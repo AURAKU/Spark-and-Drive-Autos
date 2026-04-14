@@ -1,0 +1,262 @@
+import { cookies } from "next/headers";
+import Image from "next/image";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { PageHeading } from "@/components/typography/page-headings";
+import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
+import { InquiryPanel } from "@/components/inquiry/inquiry-panel";
+import { Badge } from "@/components/ui/badge";
+import { CarListingState } from "@prisma/client";
+
+import {
+  formatVehiclePriceFromRmb,
+  getCarDisplayPrice,
+  getGlobalCurrencySettings,
+  parseDisplayCurrency,
+} from "@/lib/currency";
+import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { formatMoney } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+type Props = { params: Promise<{ slug: string }> };
+
+const sourceLabel: Record<string, string> = {
+  IN_GHANA: "Ghana stock",
+  IN_CHINA: "China source",
+  IN_TRANSIT: "In transit",
+};
+
+export async function generateMetadata(props: Props) {
+  const { slug } = await props.params;
+  const car = await prisma.car.findFirst({
+    where: { slug, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
+    select: { title: true },
+  });
+  if (!car) return { title: "Vehicle" };
+  return { title: car.title };
+}
+
+export default async function CarDetailPage(props: Props) {
+  const { slug } = await props.params;
+  const car = await prisma.car.findFirst({
+    where: { slug, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
+    include: {
+      images: { orderBy: { sortOrder: "asc" } },
+      videos: { orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }] },
+      specs: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+
+  if (!car) notFound();
+
+  const cookieStore = await cookies();
+  const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
+  const fx = await getGlobalCurrencySettings();
+  const priceLabel = formatVehiclePriceFromRmb(Number(car.basePriceRmb), displayCurrency, fx);
+  const listPriceAsCifHintGhs = getCarDisplayPrice(Number(car.basePriceRmb), "GHS", fx);
+
+  const cover = car.coverImageUrl ?? car.images[0]?.url;
+  const isSold = car.listingState === CarListingState.SOLD;
+  const checkoutBlocked = getCarCheckoutIneligibleReason(car);
+  const checkoutBlockedMessage = checkoutBlocked ? customerCheckoutBlockedMessage(checkoutBlocked) : null;
+  const canPayOnline = checkoutBlocked === null;
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      {checkoutBlockedMessage ? (
+        <div className="mb-8 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:text-amber-100">
+          <p className="font-semibold text-amber-900 dark:text-amber-50">Online purchase not available</p>
+          <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">{checkoutBlockedMessage}</p>
+          {isSold ? (
+            <p className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/70">
+              This listing may stay visible for reference until operations archives it.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-4">
+          <div className="relative aspect-[16/10] overflow-hidden rounded-3xl border border-border bg-muted dark:border-white/10 dark:bg-zinc-900">
+            {cover ? (
+              <Image src={cover} alt={car.title} fill priority className="object-cover" sizes="(max-width:1024px) 100vw, 58vw" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No image</div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {car.images.slice(0, 9).map((im) => (
+              <div key={im.id} className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted dark:border-white/10 dark:bg-zinc-900">
+                <Image src={im.url} alt={im.altText ?? car.title} fill className="object-cover" sizes="200px" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <p className="text-xs tracking-[0.25em] text-muted-foreground uppercase">Walkthrough</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {car.videos.map((v) => (
+                <div key={v.id} className="overflow-hidden rounded-2xl border border-border bg-muted/80 dark:border-white/10 dark:bg-black/40">
+                  {v.isFeatured ? (
+                    <p className="border-b border-border bg-muted px-3 py-1.5 text-[10px] font-medium tracking-wide text-[var(--brand)] uppercase dark:border-white/10 dark:bg-white/[0.06]">
+                      Hero clip
+                    </p>
+                  ) : null}
+                  <video controls className="aspect-video w-full" poster={v.thumbnailUrl ?? undefined} preload="metadata">
+                    <source src={v.url} />
+                  </video>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">{sourceLabel[car.sourceType]}</Badge>
+            <Badge variant="outline">{car.availabilityStatus.replaceAll("_", " ")}</Badge>
+            {isSold && (
+              <Badge className="border-red-500/50 bg-red-500/20 text-red-100">Sold</Badge>
+            )}
+            {car.featured && <Badge>Featured</Badge>}
+          </div>
+          <PageHeading variant="product" className="mt-4 font-semibold">
+            {car.title}
+          </PageHeading>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {car.brand} {car.model} · {car.year}
+            {car.trim ? ` · ${car.trim}` : ""}
+          </p>
+          <p className="mt-6 text-3xl font-semibold text-[var(--brand)]">{priceLabel}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Base CNY {Number(car.basePriceRmb).toLocaleString()} · converted with live admin rates
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{car.location}</p>
+
+          <div className="mt-8 grid gap-3 rounded-2xl border border-border bg-card/90 p-5 text-sm text-card-foreground shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-200 dark:ring-transparent">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Engine</span>
+              <span>{car.engineType.replaceAll("_", " ")}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Transmission</span>
+              <span>{car.transmission ?? "—"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Mileage</span>
+              <span>{car.mileage != null ? `${car.mileage.toLocaleString()} km` : "—"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Exterior</span>
+              <span>{car.colorExterior ?? "—"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Interior</span>
+              <span>{car.colorInterior ?? "—"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">VIN / chassis</span>
+              <span className="text-right">{car.vin ?? "Available on request"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Inspection</span>
+              <span>{car.inspectionStatus ?? "—"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Delivery window</span>
+              <span>{car.estimatedDelivery ?? "—"}</span>
+            </div>
+            {car.seaShippingFeeGhs != null && Number(car.seaShippingFeeGhs) > 0 ? (
+              <div className="flex justify-between gap-4 border-t border-border pt-3 dark:border-white/5">
+                <span className="text-muted-foreground">Sea shipping (est.)</span>
+                <span className="text-right font-medium text-cyan-700 dark:text-cyan-200/95">
+                  {formatMoney(Number(car.seaShippingFeeGhs), "GHS")} · Ghana delivery
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          {(car.sourceType === "IN_CHINA" || car.sourceType === "IN_TRANSIT") && (
+            <div className="mt-8">
+              <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">Import planning</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Rough duty estimate for Ghana arrival — list price is pre-filled as a{" "}
+                <span className="font-medium text-foreground">non-CIF</span> placeholder only. Adjust to the valuation you will declare.
+              </p>
+              <div className="mt-4">
+                <DutyCalculatorPanel defaultYear={car.year} defaultCifGhs={listPriceAsCifHintGhs} compact />
+              </div>
+            </div>
+          )}
+
+          {car.shortDescription && <p className="mt-6 text-sm leading-relaxed text-foreground/90">{car.shortDescription}</p>}
+          {car.longDescription && (
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{car.longDescription}</p>
+          )}
+
+          {car.specs.length > 0 && (
+            <div className="mt-8">
+              <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">Specifications</p>
+              <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+                {car.specs.map((s) => (
+                  <li key={s.id} className="flex justify-between gap-4 border-b border-border py-2 dark:border-white/5">
+                    <span className="text-muted-foreground">{s.label}</span>
+                    <span className="text-right">{s.value}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {car.specifications && typeof car.specifications === "object" && !Array.isArray(car.specifications) && (
+            <div className="mt-8">
+              <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">Highlights</p>
+              <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+                {Object.entries(car.specifications as Record<string, string>).map(([k, v]) => (
+                  <li key={k} className="flex justify-between gap-4 border-b border-border py-2 dark:border-white/5">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="text-right">{v}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-10 flex flex-wrap gap-3">
+            {canPayOnline ? (
+              <>
+                <Link
+                  href={`/checkout?carId=${car.id}&type=FULL`}
+                  className="inline-flex h-8 items-center justify-center rounded-lg bg-white px-3 text-sm font-medium text-black transition hover:bg-white/90"
+                >
+                  Pay now
+                </Link>
+                <Link
+                  href={`/checkout?carId=${car.id}&type=RESERVATION_DEPOSIT`}
+                  className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-sm font-medium text-foreground transition hover:bg-muted dark:border-white/15 dark:text-white dark:hover:bg-white/5"
+                >
+                  Reserve with deposit
+                </Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Pay now and reserve checkout are disabled for this listing.</p>
+            )}
+            <a
+              href="https://wa.me/233200000000"
+              className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-muted px-3 text-sm font-medium text-foreground transition hover:bg-muted/80 dark:border-transparent dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              target="_blank"
+              rel="noreferrer"
+            >
+              WhatsApp
+            </a>
+          </div>
+
+          <div className="mt-12 border-t border-border pt-10 dark:border-white/10">
+            <InquiryPanel carId={car.id} title={car.title} disabled={checkoutBlocked === "VEHICLE_SOLD"} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

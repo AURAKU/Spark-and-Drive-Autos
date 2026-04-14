@@ -1,0 +1,122 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { computeDutyEstimate, dutyEstimateInputSchema } from "@/lib/duty/calculator";
+import type { DutyEstimateResult } from "@/lib/duty/calculator";
+import { formatMoney } from "@/lib/format";
+
+import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
+import { DutyOfficialLinks } from "./duty-official-links";
+
+type Props = {
+  /** When set, pre-fill calculator fields (e.g. from inventory). */
+  defaultYear?: number;
+  defaultCifGhs?: number;
+  /** If true, show a compact layout for sidebars. */
+  compact?: boolean;
+};
+
+export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, compact }: Props) {
+  const [cifGhs, setCifGhs] = useState(defaultCifGhs != null ? String(Math.round(defaultCifGhs)) : "");
+  const [vehicleYear, setVehicleYear] = useState(defaultYear != null ? String(defaultYear) : String(new Date().getFullYear() - 3));
+  const [engineCc, setEngineCc] = useState("");
+  const [result, setResult] = useState<DutyEstimateResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const parsedPreview = useMemo(() => {
+    const raw = {
+      cifGhs: Number(cifGhs),
+      vehicleYear: Number(vehicleYear),
+      engineCc: engineCc.trim() === "" ? undefined : Number(engineCc),
+    };
+    return dutyEstimateInputSchema.safeParse(raw);
+  }, [cifGhs, vehicleYear, engineCc]);
+
+  function runEstimate() {
+    setError(null);
+    if (!parsedPreview.success) {
+      setError("Enter a valid CIF value (GHS), vehicle year, and optional engine cc.");
+      setResult(null);
+      return;
+    }
+    setResult(computeDutyEstimate(parsedPreview.data));
+  }
+
+  return (
+    <div className={`rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-black/40 ${compact ? "p-4" : "p-5"}`}>
+      <h3 className="text-sm font-semibold text-white">Duty estimate calculator</h3>
+      <p className="mt-1 text-xs text-zinc-500">
+        Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling — not necessarily the list price).
+      </p>
+      <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-3"}`}>
+        <label className="block text-xs text-zinc-400">
+          CIF / declared value (GHS)
+          <input
+            value={cifGhs}
+            onChange={(e) => setCifGhs(e.target.value)}
+            inputMode="decimal"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+            placeholder="e.g. 185000"
+          />
+        </label>
+        <label className="block text-xs text-zinc-400">
+          Year of manufacture
+          <input
+            value={vehicleYear}
+            onChange={(e) => setVehicleYear(e.target.value)}
+            inputMode="numeric"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-xs text-zinc-400">
+          Engine cc (optional)
+          <input
+            value={engineCc}
+            onChange={(e) => setEngineCc(e.target.value)}
+            inputMode="numeric"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+            placeholder="e.g. 2000"
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        onClick={runEstimate}
+        className="mt-4 rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110"
+      >
+        Calculate estimate
+      </button>
+      {error ? <p className="mt-3 text-xs text-rose-300">{error}</p> : null}
+      {result ? (
+        <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Estimated total (GHS)</p>
+            <p className="text-2xl font-semibold tabular-nums text-[var(--brand)]">{formatMoney(result.totalGhs, "GHS")}</p>
+          </div>
+          <ul className="space-y-2 text-xs text-zinc-400">
+            {result.lines.map((line) => (
+              <li key={line.code} className="rounded-lg border border-white/5 bg-black/25 px-3 py-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-zinc-300">{line.label}</span>
+                  <span className="font-mono text-[var(--brand)]">{formatMoney(line.amountGhs, "GHS")}</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-snug text-zinc-600">{line.basisNote}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] leading-relaxed text-zinc-600">{result.methodologyNote}</p>
+          <p className="text-[10px] font-mono text-zinc-600">Formula: {result.formulaVersion}</p>
+        </div>
+      ) : null}
+      <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+        <DutyEstimateDisclosure variant="short" />
+      </div>
+      {!compact ? (
+        <div className="mt-5">
+          <DutyOfficialLinks />
+        </div>
+      ) : null}
+    </div>
+  );
+}

@@ -1,0 +1,363 @@
+import { NotificationType, PaymentStatus, type Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+
+import { prisma } from "@/lib/prisma";
+import { createReceiptReference, generateAndPersistOrderReceiptPdf, makeCarReceiptLines } from "@/lib/receipt-engine";
+import { writeAuditLog } from "@/lib/audit";
+import { canUploadPaymentProof } from "@/lib/payment-status-utils";
+import { syncDutyWorkflowAfterDutyPaymentSuccessInTx } from "@/lib/duty/sync-from-payment";
+import { ensureCarSeaShipmentInTx } from "@/lib/shipping/shipment-service";
+import { markCarSoldAndNotifyUsersFromPayment } from "@/lib/sold-vehicle";
+
+export { canUploadPaymentProof, PAYMENT_FINAL_STATUSES } from "@/lib/payment-status-utils";
+
+type TransitionOpts = {
+  toStatus: PaymentStatus;
+  source: string;
+  actorUserId?: string | null;
+  note?: string | null;
+  paidAt?: Date | null;
+  receiptData?: Prisma.InputJsonValue;
+  /** When admin confirms — stored on Payment */
+  review?: { reviewedById: string; reviewedAt: Date };
+};
+
+/**
+ * Single entry point for payment status changes (webhook, checkout return, admin, proof flow).
+ * Idempotent when already at `toStatus` for SUCCESS path (skips duplicate side effects).
+ */
+export async function transitionPaymentStatus(paymentId: string, opts: TransitionOpts): Promise<void> {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: {
+      order: {
+        select: {
+          id: true,
+          kind: true,
+          reference: true,
+          receiptReference: true,
+          car: { select: { seaShippingFeeGhs: true, estimatedDelivery: true } },
+        },
+      },
+    },
+  });
+  if (!payment) return;
+
+  const fromStatus = payment.status;
+  if (fromStatus === opts.toStatus && opts.toStatus === "SUCCESS") {
+    if (payment.orderId) {
+      await syncCarOrderReceiptPdf(payment.orderId);
+    }
+    await markCarSoldAndNotifyUsersFromPayment(paymentId);
+    revalidatePaymentPaths(paymentId, payment.userId);
+    if (payment.orderId) void revalidatePathsForOrder(payment.orderId);
+    return;
+  }
+  if (fromStatus === opts.toStatus && opts.toStatus !== "SUCCESS") {
+    return;
+  }
+
+  const paidAtResolved =
+    opts.toStatus === "SUCCESS"
+      ? (opts.paidAt ?? new Date())
+      : opts.paidAt !== undefined
+        ? opts.paidAt
+        : undefined;
+
+  const data: Prisma.PaymentUpdateInput = {
+    status: opts.toStatus,
+    ...(paidAtResolved !== undefined ? { paidAt: paidAtResolved } : {}),
+    ...(opts.receiptData !== undefined ? { receiptData: opts.receiptData } : {}),
+    ...(opts.review
+      ? { reviewedById: opts.review.reviewedById, reviewedAt: opts.review.reviewedAt }
+      : {}),
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { id: paymentId },
+      data,
+    });
+    await tx.paymentStatusHistory.create({
+      data: {
+        paymentId,
+        fromStatus,
+        toStatus: opts.toStatus,
+        note: opts.note ?? null,
+        source: opts.source,
+        actorUserId: opts.actorUserId ?? null,
+      },
+    });
+    if (opts.toStatus === "SUCCESS" && payment.orderId) {
+      await tx.order.update({
+        where: { id: payment.orderId },
+        data: {
+          orderStatus: "PAID",
+          receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
+        },
+      });
+      const ord = payment.order;
+      if (ord?.kind === "CAR" && payment.userId) {
+        await ensureCarSeaShipmentInTx(tx, {
+          orderId: ord.id,
+          userId: payment.userId,
+          orderReference: ord.reference,
+          feeGhs: ord.car?.seaShippingFeeGhs != null ? Number(ord.car.seaShippingFeeGhs) : null,
+          estimatedDuration: ord.car?.estimatedDelivery ?? null,
+        });
+      }
+      if (payment.paymentType === "DUTY" && payment.orderId && payment.order?.kind === "CAR") {
+        await syncDutyWorkflowAfterDutyPaymentSuccessInTx(tx, payment.orderId);
+      }
+    }
+    await tx.paymentVerification.upsert({
+      where: { paymentId },
+      create: {
+        paymentId,
+        verified: opts.toStatus === "SUCCESS",
+        verificationSource: opts.source,
+        verifiedById: opts.review?.reviewedById ?? opts.actorUserId ?? null,
+        verifiedAt: opts.toStatus === "SUCCESS" ? (opts.paidAt ?? new Date()) : null,
+      },
+      update: {
+        verified: opts.toStatus === "SUCCESS",
+        verificationSource: opts.source,
+        verifiedById: opts.review?.reviewedById ?? opts.actorUserId ?? null,
+        verifiedAt: opts.toStatus === "SUCCESS" ? (opts.paidAt ?? new Date()) : null,
+      },
+    });
+    await writeAuditLog(
+      {
+        actorId: opts.actorUserId ?? null,
+        action: "PAYMENT_STATUS_TRANSITION",
+        entityType: "Payment",
+        entityId: paymentId,
+        metadataJson: {
+          fromStatus,
+          toStatus: opts.toStatus,
+          source: opts.source,
+          orderId: payment.orderId,
+          note: opts.note ?? null,
+        },
+      },
+      tx,
+    );
+    if (payment.orderId && fromStatus !== opts.toStatus) {
+      await writeAuditLog(
+        {
+          actorId: opts.actorUserId ?? null,
+          action: "ORDER_STATUS_REVIEW",
+          entityType: "Order",
+          entityId: payment.orderId,
+          metadataJson: {
+            paymentId,
+            paymentFrom: fromStatus,
+            paymentTo: opts.toStatus,
+          },
+        },
+        tx,
+      );
+    }
+  });
+
+  if (opts.toStatus === "SUCCESS") {
+    try {
+      if (payment.orderId) {
+        await syncCarOrderReceiptPdf(payment.orderId);
+      }
+      await markCarSoldAndNotifyUsersFromPayment(paymentId);
+    } catch (e) {
+      console.error("[transitionPaymentStatus] markCarSold", e);
+    }
+  }
+
+  if (payment.userId) {
+    const title = paymentStatusNotificationTitle(opts.toStatus);
+    const body = opts.note ?? `Your payment ${payment.providerReference ?? paymentId.slice(0, 8)} was updated.`;
+    await prisma.notification.create({
+      data: {
+        userId: payment.userId,
+        type: NotificationType.PAYMENT,
+        title,
+        body,
+        href: `/dashboard/payments/${paymentId}`,
+      },
+    });
+  }
+
+  revalidatePaymentPaths(paymentId, payment.userId);
+  if (payment.orderId) {
+    void revalidatePathsForOrder(payment.orderId);
+  }
+}
+
+async function syncCarOrderReceiptPdf(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      user: { select: { name: true } },
+      car: { select: { title: true } },
+      payments: {
+        where: { status: "SUCCESS" },
+        orderBy: { paidAt: "desc" },
+        select: { amount: true, paymentType: true },
+      },
+    },
+  });
+  if (!order || order.kind !== "CAR" || !order.car) return;
+  const last = order.payments[0];
+  if (!last) return;
+
+  const totalPaid = order.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalCost = Number(order.amount);
+  const outstanding = Math.max(0, totalCost - totalPaid);
+  const lines = makeCarReceiptLines({
+    carTitle: order.car.title,
+    totalCarCostGhs: totalCost,
+    depositPaidGhs: totalPaid,
+    outstandingBalanceGhs: outstanding,
+    paymentStatusLabel: outstanding <= 0 ? "Fully Paid" : "Deposit / Part Payment",
+  });
+  const { receiptPdfUrl, templateData, receiptReference } = await generateAndPersistOrderReceiptPdf({
+    scope: "CAR",
+    order,
+    customerName: order.user?.name,
+    lines,
+  });
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      receiptReference: receiptReference,
+      receiptPdfUrl,
+      receiptData: {
+        ...(templateData as object),
+        receiptType: "CAR",
+        reference: order.reference,
+        totalCarCostGhs: totalCost,
+        totalPaidGhs: totalPaid,
+        outstandingBalanceGhs: outstanding,
+        paymentType: last.paymentType,
+      } as Prisma.InputJsonValue,
+    },
+  });
+}
+
+function paymentStatusNotificationTitle(status: PaymentStatus): string {
+  switch (status) {
+    case "SUCCESS":
+      return "Payment confirmed";
+    case "FAILED":
+      return "Payment update";
+    case "PROCESSING":
+      return "Payment under review";
+    case "AWAITING_PROOF":
+      return "Action needed: payment proof";
+    default:
+      return "Payment status updated";
+  }
+}
+
+function revalidatePaymentPaths(paymentId: string, userId: string | null) {
+  revalidatePath("/dashboard/payments");
+  revalidatePath(`/dashboard/payments/${paymentId}`);
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/payments/intelligence");
+  revalidatePath(`/admin/payments/${paymentId}`);
+  revalidatePath("/admin/orders");
+  if (userId) {
+    revalidatePath("/dashboard/notifications");
+  }
+}
+
+/** Call when order id is known (e.g. after loading payment). */
+export async function revalidatePathsForOrder(orderId: string | null) {
+  if (!orderId) return;
+  revalidatePath(`/dashboard/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/duty");
+}
+
+/**
+ * After a user attaches a proof image; moves PENDING / AWAITING_PROOF → PROCESSING when applicable.
+ */
+export async function recordPaymentProofSubmission(paymentId: string, userId: string): Promise<void> {
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (!payment || payment.userId !== userId) {
+    throw new Error("FORBIDDEN");
+  }
+  if (!canUploadPaymentProof(payment.status)) {
+    throw new Error("INVALID_STATUS");
+  }
+
+  const prev = payment.status;
+  const next: PaymentStatus =
+    prev === "PENDING" || prev === "AWAITING_PROOF" ? "PROCESSING" : prev;
+
+  await prisma.$transaction(async (tx) => {
+    if (next !== prev) {
+      await tx.payment.update({ where: { id: paymentId }, data: { status: next } });
+    }
+    await tx.paymentStatusHistory.create({
+      data: {
+        paymentId,
+        fromStatus: prev,
+        toStatus: next,
+        source: "USER_PROOF",
+        actorUserId: userId,
+        note:
+          next !== prev
+            ? "Payment screenshot submitted — under review"
+            : "Additional payment screenshot uploaded",
+      },
+    });
+  });
+
+  if (payment.userId) {
+    await prisma.notification.create({
+      data: {
+        userId: payment.userId,
+        type: NotificationType.PAYMENT,
+        title: "Payment proof received",
+        body:
+          next !== prev
+            ? "We received your screenshot and will verify it shortly."
+            : "An additional screenshot was added to your payment record.",
+        href: `/dashboard/payments/${paymentId}`,
+      },
+    });
+  }
+
+  revalidatePaymentPaths(paymentId, payment.userId);
+  if (payment.orderId) {
+    void revalidatePathsForOrder(payment.orderId);
+  }
+}
+
+export async function appendPaymentHistoryOnly(
+  paymentId: string,
+  entry: {
+    fromStatus: PaymentStatus | null;
+    toStatus: PaymentStatus;
+    source: string;
+    actorUserId?: string | null;
+    note?: string | null;
+  },
+): Promise<void> {
+  await prisma.paymentStatusHistory.create({
+    data: {
+      paymentId,
+      fromStatus: entry.fromStatus,
+      toStatus: entry.toStatus,
+      note: entry.note ?? null,
+      source: entry.source,
+      actorUserId: entry.actorUserId ?? null,
+    },
+  });
+  revalidatePath("/dashboard/payments");
+  revalidatePath(`/dashboard/payments/${paymentId}`);
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/payments/intelligence");
+  revalidatePath(`/admin/payments/${paymentId}`);
+}

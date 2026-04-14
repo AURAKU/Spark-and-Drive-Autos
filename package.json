@@ -1,12 +1,34 @@
 {
-  "name": "spark-drive-app",
+  "name": "spark-and-drive-autos",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "node scripts/prep-dev.mjs && next dev --turbopack -p 5173",
+    "dev:quick": "next dev --turbopack -p 5173",
+    "dev:webpack": "node scripts/prep-dev.mjs && next dev -p 5173",
+    "dev:clean": "rm -rf .next && next dev --turbopack -p 5173",
+    "dev:fresh": "node scripts/kill-port.mjs 5173 && node scripts/prep-dev.mjs && next dev --turbopack -p 5173",
+    "kill:5173": "node scripts/kill-port.mjs 5173",
+    "doctor": "node scripts/doctor.mjs",
+    "env:bootstrap": "node scripts/ensure-local-env.mjs",
+    "build": "next build",
+    "start": "node scripts/start.mjs",
+    "docker:up": "docker compose up -d --wait",
+    "docker:down": "docker compose down",
+    "setup:local": "npm run env:bootstrap && docker compose up -d --wait && npx prisma db push && npm run db:seed",
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -28,17 +50,20 @@
     "date-fns": "^4.1.0",
     "dompurify": "^3.3.3",
     "framer-motion": "^12.38.0",
+    "jose": "^6.2.2",
     "lucide-react": "^1.7.0",
     "nanoid": "^5.1.7",
     "next": "15.5.14",
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",
+    "pdf-lib": "^1.17.1",
     "prisma": "^5.22.0",
     "pusher": "^5.3.3",
     "pusher-js": "^8.5.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.72.1",
+    "recharts": "^2.15.4",
     "shadcn": "^4.1.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
@@ -47,6 +72,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@tailwindcss/oxide-darwin-arm64": "^4.2.2",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
@@ -57,5 +83,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-darwin-arm64": "^4.2.2"
   }
 }

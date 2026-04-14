@@ -1,0 +1,391 @@
+"use client";
+
+import { AvailabilityStatus, CarListingState, EngineType, SourceType } from "@prisma/client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
+
+import { deleteCar, updateCar } from "@/actions/cars";
+import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
+import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
+import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
+import { tagsToCommaList, specificationsToTextarea } from "@/lib/car-form-helpers";
+import type { CarForClientEdit } from "@/lib/serialize-car";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+type State = {
+  ok?: boolean;
+  id?: string;
+  error?: string;
+  warning?: string;
+  issues?: { fieldErrors: Record<string, string[] | undefined>; formErrors: string[] };
+} | null;
+
+export function EditCarForm({ car }: { car: CarForClientEdit }) {
+  const router = useRouter();
+  const [state, action] = useActionState(updateCar, null as State);
+  const [, startTransition] = useTransition();
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  useEffect(() => {
+    if (state?.ok) {
+      toast.success("Vehicle saved");
+      router.refresh();
+    }
+  }, [state?.ok, router]);
+
+  useEffect(() => {
+    if (state?.warning) toast.warning(state.warning);
+  }, [state?.warning]);
+
+  const baseRmb = Number(car.basePriceRmb);
+  const costRmb = car.supplierCostRmb;
+  const profitRmb = profitAmountRmb(baseRmb, costRmb);
+  const marginPct = profitMarginPercent(baseRmb, costRmb);
+  const select =
+    "mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none ring-[var(--brand)]/30 focus:ring-2";
+
+  return (
+    <div className="mt-8 space-y-8">
+      <form action={action} className="grid max-w-3xl gap-4 sm:grid-cols-2">
+        <input type="hidden" name="id" value={car.id} />
+        {state?.error && <p className="sm:col-span-2 text-sm text-red-400">{state.error}</p>}
+        <AdminZodIssues issues={state?.issues} />
+
+        <p className="sm:col-span-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Identity</p>
+        <div className="sm:col-span-2">
+          <Label htmlFor="title">Title</Label>
+          <Input id="title" name="title" required className="mt-1" defaultValue={car.title} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="slug">URL slug</Label>
+          <p className="mt-0.5 text-xs text-zinc-500">Lowercase, numbers, hyphens only. Changing this updates the public URL.</p>
+          <Input
+            id="slug"
+            name="slug"
+            required
+            className="mt-1 font-mono text-sm"
+            defaultValue={car.slug}
+            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+          />
+        </div>
+        <div>
+          <Label htmlFor="brand">Brand</Label>
+          <Input id="brand" name="brand" required className="mt-1" defaultValue={car.brand} />
+        </div>
+        <div>
+          <Label htmlFor="model">Model</Label>
+          <Input id="model" name="model" required className="mt-1" defaultValue={car.model} />
+        </div>
+        <div>
+          <Label htmlFor="year">Year</Label>
+          <Input id="year" name="year" type="number" required className="mt-1" defaultValue={car.year} />
+        </div>
+        <div>
+          <Label htmlFor="trim">Trim</Label>
+          <Input id="trim" name="trim" className="mt-1" defaultValue={car.trim ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="bodyType">Body type</Label>
+          <Input id="bodyType" name="bodyType" className="mt-1" defaultValue={car.bodyType ?? ""} />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Mechanical</p>
+        <div>
+          <Label htmlFor="engineType">Engine type</Label>
+          <select
+            id="engineType"
+            name="engineType"
+            className={select}
+            required
+            defaultValue={car.engineType}
+          >
+            {Object.values(EngineType).map((v) => (
+              <option key={v} value={v}>
+                {v.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="transmission">Transmission</Label>
+          <Input id="transmission" name="transmission" className="mt-1" defaultValue={car.transmission ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="drivetrain">Drivetrain</Label>
+          <Input id="drivetrain" name="drivetrain" className="mt-1" defaultValue={car.drivetrain ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="mileage">Mileage (km)</Label>
+          <Input
+            id="mileage"
+            name="mileage"
+            type="number"
+            min={0}
+            className="mt-1"
+            defaultValue={car.mileage ?? ""}
+          />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Appearance &amp; ID</p>
+        <div>
+          <Label htmlFor="colorExterior">Exterior color</Label>
+          <Input id="colorExterior" name="colorExterior" className="mt-1" defaultValue={car.colorExterior ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="colorInterior">Interior color</Label>
+          <Input id="colorInterior" name="colorInterior" className="mt-1" defaultValue={car.colorInterior ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="vin">VIN / chassis</Label>
+          <Input id="vin" name="vin" className="mt-1" defaultValue={car.vin ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="condition">Condition</Label>
+          <Input id="condition" name="condition" className="mt-1" defaultValue={car.condition ?? ""} />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Commerce</p>
+        <div>
+          <Label htmlFor="sourceType">Source</Label>
+          <select id="sourceType" name="sourceType" className={select} required defaultValue={car.sourceType}>
+            {Object.values(SourceType).map((v) => (
+              <option key={v} value={v}>
+                {v.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="availabilityStatus">Stock availability</Label>
+          <select
+            id="availabilityStatus"
+            name="availabilityStatus"
+            className={select}
+            required
+            defaultValue={car.availabilityStatus}
+          >
+            {Object.values(AvailabilityStatus).map((v) => (
+              <option key={v} value={v}>
+                {v.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="listingState">Listing visibility</Label>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Draft = not on storefront; Published = live; Hidden = off but kept; Sold = sold overlay, checkout closed.
+          </p>
+          <select
+            id="listingState"
+            name="listingState"
+            className={select}
+            required
+            defaultValue={car.listingState}
+          >
+            {Object.values(CarListingState).map((v) => (
+              <option key={v} value={v}>
+                {v.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <AdminRmbSellingPriceField
+          label="Base selling price (CNY / RMB)"
+          description="Canonical price — reference GHS is saved to the vehicle record on each save for admin quoting."
+          defaultValue={baseRmb}
+          lastSavedReferenceGhs={Number(car.price)}
+        />
+        <div className="sm:col-span-2">
+          <Label htmlFor="supplierCostRmb">Supplier / dealership cost (CNY)</Label>
+          <p className="mt-0.5 text-xs text-zinc-500">Admin-only — never shown on the public site.</p>
+          <Input
+            id="supplierCostRmb"
+            name="supplierCostRmb"
+            type="number"
+            step="0.01"
+            min={0}
+            className="mt-1"
+            defaultValue={costRmb ?? ""}
+          />
+        </div>
+        <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-200/80">Admin profit (CNY)</p>
+          <p className="mt-1 text-sm text-zinc-300">
+            {profitRmb != null ? (
+              <>
+                <span className="font-semibold text-white">¥{profitRmb.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                {marginPct != null ? (
+                  <span className="text-zinc-500"> · margin {marginPct.toFixed(1)}% of list</span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-zinc-500">Enter a cost to see estimated profit.</span>
+            )}
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="location">Location</Label>
+          <Input id="location" name="location" className="mt-1" defaultValue={car.location ?? ""} />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Media (URLs)</p>
+        <div className="sm:col-span-2">
+          <Label htmlFor="coverImageUrl">Cover image URL</Label>
+          <Input id="coverImageUrl" name="coverImageUrl" type="url" className="mt-1" defaultValue={car.coverImageUrl ?? ""} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="coverImagePublicId">Cover image Cloudinary public ID</Label>
+          <Input
+            id="coverImagePublicId"
+            name="coverImagePublicId"
+            className="mt-1"
+            defaultValue={car.coverImagePublicId ?? ""}
+          />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Copy</p>
+        <div className="sm:col-span-2">
+          <Label htmlFor="shortDescription">Short description</Label>
+          <Textarea
+            id="shortDescription"
+            name="shortDescription"
+            className="mt-1"
+            rows={3}
+            defaultValue={car.shortDescription ?? ""}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="longDescription">Long description</Label>
+          <Textarea
+            id="longDescription"
+            name="longDescription"
+            className="mt-1"
+            rows={6}
+            defaultValue={car.longDescription ?? ""}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="engineDetails">Engine / technical notes</Label>
+          <Textarea
+            id="engineDetails"
+            name="engineDetails"
+            className="mt-1"
+            rows={3}
+            defaultValue={car.engineDetails ?? ""}
+          />
+        </div>
+        <div>
+          <Label htmlFor="inspectionStatus">Inspection status</Label>
+          <Input
+            id="inspectionStatus"
+            name="inspectionStatus"
+            className="mt-1"
+            defaultValue={car.inspectionStatus ?? ""}
+          />
+        </div>
+        <div>
+          <Label htmlFor="estimatedDelivery">Estimated delivery window</Label>
+          <Input
+            id="estimatedDelivery"
+            name="estimatedDelivery"
+            className="mt-1"
+            defaultValue={car.estimatedDelivery ?? ""}
+          />
+        </div>
+        <div>
+          <Label htmlFor="seaShippingFeeGhs">Sea shipping estimate (GHS)</Label>
+          <Input
+            id="seaShippingFeeGhs"
+            name="seaShippingFeeGhs"
+            type="number"
+            min={0}
+            step="0.01"
+            className="mt-1"
+            placeholder="Shown on listing & checkout"
+            defaultValue={car.seaShippingFeeGhs != null ? String(car.seaShippingFeeGhs) : ""}
+          />
+          <p className="mt-1 text-[10px] text-zinc-500">Vehicle moves on sea freight only. Leave blank if not yet quoted.</p>
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="accidentHistory">Accident history</Label>
+          <Textarea
+            id="accidentHistory"
+            name="accidentHistory"
+            className="mt-1"
+            rows={2}
+            defaultValue={car.accidentHistory ?? ""}
+          />
+        </div>
+
+        <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Tags &amp; structured data</p>
+        <div className="sm:col-span-2">
+          <Label htmlFor="tags">Badges / tags</Label>
+          <Input id="tags" name="tags" className="mt-1" defaultValue={tagsToCommaList(car.tags)} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="specifications">Specifications JSON</Label>
+          <Textarea
+            id="specifications"
+            name="specifications"
+            className="mt-1 font-mono text-xs"
+            rows={5}
+            defaultValue={specificationsToTextarea(car.specifications)}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <input id="featured" name="featured" type="checkbox" value="on" className="size-4" defaultChecked={car.featured} />
+          <Label htmlFor="featured">Featured on homepage</Label>
+        </div>
+        <div className="sm:col-span-2 flex flex-wrap gap-3">
+          <Button type="submit">Save changes</Button>
+          <Link
+            href="/admin/cars"
+            className="inline-flex h-8 items-center rounded-lg border border-white/15 px-3 text-sm text-zinc-300 hover:bg-white/5"
+          >
+            Back to list
+          </Link>
+        </div>
+      </form>
+
+      <div className="max-w-3xl rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+        <p className="text-sm text-zinc-400">
+          The <strong className="text-zinc-300">reference GHS</strong> field on this listing is updated from base RMB every
+          time you save, and for all vehicles when admin exchange rates change.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              if (!confirmDel) {
+                setConfirmDel(true);
+                return;
+              }
+              startTransition(async () => {
+                const r = await deleteCar(car.id);
+                if (r?.error) {
+                  toast.error(r.error);
+                  setConfirmDel(false);
+                  return;
+                }
+                if (r?.ok) {
+                  toast.success("Vehicle deleted");
+                  router.push("/admin/cars");
+                }
+              });
+            }}
+          >
+            {confirmDel ? "Click again to delete" : "Delete vehicle"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

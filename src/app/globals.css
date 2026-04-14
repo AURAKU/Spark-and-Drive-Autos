@@ -121,10 +121,283 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
+  :root {
+    --brand: #14d8e6;
+    --brand-deep: #0a9fb0;
   }
   html {
     @apply font-sans;
+    font-size: 17px;
+  }
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased transition-colors duration-300;
+    background-image:
+      radial-gradient(1200px 600px at 15% -10%, rgba(20, 216, 230, 0.12), transparent),
+      radial-gradient(900px 500px at 100% 0%, rgba(10, 159, 176, 0.12), transparent);
+  }
+
+  .light body {
+    background-color: #f7fafc;
+    background-image:
+      radial-gradient(980px 520px at 0% -18%, rgba(20, 216, 230, 0.2), transparent),
+      radial-gradient(860px 480px at 100% -8%, rgba(10, 159, 176, 0.13), transparent);
+  }
+
+  /* Readability layer for legacy hardcoded dark-style utility classes. */
+  .light .text-white {
+    color: #0f172a !important;
+  }
+  .light .text-zinc-100,
+  .light .text-zinc-200,
+  .light .text-zinc-300 {
+    color: #1e293b !important;
+  }
+  .light .text-zinc-400 {
+    color: #334155 !important;
+  }
+  .light .text-zinc-500,
+  .light .text-zinc-600 {
+    color: #475569 !important;
+  }
+  .light .text-zinc-700 {
+    color: #64748b !important;
+  }
+
+  /* Ghost actions used `hover:text-white` for dark chrome — keep hover legible on light surfaces */
+  .light .hover\:text-white:hover {
+    color: #0f172a !important;
+  }
+  .light .hover\:text-zinc-200:hover {
+    color: #0f172a !important;
+  }
+
+  .light [class*="border-white/10"] {
+    border-color: rgba(15, 23, 42, 0.14) !important;
+  }
+  .light [class*="border-white/15"] {
+    border-color: rgba(15, 23, 42, 0.18) !important;
+  }
+  .light [class*="border-white/20"] {
+    border-color: rgba(15, 23, 42, 0.22) !important;
+  }
+
+  .light [class*="bg-white/[0.02]"] {
+    background-color: rgba(15, 23, 42, 0.03) !important;
+  }
+  .light [class*="bg-white/[0.03]"] {
+    background-color: rgba(15, 23, 42, 0.045) !important;
+  }
+  .light [class*="bg-white/[0.04]"] {
+    background-color: rgba(15, 23, 42, 0.055) !important;
+  }
+  .light [class*="bg-white/[0.05]"] {
+    background-color: rgba(15, 23, 42, 0.07) !important;
+  }
+  .light [class*="bg-black/20"],
+  .light [class*="bg-black/30"],
+  .light [class*="bg-black/40"],
+  .light [class*="bg-black/50"] {
+    background-color: rgba(15, 23, 42, 0.06) !important;
+  }
+
+  /* Dark-only explicit hex backgrounds get softened for light mode. */
+  .light [class*="bg-[#0"],
+  .light [class*="bg-[#03"],
+  .light [class*="bg-[#05"],
+  .light [class*="bg-[#07"],
+  .light [class*="bg-[#12"] {
+    background-color: rgba(255, 255, 255, 0.86) !important;
+    backdrop-filter: blur(12px);
+  }
+
+  /* Gradient text tuned for dark backgrounds should fall back to readable solid text in light mode. */
+  .light .bg-clip-text.text-transparent {
+    color: #0f172a !important;
+    background-image: none !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  /* Global hierarchy polish for crisp modern light mode. */
+  .light h1 {
+    color: #0b1220 !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.015em;
+  }
+  .light h2 {
+    color: #111827 !important;
+    font-weight: 650 !important;
+  }
+  .light h3,
+  .light h4 {
+    color: #1f2937 !important;
+    font-weight: 620 !important;
+  }
+  .light p {
+    color: #334155;
+  }
+  .light strong,
+  .light b {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+  }
+
+  /* Make key accents and inline highlights stand out. */
+  .light .text-\[var\(--brand\)\] {
+    color: var(--brand) !important;
+    font-weight: 700 !important;
+  }
+  .light .text-emerald-400 {
+    color: #047857 !important;
+    font-weight: 700 !important;
+  }
+
+  /* Form readability and modern crisp input surface. */
+  .light input,
+  .light select,
+  .light textarea {
+    color: #0f172a !important;
+    border-color: rgba(15, 23, 42, 0.2) !important;
+    background-color: rgba(255, 255, 255, 0.92) !important;
+  }
+  .light input::placeholder,
+  .light textarea::placeholder {
+    color: #64748b !important;
+  }
+  .light label {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+  }
+
+  /* CTA contrast boost while keeping style language. */
+  .light .bg-\[var\(--brand\)\] {
+    background-color: var(--brand) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--brand) 60%, transparent);
+  }
+  .light .bg-\[var\(--brand\)\]:hover {
+    filter: brightness(1.08);
+  }
+
+  /* Parts storefront: enforce strong readability in light mode. */
+  .light .parts-theme {
+    color: #111827;
+  }
+  .light .parts-theme .parts-theme-bg {
+    opacity: 0.24 !important;
+    filter: brightness(1.55) saturate(0.88);
+  }
+  .light .parts-theme .parts-hero,
+  .light .parts-theme .parts-filters,
+  .light .parts-theme .parts-surface {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(239, 68, 68, 0.34) !important;
+    box-shadow: 0 14px 40px -24px rgba(15, 23, 42, 0.35) !important;
+  }
+  .light .parts-theme .text-zinc-100,
+  .light .parts-theme .text-zinc-200 {
+    color: #0f172a !important;
+  }
+  .light .parts-theme .text-zinc-300,
+  .light .parts-theme .text-zinc-400,
+  .light .parts-theme .text-zinc-500 {
+    color: #334155 !important;
+  }
+  .light .parts-theme .drop-shadow-\[0_0_14px_rgba\(239\,68\,68\,0\.65\)\] {
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.35));
+  }
+  .light .parts-theme input,
+  .light .parts-theme select,
+  .light .parts-theme textarea {
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(148, 163, 184, 0.5) !important;
+    color: #0f172a !important;
+    font-weight: 600;
+  }
+  .light .parts-theme input::placeholder,
+  .light .parts-theme textarea::placeholder {
+    color: #64748b !important;
+  }
+  .light .parts-theme a[class*="bg-red-500"],
+  .light .parts-theme button[class*="bg-red-500"] {
+    color: #fff !important;
+  }
+
+  /* Elevation and card clarity on light surfaces. */
+  .light .rounded-2xl.border,
+  .light .rounded-xl.border {
+    box-shadow: 0 8px 30px -22px rgba(15, 23, 42, 0.35);
+  }
+
+  /* Global interaction affordance: make click/tap actions visibly responsive. */
+  a,
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  summary {
+    transition:
+      transform 140ms ease,
+      box-shadow 200ms ease,
+      filter 160ms ease,
+      background-color 200ms ease,
+      border-color 200ms ease;
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand) 70%, white 30%);
+    outline-offset: 2px;
+  }
+
+  .ui-press-highlight {
+    transform: translateY(-0.5px) scale(0.992);
+    filter: saturate(1.08);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--brand) 42%, transparent),
+      0 8px 24px -14px color-mix(in srgb, var(--brand) 60%, transparent);
+  }
+
+  body.ui-page-nav-pulse::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 70;
+    animation: ui-nav-pulse 320ms ease-out;
+  }
+
+  .dark body.ui-page-nav-pulse::before {
+    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 16%, transparent), transparent 70%);
+  }
+
+  .light body.ui-page-nav-pulse::before {
+    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 20%, transparent), transparent 70%);
+  }
+}
+
+@media (max-width: 640px) {
+  @layer base {
+    html {
+      font-size: 16px;
+    }
+  }
+}
+
+@layer utilities {
+  .text-xs {
+    font-size: 0.84rem;
+    line-height: 1.35;
+  }
+  .text-sm {
+    font-size: 0.96rem;
+    line-height: 1.45;
+  }
+}
+
+@keyframes ui-nav-pulse {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
   }
 }

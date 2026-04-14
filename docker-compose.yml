@@ -1,0 +1,24 @@
+# Local development only. Postgres role/password/database live here — not in .env.example (use placeholders there).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: spark-drive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spark
+      POSTGRES_PASSWORD: sparkdev
+      POSTGRES_DB: sparkdrive
+    # Host 5433 avoids conflict with a local Postgres install on 5432
+    ports:
+      - "5433:5432"
+    volumes:
+      - spark_drive_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spark -d sparkdrive"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  spark_drive_pgdata:
