@@ -66,6 +66,15 @@ Then remove `node_modules` and reinstall if needed.
 
    **Odd build errors** (e.g. “Cannot find module for page”): delete `.next` and run `npm run build` again.
 
+## Lost database / new server admin
+
+If production (or local) Postgres is empty or you cannot sign in, create a **SUPER_ADMIN** without using the full seed:
+
+1. Set in `.env` (or export in the shell): `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` (10+ chars), optionally `BOOTSTRAP_ADMIN_NAME`.
+2. Ensure `DATABASE_URL` points at the target database and run migrations: `npx prisma migrate deploy`.
+3. Run: `npm run db:create-admin`
+4. Sign in at `/login`, then **remove** the `BOOTSTRAP_*` variables from `.env` so they are not left in backups.
+
 ## Demo credentials (development seed only)
 
 - **Admin:** `admin@sparkdriveautos.com` / `DemoAdmin2026!`

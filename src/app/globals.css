@@ -128,9 +128,13 @@
   html {
     @apply font-sans;
     font-size: 17px;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
     @apply min-h-screen bg-background text-foreground antialiased transition-colors duration-300;
+    overflow-x: clip;
     background-image:
       radial-gradient(1200px 600px at 15% -10%, rgba(20, 216, 230, 0.12), transparent),
       radial-gradient(900px 500px at 100% 0%, rgba(10, 159, 176, 0.12), transparent);
