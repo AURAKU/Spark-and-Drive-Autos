@@ -50,6 +50,7 @@ Use this as your **master checklist**. Some items only you can do (accounts, pay
 - [ ] On the server, after first deploy: `npx prisma migrate deploy`  
   (Use migrations for production; avoid `db push` on production unless you intentionally have no migration history.)
 - [ ] **Backups**: schedule Postgres dumps or use host backup tools.
+- [ ] **Admin access**: if you have no users (new or restored empty DB), create a super-admin with `npm run db:create-admin` after setting `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env` — see README section *Lost database / new server admin*.
 
 ### A6. Security & content (ongoing)
 

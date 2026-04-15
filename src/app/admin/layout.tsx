@@ -43,7 +43,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen flex-col">
       <DashboardTopHeader showPartnerStrip={false} />
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-5 text-sidebar-foreground xl:block">
+        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-5 text-sidebar-foreground lg:block">
           <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
             {isAssistant ? "Support inbox" : "Operations"}
           </p>
@@ -68,7 +68,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </nav>
         </aside>
         <div className="flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 xl:hidden dark:border-white/10">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <AdminMobileNav links={links} sectionLabel={isAssistant ? "Support inbox" : "Operations"} />
               <Link href="/admin" className="truncate text-sm text-[var(--brand)]">
@@ -79,7 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Back to user view
             </ViewModeButton>
           </div>
-          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">{children}</div>
+          <div className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>
       </div>
     </div>

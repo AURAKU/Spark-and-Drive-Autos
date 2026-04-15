@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getStaffOperationsHref, isAdminRole, isSupportStaffRole } from "@/auth";
 import { AdminPreviewBanner } from "@/components/layout/admin-preview-banner";
 import { CurrencySwitcher } from "@/components/layout/currency-switcher";
+import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
 import { StaffDashboardBar } from "@/components/layout/staff-dashboard-bar";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
@@ -135,13 +136,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
               )}
             </div>
           ) : null}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 lg:hidden dark:border-white/10">
-            <Link href="/dashboard" className="text-sm text-[var(--brand)]">
-              Dashboard menu (use desktop for full nav)
-            </Link>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <DashboardMobileNav
+                links={links}
+                sectionLabel="Your dashboard"
+                unreadByHref={{ "/dashboard/notifications": unread }}
+              />
+              <Link href="/dashboard" className="truncate text-sm font-medium text-[var(--brand)]">
+                Overview
+              </Link>
+            </div>
             <CurrencySwitcher initial={displayCurrency} />
           </div>
-          <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</div>
+          <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>
       </div>
     </div>

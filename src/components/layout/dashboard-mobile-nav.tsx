@@ -7,14 +7,15 @@ import { Menu } from "lucide-react";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-export type AdminNavLink = { href: string; label: string };
+export type DashboardNavLink = { href: string; label: string };
 
 type Props = {
-  links: AdminNavLink[];
+  links: DashboardNavLink[];
   sectionLabel: string;
+  unreadByHref?: Record<string, number>;
 };
 
-export function AdminMobileNav({ links, sectionLabel }: Props) {
+export function DashboardMobileNav({ links, sectionLabel, unreadByHref }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -30,23 +31,29 @@ export function AdminMobileNav({ links, sectionLabel }: Props) {
       >
         <SheetHeader className="border-b border-sidebar-border px-4 pb-4 pt-4 text-left">
           <SheetTitle className="text-sidebar-foreground">{sectionLabel}</SheetTitle>
-          <p className="text-xs font-normal text-muted-foreground">Spark and Drive Autos · admin</p>
+          <p className="text-xs font-normal text-muted-foreground">Spark and Drive Autos · dashboard</p>
         </SheetHeader>
         <nav className="flex flex-col gap-0.5 px-2 py-4">
           {links.map((l) => {
-            const active = pathname === l.href || (l.href !== "/admin" && pathname.startsWith(l.href));
+            const active = pathname === l.href || (l.href !== "/dashboard" && pathname.startsWith(l.href));
+            const unread = unreadByHref?.[l.href] ?? 0;
             return (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className={`rounded-lg px-3 py-2.5 text-sm transition ${
+                className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition ${
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground"
                 }`}
               >
-                {l.label}
+                <span>{l.label}</span>
+                {unread > 0 ? (
+                  <span className="shrink-0 rounded-full bg-[var(--brand)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand)]">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

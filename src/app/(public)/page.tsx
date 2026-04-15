@@ -111,7 +111,7 @@ export default async function HomePage() {
         <div className={`relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:py-28 ${heroTitle.variable}`}>
           <div className="relative mx-auto max-w-5xl text-center">
             <h1
-              className={`${heroTitle.className} text-balance text-7xl font-semibold leading-[0.96] tracking-[-0.02em] text-white sm:text-8xl md:text-[7.2rem] lg:text-[8.8rem]`}
+              className={`${heroTitle.className} text-balance text-[clamp(2.75rem,11vw,5rem)] font-semibold leading-[0.98] tracking-[-0.02em] text-white sm:text-7xl md:text-8xl md:leading-[0.96] lg:text-[7.2rem] xl:text-[8.8rem]`}
             >
               <span className="inline-block bg-gradient-to-br from-white via-zinc-100 to-zinc-400 bg-clip-text text-transparent">
                 Spark and Drive

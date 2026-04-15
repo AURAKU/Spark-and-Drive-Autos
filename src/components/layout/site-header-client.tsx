@@ -95,8 +95,8 @@ export function SiteHeaderClient({
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/90">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/40 to-transparent" />
-      <div className="mx-auto flex min-h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6">
-        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+      <div className="mx-auto flex min-h-[4.25rem] max-w-7xl min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6">
+        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-2.5">
           <Link
             href="/"
             aria-label="Home"
@@ -115,7 +115,7 @@ export function SiteHeaderClient({
             <span>{isLoggedIn ? "Dashboard" : "Profile"}</span>
           </Link>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-2.5">
           <ThemeToggle />
           <CurrencySwitcher initial={displayCurrency} />
           {isLoggedIn ? (
