@@ -1,56 +1,87 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import type { EngineType } from "@prisma/client";
+import { useEffect, useMemo, useState } from "react";
 
-import { computeDutyEstimate, dutyEstimateInputSchema } from "@/lib/duty/calculator";
-import type { DutyEstimateResult } from "@/lib/duty/calculator";
+import {
+  computeDutyEstimate,
+  dutyEstimateInputSchema,
+  type DutyEstimateResult,
+  type DutyPowertrain,
+} from "@/lib/duty/calculator";
 import { formatMoney } from "@/lib/format";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
 import { DutyOfficialLinks } from "./duty-official-links";
 
+const POWERTRAIN_OPTIONS: { value: DutyPowertrain; label: string }[] = [
+  { value: "GASOLINE", label: "Gasoline / diesel (ICE)" },
+  { value: "HYBRID", label: "Hybrid (HEV)" },
+  { value: "PLUGIN_HYBRID", label: "Plug-in hybrid (PHEV)" },
+  { value: "ELECTRIC", label: "Battery electric (BEV)" },
+];
+
 type Props = {
   /** When set, pre-fill calculator fields (e.g. from inventory). */
   defaultYear?: number;
   defaultCifGhs?: number;
+  /** Pre-select powertrain from listing `engineType`. */
+  defaultPowertrain?: EngineType;
   /** If true, show a compact layout for sidebars. */
   compact?: boolean;
 };
 
-export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, compact }: Props) {
+export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertrain, compact }: Props) {
   const [cifGhs, setCifGhs] = useState(defaultCifGhs != null ? String(Math.round(defaultCifGhs)) : "");
-  const [vehicleYear, setVehicleYear] = useState(defaultYear != null ? String(defaultYear) : String(new Date().getFullYear() - 3));
+  const [vehicleYear, setVehicleYear] = useState(
+    defaultYear != null ? String(defaultYear) : String(new Date().getFullYear() - 3),
+  );
+  const [powertrain, setPowertrain] = useState<DutyPowertrain>(defaultPowertrain ?? "GASOLINE");
+  const [applyEvDutyWaiver, setApplyEvDutyWaiver] = useState(false);
   const [engineCc, setEngineCc] = useState("");
   const [result, setResult] = useState<DutyEstimateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (defaultPowertrain) setPowertrain(defaultPowertrain);
+  }, [defaultPowertrain]);
+
+  useEffect(() => {
+    if (powertrain !== "ELECTRIC" && applyEvDutyWaiver) setApplyEvDutyWaiver(false);
+  }, [powertrain, applyEvDutyWaiver]);
 
   const parsedPreview = useMemo(() => {
     const raw = {
       cifGhs: Number(cifGhs),
       vehicleYear: Number(vehicleYear),
       engineCc: engineCc.trim() === "" ? undefined : Number(engineCc),
+      powertrain,
+      applyEvDutyWaiver,
     };
     return dutyEstimateInputSchema.safeParse(raw);
-  }, [cifGhs, vehicleYear, engineCc]);
+  }, [cifGhs, vehicleYear, engineCc, powertrain, applyEvDutyWaiver]);
 
   function runEstimate() {
     setError(null);
     if (!parsedPreview.success) {
-      setError("Enter a valid CIF value (GHS), vehicle year, and optional engine cc.");
+      setError("Enter a valid CIF (GHS), year, and powertrain. For BEV, engine cc is not required.");
       setResult(null);
       return;
     }
     setResult(computeDutyEstimate(parsedPreview.data));
   }
 
+  const showCc = powertrain !== "ELECTRIC";
+
   return (
     <div className={`rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-black/40 ${compact ? "p-4" : "p-5"}`}>
       <h3 className="text-sm font-semibold text-white">Duty estimate calculator</h3>
       <p className="mt-1 text-xs text-zinc-500">
-        Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling — not necessarily the list price).
+        Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling — not necessarily the list price). Rates follow{" "}
+        <span className="text-zinc-400">Ghana GRA / ICUMS</span> planning references; BEV uses CET-style duty bands without engine cc.
       </p>
-      <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-3"}`}>
-        <label className="block text-xs text-zinc-400">
+      <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
+        <label className="block text-xs text-zinc-400 sm:col-span-2 lg:col-span-1">
           CIF / declared value (GHS)
           <input
             value={cifGhs}
@@ -70,16 +101,52 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, compact }: Pro
           />
         </label>
         <label className="block text-xs text-zinc-400">
-          Engine cc (optional)
-          <input
-            value={engineCc}
-            onChange={(e) => setEngineCc(e.target.value)}
-            inputMode="numeric"
+          Powertrain
+          <select
+            value={powertrain}
+            onChange={(e) => setPowertrain(e.target.value as DutyPowertrain)}
             className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
-            placeholder="e.g. 2000"
-          />
+          >
+            {POWERTRAIN_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
+        {showCc ? (
+          <label className="block text-xs text-zinc-400 sm:col-span-2 lg:col-span-1">
+            Engine cc (optional, ICE / hybrid)
+            <input
+              value={engineCc}
+              onChange={(e) => setEngineCc(e.target.value)}
+              inputMode="numeric"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+              placeholder="e.g. 2000"
+            />
+          </label>
+        ) : (
+          <div className="flex items-end sm:col-span-2 lg:col-span-1">
+            <p className="w-full rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[11px] leading-snug text-cyan-100/90">
+              Battery electric: no engine displacement. ICUMS classifies by HS (e.g. 8703 electric), VIN, and CIF — use the official calculator to confirm.
+            </p>
+          </div>
+        )}
       </div>
+      {powertrain === "ELECTRIC" ? (
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-left text-[11px] text-zinc-400">
+          <input
+            type="checkbox"
+            checked={applyEvDutyWaiver}
+            onChange={(e) => setApplyEvDutyWaiver(e.target.checked)}
+            className="mt-0.5 rounded border-white/20 bg-black/40"
+          />
+          <span>
+            Model <strong className="font-medium text-zinc-300">possible import duty exemption</strong> (e.g. announced relief for qualifying public-transport or assembly
+            categories). Personal-use cars may still pay standard CET — confirm with GRA before relying on this.
+          </span>
+        </label>
+      ) : null}
       <button
         type="button"
         onClick={runEstimate}

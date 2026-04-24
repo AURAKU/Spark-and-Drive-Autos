@@ -7,7 +7,6 @@ import {
   type Part,
 } from "@prisma/client";
 
-import type { DisplayCurrency } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 
 /** ~17 minutes — between 15–20 min so the homepage mix refreshes on a predictable cadence. */

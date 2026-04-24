@@ -13,10 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 const types: { value: InquiryType; label: string }[] = [
   { value: "GENERAL", label: "Ask about this car" },
   { value: "MORE_PHOTOS", label: "Request more photos" },
-  { value: "VIDEO_CALL", label: "Request a video call" },
   { value: "SHIPPING_ESTIMATE", label: "Shipping estimate" },
   { value: "DUTY_ESTIMATE", label: "Duty estimate" },
-  { value: "RESERVE", label: "Reserve this car" },
 ];
 
 export function InquiryPanel({ carId, title, disabled }: { carId: string; title: string; disabled?: boolean }) {

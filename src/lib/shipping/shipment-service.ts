@@ -1,4 +1,4 @@
-import { NotificationType, Prisma, type DeliveryMode, type OrderStatus, type PartOrigin } from "@prisma/client";
+import { NotificationType, OrderKind, Prisma, type DeliveryMode, type OrderStatus, type PartOrigin } from "@prisma/client";
 
 import { ensureDutyRecordForCarSeaInTx } from "@/lib/duty/ensure-duty-record";
 import { prisma } from "@/lib/prisma";
@@ -388,37 +388,35 @@ export async function listShipmentsForAdminDashboard(take = 80, query?: string) 
   });
 }
 
-export async function listShipmentsForUser(userId: string, query?: string) {
-  await backfillOpenShipmentsForUser(userId);
-  const queryWhere = makeShipmentSearchWhere(query ?? "");
-  const where: Prisma.ShipmentWhereInput = { AND: [{ order: { userId } }, queryWhere] };
-  const rows = await prisma.shipment.findMany({
-    where,
-    orderBy: { updatedAt: "desc" },
-    take: 60,
-    include: {
-      order: {
-        select: {
-          id: true,
-          reference: true,
-          kind: true,
-          orderStatus: true,
-          car: { select: { title: true, slug: true } },
-        },
-      },
-      events: {
-        where: { visibleToCustomer: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
-  const missingIds = rows.filter((r) => !r.trackingNumber).map((r) => r.id);
-  await assignMissingTrackingNumbers(missingIds);
-  if (missingIds.length === 0) return rows;
+const USER_SHIPMENTS_PAGE_SIZE = 10;
+
+export type UserShipmentListParams = {
+  /** Search: tracking #, order ref, car title, part title */
+  q?: string;
+  /** `all` | `cars` | `parts` — filter by order kind (vehicle vs parts & accessories). */
+  type?: string;
+  /** 1-based page */
+  page?: number;
+};
+
+export type UserShipmentListResult = {
+  items: Awaited<ReturnType<typeof fetchUserShipmentsPage>>;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+async function fetchUserShipmentsPage(
+  where: Prisma.ShipmentWhereInput,
+  skip: number,
+  take: number,
+) {
   return prisma.shipment.findMany({
     where,
     orderBy: { updatedAt: "desc" },
-    take: 60,
+    skip,
+    take,
     include: {
       order: {
         select: {
@@ -435,6 +433,56 @@ export async function listShipmentsForUser(userId: string, query?: string) {
       },
     },
   });
+}
+
+function orderKindFromFilter(type: string | undefined): OrderKind | null {
+  const t = (type ?? "all").toLowerCase();
+  if (t === "cars" || t === "car") return "CAR";
+  if (t === "parts" || t === "part" || t === "accessories") return "PARTS";
+  return null;
+}
+
+/**
+ * User-facing shipping list: search, Cars vs Parts filter, and pagination (10 per page).
+ */
+export async function listShipmentsForUser(
+  userId: string,
+  params: UserShipmentListParams = {},
+): Promise<UserShipmentListResult> {
+  await backfillOpenShipmentsForUser(userId);
+
+  const q = params.q?.trim() ?? "";
+  const queryWhere = makeShipmentSearchWhere(q);
+  const orderKind = orderKindFromFilter(params.type);
+  const orderKindWhere: Prisma.ShipmentWhereInput =
+    orderKind == null ? {} : { order: { kind: orderKind } };
+
+  const where: Prisma.ShipmentWhereInput = {
+    AND: [{ order: { userId } }, orderKindWhere, queryWhere],
+  };
+
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = USER_SHIPMENTS_PAGE_SIZE;
+
+  const total = await prisma.shipment.count({ where });
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / pageSize));
+  const safePage = total === 0 ? 1 : Math.min(page, totalPages);
+  const finalSkip = (safePage - 1) * pageSize;
+
+  let rows = await fetchUserShipmentsPage(where, finalSkip, pageSize);
+  const missingIds = rows.filter((r) => !r.trackingNumber).map((r) => r.id);
+  await assignMissingTrackingNumbers(missingIds);
+  if (missingIds.length > 0) {
+    rows = await fetchUserShipmentsPage(where, finalSkip, pageSize);
+  }
+
+  return {
+    items: rows,
+    total,
+    page: safePage,
+    pageSize,
+    totalPages,
+  };
 }
 
 export async function getShipmentsForOrderDetail(orderId: string, userId: string) {

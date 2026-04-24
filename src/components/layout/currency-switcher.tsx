@@ -22,11 +22,11 @@ export function CurrencySwitcher({ initial }: { initial: DisplayCurrency }) {
   }
 
   return (
-    <label className="flex items-center gap-1.5 text-xs text-zinc-400">
-      <span className="hidden sm:inline">Prices</span>
+    <label className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-4">
+      <span className="shrink-0 text-xs font-medium tracking-wide text-zinc-300 sm:text-[0.8125rem]">Currency</span>
       <select
         aria-label="Display currency"
-        className="h-8 max-w-[5.5rem] rounded-lg border border-white/10 bg-black/40 px-2 text-xs text-white outline-none ring-[var(--brand)]/30 focus:ring-2 disabled:opacity-50"
+        className="h-8 min-w-[7.5rem] rounded-lg border border-white/10 bg-black/40 px-3 text-xs font-medium tabular-nums text-white outline-none ring-[var(--brand)]/30 focus:ring-2 disabled:opacity-50 sm:min-w-[8.25rem]"
         value={initial}
         disabled={pending}
         onChange={(e) => onChange(e.target.value as DisplayCurrency)}

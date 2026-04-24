@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { isPaymentProofPdfUrl } from "@/lib/payment-proof-url";
 import { getSettlementInstructions, SETTLEMENT_METHOD_ORDER, settlementMethodLabel } from "@/lib/payment-settlement";
 import { PAYMENT_STATUS_ORDER } from "@/lib/payment-status-utils";
 
@@ -171,7 +172,11 @@ export function AdminPaymentPanel({ payment: initial }: { payment: PaymentWithRe
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold text-white">Payment screenshots</h2>
+        <h2 className="text-lg font-semibold text-white">Payment proof (images &amp; PDFs)</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Approve to confirm a manual payment: status moves to <strong className="text-zinc-400">Success</strong> and the
+          customer order/receipt flow runs when applicable.
+        </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {payment.proofs.length === 0 ? (
             <p className="text-sm text-zinc-500">No uploads yet.</p>
@@ -204,12 +209,30 @@ function ProofReviewCard({
   onReject: (note: string) => void;
 }) {
   const [note, setNote] = useState("");
+  const isPdf = isPaymentProofPdfUrl(proof.imageUrl);
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={proof.imageUrl} alt="Payment proof" className="h-40 w-full object-cover" />
+      {isPdf ? (
+        <div className="flex h-40 flex-col items-center justify-center gap-2 bg-zinc-900/80 px-3">
+          <p className="text-center text-xs font-medium text-zinc-300">PDF receipt</p>
+          <a
+            href={proof.imageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-semibold text-[var(--brand)] hover:underline"
+          >
+            Open PDF in new tab
+          </a>
+        </div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src={proof.imageUrl} alt="Payment proof" className="h-40 w-full object-cover" />
+      )}
       <div className="space-y-2 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{proof.status}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          {proof.status}
+          {isPdf ? <span className="ml-2 text-zinc-600">· PDF</span> : <span className="ml-2 text-zinc-600">· Image</span>}
+        </p>
         {proof.note ? <p className="text-xs text-zinc-400">{proof.note}</p> : null}
         <Input
           placeholder="Note to customer (optional)"
@@ -217,7 +240,7 @@ function ProofReviewCard({
           onChange={(e) => setNote(e.target.value)}
           className="text-xs"
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             size="sm"
@@ -225,7 +248,7 @@ function ProofReviewCard({
             disabled={disabled}
             onClick={() => onApprove(note)}
           >
-            Approve
+            Approve &amp; confirm payment
           </Button>
           <Button
             type="button"

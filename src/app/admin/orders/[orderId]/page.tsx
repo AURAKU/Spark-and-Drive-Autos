@@ -53,6 +53,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       <p className="mt-1 text-sm text-zinc-400">
         {order.user?.email ?? "No user"} · {order.orderStatus.replaceAll("_", " ")}
       </p>
+      <div className="mt-3">
+        <Link
+          href={`/admin/duty-estimator?orderId=${encodeURIComponent(order.id)}&customerId=${encodeURIComponent(order.userId ?? "")}&clientName=${encodeURIComponent(order.user?.name ?? order.user?.email ?? "")}&clientContact=${encodeURIComponent(order.user?.email ?? "")}&vehicleName=${encodeURIComponent(order.car?.title ?? "Vehicle import estimate")}`}
+          className="inline-flex items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--brand)] hover:bg-[var(--brand)]/20"
+        >
+          Generate vehicle import estimate
+        </Link>
+      </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">

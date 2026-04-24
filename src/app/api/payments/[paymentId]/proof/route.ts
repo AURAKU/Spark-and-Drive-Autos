@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { recordPaymentProofSubmission } from "@/lib/payment-lifecycle";
-import { isTrustedPaymentProofImageUrl } from "@/lib/payment-proof-url";
+import { isTrustedPaymentProofUrl } from "@/lib/payment-proof-url";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -38,8 +38,8 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
-  if (!isTrustedPaymentProofImageUrl(parsed.data.imageUrl)) {
-    return NextResponse.json({ error: "Image URL must be from our secure upload host" }, { status: 400 });
+  if (!isTrustedPaymentProofUrl(parsed.data.imageUrl)) {
+    return NextResponse.json({ error: "Proof URL must be from our secure upload host" }, { status: 400 });
   }
 
   const payment = await prisma.payment.findFirst({

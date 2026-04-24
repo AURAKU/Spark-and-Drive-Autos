@@ -18,7 +18,7 @@ function readPage(sp: Record<string, string | string[] | undefined>, key: string
   return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
 }
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 export default async function DashboardChatsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/dashboard/chats");
@@ -34,6 +34,12 @@ export default async function DashboardChatsPage({ searchParams }: { searchParam
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
     include: { car: { select: { title: true, slug: true } } },
+  });
+  const publishedReviews = await prisma.review.findMany({
+    where: { userId: session.user.id, status: "APPROVED", partId: { not: null } },
+    orderBy: { updatedAt: "desc" },
+    take: 10,
+    include: { part: { select: { id: true, slug: true, title: true } } },
   });
   const pageHref = (nextPage: number) => (nextPage > 1 ? `/dashboard/chats?page=${nextPage}` : "/dashboard/chats");
 
@@ -90,6 +96,32 @@ export default async function DashboardChatsPage({ searchParams }: { searchParam
           nextHref={page < totalPages ? pageHref(page + 1) : null}
         />
       ) : null}
+
+      <div className="mt-10">
+        <h2 className="text-sm font-semibold tracking-wide text-foreground">Published product reviews</h2>
+        <div className="mt-3 space-y-2">
+          {publishedReviews.length === 0 ? (
+            <p className="text-sm text-zinc-500">No published reviews yet.</p>
+          ) : (
+            publishedReviews.map((r) => (
+              <div key={r.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-zinc-500">{r.part?.title ?? "Part review"}</p>
+                    <p className="mt-1 text-sm text-zinc-100">{r.body}</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">Rating: {r.rating}/5</p>
+                  </div>
+                  {r.part?.slug ? (
+                    <Link href={`/parts/${r.part.slug}`} className="text-xs font-medium text-[var(--brand)] hover:underline">
+                      View part
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

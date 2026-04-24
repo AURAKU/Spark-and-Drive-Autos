@@ -5,6 +5,7 @@ import { CarMediaPanel } from "@/components/admin/car-media-panel";
 import { PageHeading } from "@/components/typography/page-headings";
 import { prisma } from "@/lib/prisma";
 import { serializeCarForEditForm } from "@/lib/serialize-car";
+import { carHasSuccessfulFullVehiclePayment } from "@/lib/sold-vehicle";
 
 import { EditCarForm } from "./edit-car-form";
 
@@ -24,6 +25,7 @@ export default async function EditCarPage(props: Props) {
   if (!car) notFound();
 
   const carForClient = serializeCarForEditForm(car);
+  const hasSuccessfulFullPayment = await carHasSuccessfulFullVehiclePayment(car.id);
 
   return (
     <div>
@@ -34,7 +36,7 @@ export default async function EditCarPage(props: Props) {
           View public page
         </Link>
       </p>
-      <EditCarForm car={carForClient} />
+      <EditCarForm car={carForClient} hasSuccessfulFullPayment={hasSuccessfulFullPayment} />
       <div className="mt-12 border-t border-white/10 pt-10">
         <h2 className="text-lg font-semibold text-white">Photos &amp; video</h2>
         <p className="mt-1 text-sm text-zinc-500">Manage gallery order, cover image, and walkthrough clips.</p>

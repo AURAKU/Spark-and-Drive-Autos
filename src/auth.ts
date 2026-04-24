@@ -6,6 +6,11 @@ import Google from "next-auth/providers/google";
 import { z } from "zod";
 
 import { authConfig } from "./auth.config";
+import {
+  AccountSuspendedAuthError,
+  AmbiguousPhoneAuthError,
+  OAuthOnlyAuthError,
+} from "@/lib/auth-credentials-errors";
 import { resolveAppleClientSecret } from "@/lib/apple-client-secret";
 import { getRequestIp } from "@/lib/client-ip";
 import { normalizePhone } from "@/lib/phone";
@@ -157,6 +162,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               userAgent,
               metadataJson: { candidateCount: byPhone.length },
             });
+            if (byPhone.length > 1) {
+              throw new AmbiguousPhoneAuthError();
+            }
             return null;
           }
         }
@@ -165,8 +173,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           await recordSecurityObservation({
             severity: "MEDIUM",
             channel: "AUTH",
-            title: "Credential login unknown email",
-            email: id.toLowerCase(),
+            title: isLikelyEmail(id) ? "Credential login unknown email" : "Credential login unknown phone",
+            email: isLikelyEmail(id) ? id.toLowerCase() : undefined,
+            phone: isLikelyEmail(id) ? undefined : normalizePhone(id),
             ipAddress: ip,
             userAgent,
           });
@@ -184,7 +193,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ipAddress: ip,
             userAgent,
           });
-          return null;
+          throw new OAuthOnlyAuthError();
         }
 
         if (user.accountBlocked) {
@@ -198,7 +207,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ipAddress: ip,
             userAgent,
           });
-          return null;
+          throw new AccountSuspendedAuthError();
         }
 
         const ok = await compare(password, user.passwordHash);

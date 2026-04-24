@@ -35,7 +35,7 @@ function firstIssueMessage(body: RegisterErrorBody): string | null {
   return null;
 }
 
-async function parseRegisterError(res: Response): Promise<RegisterErrorBody> {
+async function parseRegisterResponse(res: Response): Promise<RegisterErrorBody> {
   const text = await res.text();
   if (!text.trim()) return { error: `Request failed (${res.status})` };
   try {
@@ -44,6 +44,8 @@ async function parseRegisterError(res: Response): Promise<RegisterErrorBody> {
     return { error: text.slice(0, 200) || `Request failed (${res.status})` };
   }
 }
+
+const simpleEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function RegisterClient({
   googleEnabled = false,
@@ -83,7 +85,7 @@ export function RegisterClient({
       toast.error("Enter your full name (at least 2 characters).");
       return;
     }
-    if (!trimmedEmail) {
+    if (!trimmedEmail || !simpleEmail.test(trimmedEmail)) {
       toast.error("Enter a valid email address.");
       return;
     }
@@ -105,15 +107,11 @@ export function RegisterClient({
         }),
       });
 
-      const data = await parseRegisterError(res);
+      const data = await parseRegisterResponse(res);
 
       if (!res.ok) {
         const detail = firstIssueMessage(data) ?? data.error ?? "Registration failed";
-        if (res.status === 409) {
-          toast.error("This email is already registered. Sign in instead.");
-        } else {
-          toast.error(detail);
-        }
+        toast.error(detail);
         return;
       }
 
@@ -122,6 +120,7 @@ export function RegisterClient({
         password,
         redirect: false,
         callbackUrl: afterAuth,
+        redirectTo: afterAuth,
       });
 
       if (signInRes?.error) {
@@ -149,27 +148,43 @@ export function RegisterClient({
   }
 
   const loginHref = `/login?callbackUrl=${encodeURIComponent(afterAuth)}`;
+  const oauthAvailable = googleEnabled || appleEnabled;
+  const registerDescription = oauthAvailable
+    ? "Register to track orders, save favorites, message our team, and check out faster. You can create an account with Google, Apple, or email."
+    : "Register to track orders, save favorites, message our team, and check out faster using your email and a password.";
 
   return (
     <AuthPageShell
       title="Create account"
-      description="Register to track orders, save favorites, message our team, and check out faster."
+      description={registerDescription}
+      footer={
+        <p className="text-center text-sm text-muted-foreground dark:text-zinc-500">
+          <Link
+            className="font-medium text-foreground underline-offset-4 hover:text-[var(--brand)] hover:underline dark:text-zinc-300"
+            href="/forgot-password"
+          >
+            Forgot password?
+          </Link>
+        </p>
+      }
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground dark:text-zinc-400">Already have an account?</p>
         <Link
           href={loginHref}
+          aria-busy={loading}
           className={cn(
             buttonVariants({ variant: "outline", size: "lg" }),
             "h-11 min-h-11 w-full justify-center border-border bg-background/80 text-foreground hover:bg-muted sm:w-auto sm:min-w-[11rem]",
             "dark:border-white/20 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/10",
+            loading && "pointer-events-none opacity-60",
           )}
         >
           Sign in
         </Link>
       </div>
 
-      {googleEnabled || appleEnabled ? (
+      {oauthAvailable ? (
         <div className="mt-8 space-y-4">
           {appleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
           {googleEnabled ? <GoogleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}

@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-const DUTY_ORDER_PAGE_SIZE = 25;
+const DUTY_ORDER_PAGE_SIZE = 15;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -58,7 +58,7 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
     orderBy: { updatedAt: "desc" },
     include: {
       user: { select: { email: true } },
-      car: { select: { title: true, slug: true, year: true, basePriceRmb: true } },
+      car: { select: { title: true, slug: true, year: true, basePriceRmb: true, engineType: true } },
       shipments: { where: { kind: "CAR_SEA" }, take: 1, orderBy: { createdAt: "desc" } },
       dutyRecords: { orderBy: { updatedAt: "desc" }, take: 1 },
       payments: {
@@ -81,6 +81,7 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
       carTitle: o.car?.title ?? null,
       carSlug: o.car?.slug ?? null,
       carYear: o.car?.year ?? null,
+      carEngineType: o.car?.engineType ?? null,
       basePriceRmb: o.car?.basePriceRmb != null ? Number(o.car.basePriceRmb) : null,
       currency: o.currency,
       orderAmountGhs: Number(o.amount),
@@ -129,6 +130,10 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
           Need the full vehicle record?{" "}
           <Link href="/admin/orders" className="text-[var(--brand)] hover:underline">
             All orders
+          </Link>
+          {" · "}
+          <Link href="/admin/duty-estimator" className="text-[var(--brand)] hover:underline">
+            Vehicle import estimates
           </Link>
         </p>
       </div>

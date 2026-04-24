@@ -29,6 +29,12 @@ export const DUTY_OFFICIAL_LINKS: DutyOfficialLink[] = [
     href: "https://gra.gov.gh/customs/vehicle-importation/",
   },
   {
+    id: "trade-ghana-ev-tariffs",
+    label: "Trade.gov — Ghana EV tariffs (context)",
+    description: "ECOWAS CET and Ghana policy context for electric vs ICE passenger vehicles (planning reference).",
+    href: "https://www.trade.gov/market-intelligence/ghana-electrical-vehicle-tariffs",
+  },
+  {
     id: "icums-used-vehicle-calculator",
     label: "ICUMS — Used vehicle duty calculator",
     description: "Confirm used-vehicle duty with the official ICUMS calculator (UniPass).",

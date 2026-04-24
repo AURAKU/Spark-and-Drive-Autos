@@ -11,6 +11,7 @@ import { formatConverted, getGlobalCurrencySettings, parseDisplayCurrency } from
 import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
 import { allowedPartCurrencies, getPartDisplayPrice } from "@/lib/parts-pricing";
 import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -95,6 +96,7 @@ export default async function PartDetailPage(props: Props) {
         })
       : null;
   const chinaQuotes = part.origin === "CHINA" ? await computeChinaQuotesForPartIds([part.id]) : null;
+  const shareUrl = `${getPublicAppUrl()}/parts/${part.slug}`;
 
   return (
     <div className="parts-theme relative [--brand:#ef4444]">
@@ -201,6 +203,8 @@ export default async function PartDetailPage(props: Props) {
               partId={part.id}
               partSlug={part.slug}
               partTitle={part.title}
+              shareUrl={shareUrl}
+              shareDescription={part.shortDescription}
               stockQty={part.stockQty}
               unitPrice={walletPriceGhs}
               currency="GHS"

@@ -1,4 +1,4 @@
-import type { DutyWorkflowStage } from "@prisma/client";
+import type { DutyWorkflowStage, EngineType } from "@prisma/client";
 
 export type AdminDutyOrderRow = {
   id: string;
@@ -8,6 +8,7 @@ export type AdminDutyOrderRow = {
   carTitle: string | null;
   carSlug: string | null;
   carYear: number | null;
+  carEngineType: EngineType | null;
   basePriceRmb: number | null;
   currency: string;
   /** Vehicle order total in GHS — rough proxy for calculator pre-fill (not CIF). */

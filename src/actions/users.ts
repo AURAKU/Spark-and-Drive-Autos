@@ -49,6 +49,11 @@ const accountBlockSchema = z.object({
   blocked: z.enum(["0", "1"]),
 });
 
+const partsFinderMembershipSchema = z.object({
+  userId: z.string().cuid(),
+  action: z.enum(["ACTIVATE", "DEACTIVATE"]),
+});
+
 export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormData): Promise<UpdateUserRoleState> {
   try {
     const session = await requireAdmin();
@@ -125,6 +130,96 @@ export async function setUserAccountBlocked(
     if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Admin access required" };
     console.error("[setUserAccountBlocked]", e);
     return { error: e instanceof Error ? e.message : "Could not update account status." };
+  }
+}
+
+export async function setUserPartsFinderMembership(
+  _prev: AdminUserActionState,
+  formData: FormData,
+): Promise<AdminUserActionState> {
+  try {
+    const session = await requireAdmin();
+    const parsed = partsFinderMembershipSchema.safeParse({
+      userId: formData.get("userId"),
+      action: formData.get("action"),
+    });
+    if (!parsed.success) return { error: "Invalid Parts Finder membership request." };
+    const { userId, action } = parsed.data;
+    if (userId === session.user.id) {
+      return { error: "You cannot change your own Parts Finder membership here." };
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!target) return { error: "User not found." };
+    if (target.role === "SUPER_ADMIN") {
+      return { error: "Super admin membership must be managed from Parts Finder admin surface." };
+    }
+
+    const now = new Date();
+    const [existing, settings] = await Promise.all([
+      prisma.partsFinderMembership.findFirst({
+        where: { userId },
+        orderBy: { endsAt: "desc" },
+      }),
+      prisma.partsFinderSettings.findFirst({
+        orderBy: { updatedAt: "desc" },
+        select: { activationDurationDays: true },
+      }),
+    ]);
+
+    if (action === "DEACTIVATE") {
+      if (!existing) return { error: "No Parts Finder membership found for this user." };
+      await prisma.partsFinderMembership.update({
+        where: { id: existing.id },
+        data: {
+          status: "SUSPENDED",
+          suspendedAt: now,
+          suspendedBy: session.user.id,
+          reason: "Deactivated from admin users page.",
+        },
+      });
+    } else {
+      const defaultDays = Math.max(1, settings?.activationDurationDays ?? 30);
+      const defaultEndsAt = new Date(now.getTime() + defaultDays * 24 * 60 * 60 * 1000);
+      if (!existing) {
+        await prisma.partsFinderMembership.create({
+          data: {
+            userId,
+            status: "ACTIVE",
+            startsAt: now,
+            endsAt: defaultEndsAt,
+            reason: "Activated from admin users page.",
+          },
+        });
+      } else {
+        const shouldExtend = existing.endsAt <= now;
+        await prisma.partsFinderMembership.update({
+          where: { id: existing.id },
+          data: {
+            status: "ACTIVE",
+            startsAt: shouldExtend ? now : existing.startsAt,
+            endsAt: shouldExtend ? defaultEndsAt : existing.endsAt,
+            suspendedAt: null,
+            suspendedBy: null,
+            reason: "Activated from admin users page.",
+          },
+        });
+      }
+    }
+
+    await auditLog(session.user.id, action === "ACTIVATE" ? "parts_finder.membership.activate" : "parts_finder.membership.deactivate", "User", userId, {
+      source: "admin.users.page",
+    });
+    revalidateAdminUsersSurface();
+    revalidatePath("/admin/parts-finder/memberships", "page");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Admin access required" };
+    console.error("[setUserPartsFinderMembership]", e);
+    return { error: e instanceof Error ? e.message : "Could not update Parts Finder membership." };
   }
 }
 
