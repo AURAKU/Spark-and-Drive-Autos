@@ -148,6 +148,7 @@ enum PaymentType {
   DUTY
   BALANCE
   SERVICE
+  PARTS_FINDER_MEMBERSHIP
 }
 
 enum PaymentStatus {
@@ -225,6 +226,50 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum PartsFinderMembershipStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum PartsFinderSearchStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  LOW_CONFIDENCE
+  VERIFIED
+  LIKELY
+  FLAGGED_SOURCING
+}
+
+enum PartsFinderConfidenceLabel {
+  VERIFIED_MATCH
+  LIKELY_MATCH
+  NEEDS_VERIFICATION
+}
+
+enum PartsFinderOutcomeStatus {
+  VERIFIED
+  LIKELY
+  REJECTED
+}
+
+enum PartsFinderReferenceType {
+  OEM
+  ALTERNATE
+}
+
+enum PartsFinderVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PartsFinderApprovalMode {
+  AUTO
+  MANUAL
+}
+
 enum PartListingState {
   DRAFT
   PUBLISHED
@@ -283,6 +328,14 @@ enum DutyWorkflowStage {
   CLEARANCE_IN_PROGRESS
   CLEARED
   DELIVERED_READY_FOR_PICKUP
+}
+
+enum VehicleImportEstimateStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  EXPIRED
+  SUPERSEDED
 }
 
 enum DuplicateEntityType {
@@ -394,22 +447,22 @@ model User {
   partSourcingRequests         PartSourcingRequest[]
   orders                       Order[]
   payments                     Payment[]
-  chats                        ChatThread[]             @relation("CustomerChats")
-  leads                        Lead[]                   @relation("LeadCustomer")
+  chats                        ChatThread[]                     @relation("CustomerChats")
+  leads                        Lead[]                           @relation("LeadCustomer")
   reviews                      Review[]
   notifications                Notification[]
-  messages                     Message[]                @relation("UserMessages")
-  auditLogs                    AuditLog[]               @relation("ActorAudit")
-  assignedLeads                Lead[]                   @relation("LeadOwner")
-  quotesForCustomer            Quote[]                  @relation("QuoteCustomer")
-  quotesCreated                Quote[]                  @relation("QuoteCreator")
-  paymentProofsUploaded        PaymentProof[]           @relation("PaymentProofUploader")
-  paymentProofsReviewed        PaymentProof[]           @relation("PaymentProofReviewedBy")
-  paymentsReviewed             Payment[]                @relation("PaymentReviewedBy")
-  paymentStatusEvents          PaymentStatusHistory[]   @relation("PaymentStatusActor")
-  paymentVerificationsReviewed PaymentVerification[]    @relation("PaymentVerificationReviewer")
-  policyVersionsCreated        PolicyVersion[]          @relation("PolicyVersionCreator")
-  currencySettingsUpdated      GlobalCurrencySettings[] @relation("CurrencyUpdatedBy")
+  messages                     Message[]                        @relation("UserMessages")
+  auditLogs                    AuditLog[]                       @relation("ActorAudit")
+  assignedLeads                Lead[]                           @relation("LeadOwner")
+  quotesForCustomer            Quote[]                          @relation("QuoteCustomer")
+  quotesCreated                Quote[]                          @relation("QuoteCreator")
+  paymentProofsUploaded        PaymentProof[]                   @relation("PaymentProofUploader")
+  paymentProofsReviewed        PaymentProof[]                   @relation("PaymentProofReviewedBy")
+  paymentsReviewed             Payment[]                        @relation("PaymentReviewedBy")
+  paymentStatusEvents          PaymentStatusHistory[]           @relation("PaymentStatusActor")
+  paymentVerificationsReviewed PaymentVerification[]            @relation("PaymentVerificationReviewer")
+  policyVersionsCreated        PolicyVersion[]                  @relation("PolicyVersionCreator")
+  currencySettingsUpdated      GlobalCurrencySettings[]         @relation("CurrencyUpdatedBy")
   passwordResetTokens          PasswordResetToken[]
   duplicateChecksReviewed      DuplicateCheckEvent[]
   securityObservations         SecurityObservation[]
@@ -422,12 +475,24 @@ model User {
   agreementLogs                AgreementLog[]
   contractAcceptances          ContractAcceptance[]
   riskAcknowledgements         RiskAcknowledgement[]
-  riskTags                     UserRiskTag[]            @relation("RiskTagUser")
-  riskTagsCreated              UserRiskTag[]            @relation("RiskTagCreator")
+  riskTags                     UserRiskTag[]                    @relation("RiskTagUser")
+  riskTagsCreated              UserRiskTag[]                    @relation("RiskTagCreator")
   riskEvents                   RiskEvent[]
-  systemAnnouncementsCreated   SystemAnnouncement[]     @relation("SystemAnnouncementCreator")
-  shipmentStatusEventsAuthored ShipmentStatusEvent[]    @relation("ShipmentStatusEventActor")
-  dutyRecordsUpdated             DutyRecord[]             @relation("DutyRecordUpdatedBy")
+  systemAnnouncementsCreated   SystemAnnouncement[]             @relation("SystemAnnouncementCreator")
+  shipmentStatusEventsAuthored ShipmentStatusEvent[]            @relation("ShipmentStatusEventActor")
+  dutyRecordsUpdated           DutyRecord[]                     @relation("DutyRecordUpdatedBy")
+  partsFinderMemberships       PartsFinderMembership[]
+  partsFinderSearchSessions    PartsFinderSearchSession[]       @relation("PartsFinderSessionUser")
+  partsFinderReviewedSessions  PartsFinderSearchSession[]       @relation("PartsFinderSessionReviewer")
+  partsFinderReviewOverrides   PartsFinderSearchSessionReview[] @relation("PartsFinderOverrideReviewer")
+  partsFinderConversions       PartsFinderConversion[]
+  partsFinderResults           PartsFinderResult[]
+  partsFinderVerifiedOutcomes  PartsFinderVerifiedOutcome[]     @relation("PartsFinderOutcomeReviewer")
+  partsFinderSupportVerifications PartsFinderSupportVerification[] @relation("PartsFinderSupportVerificationReviewer")
+  vehicleImportEstimatesPrepared  VehicleImportEstimate[]       @relation("VehicleImportEstimatePreparedBy")
+  vehicleImportEstimatesForCustomer VehicleImportEstimate[]     @relation("VehicleImportEstimateCustomer")
+  vehicleImportEstimatesSent       VehicleImportEstimate[]       @relation("VehicleImportEstimateSentBy")
+  vehicleImportEstimateEvents      VehicleImportEstimateEvent[] @relation("VehicleImportEstimateEventActor")
 }
 
 /// Audit log row when an admin broadcasts an in-app announcement to all user accounts.
@@ -543,6 +608,7 @@ model Car {
   orders    Order[]
   chats     ChatThread[]
   quotes    Quote[]
+  vehicleImportEstimates VehicleImportEstimate[]
 
   @@index([brand, model])
   @@index([listingState, featured])
@@ -611,6 +677,7 @@ model Inquiry {
   user    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   lead    Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   threads ChatThread[]
+  vehicleImportEstimates VehicleImportEstimate[]
 
   @@index([carId])
   @@index([status])
@@ -667,14 +734,14 @@ model Lead {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  customer    User?        @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  owner       User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  inquiries   Inquiry[]
-  carRequests            CarRequest[]
-  partSourcingRequests   PartSourcingRequest[]
-  chats                  ChatThread[]
-  quotes                 Quote[]
-  orders                 Order[]
+  customer             User?                 @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  owner                User?                 @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  inquiries            Inquiry[]
+  carRequests          CarRequest[]
+  partSourcingRequests PartSourcingRequest[]
+  chats                ChatThread[]
+  quotes               Quote[]
+  orders               Order[]
 
   @@index([stage])
   @@index([customerId])
@@ -852,12 +919,78 @@ model Order {
   agreementLogs        AgreementLog[]
   riskAcknowledgements RiskAcknowledgement[]
   ContractAcceptance   ContractAcceptance[]
+  vehicleImportEstimates VehicleImportEstimate[]
 
   @@index([userId])
   @@index([orderStatus])
   @@index([reference])
   @@index([kind])
   @@index([receiptReference])
+}
+
+model VehicleImportEstimate {
+  id                      String                      @id @default(cuid())
+  estimateNumber          String                      @unique
+  status                  VehicleImportEstimateStatus @default(DRAFT)
+  clientName              String
+  clientContact           String
+  vehicleName             String
+  /// ICE / hybrid / BEV — drives formula duty-range multipliers and document notes.
+  engineType              EngineType?
+  modelYear               Int?
+  vin                     String?
+  fob                     Decimal?                    @db.Decimal(14, 2)
+  freight                 Decimal?                    @db.Decimal(14, 2)
+  insurance               Decimal?                    @db.Decimal(14, 2)
+  cif                     Decimal?                    @db.Decimal(14, 2)
+  estimatedDutyRangeMin   Decimal?                    @db.Decimal(14, 2)
+  estimatedDutyRangeMax   Decimal?                    @db.Decimal(14, 2)
+  estimatedLandedCost     Decimal?                    @db.Decimal(14, 2)
+  importantNotice         String?                     @db.Text
+  preparedByName          String                      @default("Spark and Drive Autos")
+  preparedByUserId        String?
+  sentAt                  DateTime?
+  sentByUserId            String?
+  customerId              String?
+  orderId                 String?
+  inquiryId               String?
+  carId                   String?
+  finalizedAt             DateTime?
+  acceptedAt              DateTime?
+  expiresAt               DateTime?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  preparedBy User?    @relation("VehicleImportEstimatePreparedBy", fields: [preparedByUserId], references: [id], onDelete: SetNull)
+  sentBy     User?    @relation("VehicleImportEstimateSentBy", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  customer   User?    @relation("VehicleImportEstimateCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  inquiry    Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  car        Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
+  events     VehicleImportEstimateEvent[]
+
+  @@index([status, updatedAt])
+  @@index([customerId, createdAt])
+  @@index([orderId, createdAt])
+  @@index([inquiryId, createdAt])
+  @@index([carId, createdAt])
+  @@index([acceptedAt])
+  @@index([expiresAt])
+}
+
+model VehicleImportEstimateEvent {
+  id          String                      @id @default(cuid())
+  estimateId  String
+  status      VehicleImportEstimateStatus
+  note        String?                     @db.Text
+  actorUserId String?
+  createdAt   DateTime                    @default(now())
+
+  estimate VehicleImportEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  actor    User?                 @relation("VehicleImportEstimateEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([estimateId, createdAt])
+  @@index([status, createdAt])
 }
 
 model Payment {
@@ -1127,9 +1260,9 @@ model Shipment {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  order        Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  events       ShipmentStatusEvent[]
-  dutyRecords  DutyRecord[]
+  order       Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events      ShipmentStatusEvent[]
+  dutyRecords DutyRecord[]
 
   @@index([orderId])
   @@index([kind, currentStage])
@@ -1167,27 +1300,27 @@ model OrderTimelineEntry {
 }
 
 model DutyRecord {
-  id         String   @id @default(cuid())
-  orderId    String
+  id                  String            @id @default(cuid())
+  orderId             String
   /// Sea shipment for this vehicle order when known (links arrival/clearance context).
-  shipmentId String?
-  dutyAmount Decimal? @db.Decimal(14, 2)
-  currency   String   @default("GHS")
-  notes      String?  @db.Text
+  shipmentId          String?
+  dutyAmount          Decimal?          @db.Decimal(14, 2)
+  currency            String            @default("GHS")
+  notes               String?           @db.Text
   /// Legacy free-text; prefer `workflowStage` for new rows.
-  status     String?
-  workflowStage         DutyWorkflowStage @default(NOT_STARTED)
+  status              String?
+  workflowStage       DutyWorkflowStage @default(NOT_STARTED)
   /// Versioned calculator output (inputs, line items, subtotals, disclaimers).
-  estimateJson          Json?
-  estimateTotalGhs      Decimal?          @db.Decimal(14, 2)
-  formulaVersion        String?           @db.VarChar(40)
+  estimateJson        Json?
+  estimateTotalGhs    Decimal?          @db.Decimal(14, 2)
+  formulaVersion      String?           @db.VarChar(40)
   /// Official / ICUMS-assessed payable duty when known (not the in-app estimate).
-  assessedDutyGhs       Decimal?          @db.Decimal(14, 2)
-  customerVisibleNote   String?           @db.Text
-  internalNote          String?           @db.Text
-  updatedById           String?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  assessedDutyGhs     Decimal?          @db.Decimal(14, 2)
+  customerVisibleNote String?           @db.Text
+  internalNote        String?           @db.Text
+  updatedById         String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   shipment  Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
@@ -1196,6 +1329,232 @@ model DutyRecord {
   @@index([orderId])
   @@index([shipmentId])
   @@index([workflowStage])
+}
+
+model PartsFinderSettings {
+  id                        String   @id @default(cuid())
+  currencyCode              String   @default("GHS")
+  activationPriceMinor      Int      @default(50000)
+  activationDurationDays    Int      @default(30)
+  renewalPriceMinor         Int      @default(50000)
+  renewalDurationDays       Int      @default(30)
+  approvalMode              PartsFinderApprovalMode @default(MANUAL)
+  requireManualReviewBelow  Int      @default(55)
+  suspiciousPhraseThreshold Int      @default(2)
+  active                    Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model PartsFinderMembership {
+  id          String                      @id @default(cuid())
+  userId      String
+  status      PartsFinderMembershipStatus @default(ACTIVE)
+  startsAt    DateTime
+  endsAt      DateTime
+  suspendedAt DateTime?
+  suspendedBy String?
+  reason      String?                     @db.Text
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  user     User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions PartsFinderSearchSession[]
+
+  @@index([userId, status])
+  @@index([endsAt])
+}
+
+model PartsFinderSearchSession {
+  id                   String                      @id @default(cuid())
+  sessionId            String                      @unique
+  userId               String
+  membershipId         String?
+  /// Denormalized for fast admin analytics (make · model · year).
+  analyticsVehicleLabel   String?
+  /// Denormalized for top make/model charts.
+  analyticsMakeModelLabel String?
+  /// Denormalized part intent (canonical or raw).
+  analyticsPartIntentLabel String?
+  /// True when ranked results were persisted for this session.
+  hasRankedResults     Boolean                     @default(false)
+  inputJson            Json
+  normalizedJson       Json
+  vehicleJson          Json?
+  queryFormsJson       Json?
+  rawEvidenceJson      Json?
+  parsedResultsJson    Json?
+  rawResultsJson       Json?
+  refinedResultsJson   Json?
+  rankedResultsJson    Json?
+  confidenceJson       Json?
+  summaryJson          Json?
+  safetyFlagsJson      Json?
+  status               PartsFinderSearchStatus     @default(PENDING_REVIEW)
+  confidenceLabel      PartsFinderConfidenceLabel?
+  confidenceScore      Int?
+  adminSummaryOverride String?                     @db.Text
+  reviewNote           String?                     @db.Text
+  reviewedAt           DateTime?
+  reviewedById         String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  user            User                             @relation("PartsFinderSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  membership      PartsFinderMembership?           @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  reviewedBy      User?                            @relation("PartsFinderSessionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewOverrides PartsFinderSearchSessionReview[]
+  conversions     PartsFinderConversion[]
+  results         PartsFinderResult[]
+  outcomes        PartsFinderVerifiedOutcome[]
+  images          PartsFinderSearchImage[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById])
+}
+
+model PartsFinderSearchSessionReview {
+  id              String                      @id @default(cuid())
+  sessionId       String
+  reviewerId      String
+  status          PartsFinderSearchStatus
+  confidence      PartsFinderConfidenceLabel?
+  note            String?                     @db.Text
+  summaryOverride String?                     @db.Text
+  correctedPartName String?
+  correctedOemCodes Json?
+  candidateBefore Json?
+  candidateAfter  Json?
+  createdAt       DateTime                    @default(now())
+
+  session  PartsFinderSearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  reviewer User                     @relation("PartsFinderOverrideReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([reviewerId, createdAt])
+}
+
+model PartsFinderConversion {
+  id             String   @id @default(cuid())
+  userId         String
+  sessionId      String
+  conversionType String
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  user    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session PartsFinderSearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, conversionType, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model PartsFinderResult {
+  id              String                      @id @default(cuid())
+  sessionId       String
+  userId          String
+  candidateJson   Json
+  summaryJson     Json?
+  derivationJson  Json?
+  confidenceLabel PartsFinderConfidenceLabel?
+  confidenceScore Int?
+  isTopResult     Boolean                     @default(false)
+  reviewStatus    PartsFinderSearchStatus     @default(PENDING_REVIEW)
+  sourcingLinked  Boolean                     @default(false)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  session                    PartsFinderSearchSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                       User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  PartsFinderVerifiedOutcome PartsFinderVerifiedOutcome[]
+  references                 PartsFinderResultReference[]
+  fitmentsDetailed           PartsFinderResultFitment[]
+  verifications              PartsFinderSupportVerification[]
+
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model PartsFinderSearchImage {
+  id         String   @id @default(cuid())
+  sessionId  String
+  kind       String   @default("PART_IMAGE")
+  fileName   String?
+  mimeType   String?
+  sizeBytes  Int?
+  createdAt  DateTime @default(now())
+
+  session PartsFinderSearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model PartsFinderResultReference {
+  id            String                   @id @default(cuid())
+  resultId      String
+  referenceType PartsFinderReferenceType
+  referenceCode String
+  label         String?
+  createdAt     DateTime                 @default(now())
+
+  result PartsFinderResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([resultId, referenceType])
+  @@index([referenceCode])
+}
+
+model PartsFinderResultFitment {
+  id        String   @id @default(cuid())
+  resultId  String
+  brand     String?
+  model     String?
+  yearFrom  Int?
+  yearTo    Int?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  result PartsFinderResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([resultId, createdAt])
+}
+
+model PartsFinderSupportVerification {
+  id                 String                        @id @default(cuid())
+  resultId           String
+  status             PartsFinderVerificationStatus @default(PENDING)
+  reviewerId         String?
+  note               String?                       @db.Text
+  verifiedPartName   String?
+  verifiedOemCode    String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  result   PartsFinderResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  reviewer User?             @relation("PartsFinderSupportVerificationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([resultId, status])
+  @@index([reviewerId])
+}
+
+model PartsFinderVerifiedOutcome {
+  id                  String                   @id @default(cuid())
+  sessionId           String
+  resultId            String?
+  vehicleSignature    String
+  partIntentSignature String
+  candidateSignature  String?
+  outcomeStatus       PartsFinderOutcomeStatus
+  note                String?                  @db.Text
+  reviewerId          String
+  createdAt           DateTime                 @default(now())
+
+  session  PartsFinderSearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  result   PartsFinderResult?       @relation(fields: [resultId], references: [id], onDelete: SetNull)
+  reviewer User                     @relation("PartsFinderOutcomeReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleSignature, partIntentSignature, outcomeStatus])
+  @@index([sessionId, createdAt])
 }
 
 model Favorite {
@@ -1550,12 +1909,12 @@ model AuditLog {
 
 /// Automated security / abuse signals for admin review (Protection Center).
 model SecurityObservation {
-  id           String            @id @default(cuid())
-  createdAt    DateTime          @default(now())
-  severity     SecuritySeverity  @default(MEDIUM)
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now())
+  severity     SecuritySeverity @default(MEDIUM)
   channel      SecurityChannel
   title        String
-  detail       String?           @db.Text
+  detail       String?          @db.Text
   userId       String?
   email        String?
   phone        String?

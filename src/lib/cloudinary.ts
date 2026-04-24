@@ -28,3 +28,48 @@ export async function createUploadSignature(params: {
     folder: params.folder,
   };
 }
+
+export type PaymentProofUploadKind = "image" | "pdf";
+
+/**
+ * Signed direct upload for payment proof: images (with on-upload optimization) or raw PDF.
+ * Client must POST the same params to Cloudinary that were included in the signature.
+ */
+export async function createPaymentProofUploadSignature(params: {
+  folder: string;
+  kind: PaymentProofUploadKind;
+}) {
+  if (!configureCloudinary()) throw new Error("Cloudinary is not configured");
+  const timestamp = Math.round(Date.now() / 1000);
+  const folder = params.folder;
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME!;
+
+  if (params.kind === "pdf") {
+    const toSign: Record<string, string | number> = { folder, timestamp };
+    const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
+    return {
+      timestamp,
+      signature,
+      cloudName: cloud,
+      apiKey: process.env.CLOUDINARY_API_KEY!,
+      folder,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/raw/upload`,
+      kind: "pdf" as const,
+      eager: null as string | null,
+    };
+  }
+
+  const eager = "c_limit,w_2000,q_auto:good,f_auto";
+  const toSign: Record<string, string | number> = { folder, timestamp, eager };
+  const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
+  return {
+    timestamp,
+    signature,
+    cloudName: cloud,
+    apiKey: process.env.CLOUDINARY_API_KEY!,
+    folder,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/image/upload`,
+    kind: "image" as const,
+    eager,
+  };
+}

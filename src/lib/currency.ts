@@ -26,6 +26,13 @@ export type VehiclePricePreview = {
   sourceType?: "IN_GHANA" | "IN_CHINA" | "IN_TRANSIT";
   /** Estimated sea freight (GHS), if configured on the listing. */
   seaShippingFeeGhs?: number | null;
+  /** GHS charged at checkout (full price or reservation deposit), from admin RMB→GHS parameters. */
+  settlementGhs: number;
+  /** Full vehicle total in GHS (before deposit rule), for deposit checkout context. */
+  fullGhs: number;
+  /** Admin divisor D where GHS = round(RMB ÷ D). */
+  rmbToGhsDivisor: number;
+  paymentType: "FULL" | "RESERVATION_DEPOSIT";
 };
 
 /** UI labels — CNY is used interchangeably with RMB on the storefront. */

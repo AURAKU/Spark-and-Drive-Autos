@@ -15,7 +15,7 @@ import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 15;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

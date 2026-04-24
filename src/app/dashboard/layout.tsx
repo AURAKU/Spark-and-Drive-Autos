@@ -2,9 +2,9 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { getStaffOperationsHref, isAdminRole, isSupportStaffRole } from "@/auth";
-import { AdminPreviewBanner } from "@/components/layout/admin-preview-banner";
 import { CurrencySwitcher } from "@/components/layout/currency-switcher";
 import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
+import { DashboardSidebarNav } from "@/components/layout/dashboard-sidebar-nav";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
 import { StaffDashboardBar } from "@/components/layout/staff-dashboard-bar";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
@@ -22,7 +22,9 @@ const links = [
   { href: "/dashboard/requests", label: "Requests" },
   { href: "/dashboard/orders", label: "Orders" },
   { href: "/dashboard/payments", label: "Payments" },
-  { href: "/dashboard/shipping", label: "Shipping" },
+  { href: "/dashboard/shipping", label: "Shipping & Delivery" },
+  { href: "/dashboard/estimates", label: "Import Estimates" },
+  { href: "/dashboard/parts-finder", label: "Parts Finder", ctaStyle: "parts-finder" as const },
   { href: "/dashboard/chats", label: "Chats" },
 ];
 
@@ -40,12 +42,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       : 0;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen min-w-0 flex-col">
       <DashboardTopHeader />
       <StaffDashboardBar />
-      <AdminPreviewBanner />
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-6 text-sidebar-foreground lg:block">
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <aside className="hidden w-64 shrink-0 self-start border-r border-sidebar-border bg-sidebar p-6 text-sidebar-foreground lg:sticky lg:top-0 lg:block lg:max-h-[100dvh] lg:overflow-y-auto lg:overscroll-y-contain">
           <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">Customer</p>
           <p className="mt-2 text-sm font-medium text-sidebar-foreground">{session?.user?.name ?? session?.user?.email}</p>
           {supportStaff && !admin ? (
@@ -70,8 +71,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
             >
               {viewMode === "user" ? (
                 <>
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-amber-200/90">Customer preview</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Same session and RBAC — navigation emphasis only.</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-amber-200/90">Operations</p>
+                  <p className="mt-1 text-xs text-muted-foreground">User-mode preview active for customer workflow checks.</p>
                   <ViewModeButton targetMode="admin" redirectTo={staffOpsHref} className="mt-3 w-full">
                     Switch to admin
                   </ViewModeButton>
@@ -93,7 +94,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           )}
           <div className="mt-6 rounded-xl border border-border bg-muted/40 p-3 dark:border-white/10 dark:bg-white/[0.02]">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Display prices</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
             <div className="mt-2">
               <CurrencySwitcher initial={displayCurrency} />
             </div>
@@ -101,24 +102,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
               Matches storefront currency. Checkout is settled in GHS.
             </p>
           </div>
-          <nav className="mt-8 space-y-1">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="inline-flex h-8 w-full items-center justify-between rounded-lg px-2.5 text-sm text-sidebar-foreground/90 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <span>{l.label}</span>
-                {l.href === "/dashboard/notifications" && unread > 0 ? (
-                  <span className="rounded-full bg-[var(--brand)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand)]">
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                ) : null}
-              </Link>
-            ))}
-          </nav>
+          <DashboardSidebarNav links={links} unreadByHref={{ "/dashboard/notifications": unread }} />
         </aside>
-        <div className="flex-1">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
           {admin ? (
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-sidebar px-4 py-3 lg:hidden dark:border-white/10">
               <ViewModeButton targetMode="admin" redirectTo={staffOpsHref} className="min-h-9 flex-1 text-xs sm:flex-none">
@@ -149,7 +135,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
             <CurrencySwitcher initial={displayCurrency} />
           </div>
-          <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
+          <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>
       </div>
     </div>

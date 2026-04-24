@@ -20,7 +20,7 @@ function readPage(sp: Record<string, string | string[] | undefined>, key: string
   return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
 }
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 export default async function DashboardNotificationsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/dashboard/notifications");

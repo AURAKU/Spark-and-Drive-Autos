@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function DashboardHome() {
   const session = await requireSessionOrRedirect("/dashboard");
   const userId = session.user.id;
+  const rawName = session.user.name?.trim();
+  const emailHandle = session.user.email?.split("@")[0]?.trim();
+  const displayName = rawName || emailHandle || "there";
 
   const [orders, payments, favorites] = await Promise.all([
     prisma.order.count({ where: { userId } }),
@@ -18,7 +21,7 @@ export default async function DashboardHome() {
 
   return (
     <div>
-      <PageHeading variant="dashboard">Welcome back</PageHeading>
+      <PageHeading variant="dashboard">Welcome back, {displayName}</PageHeading>
       <p className="mt-2 text-sm text-zinc-400">
         Track orders, payments, and logistics milestones from one place.
       </p>

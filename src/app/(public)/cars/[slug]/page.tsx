@@ -1,20 +1,27 @@
 import { cookies } from "next/headers";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { PageHeading } from "@/components/typography/page-headings";
+import { CarCheckoutPayRow } from "@/components/cars/car-checkout-pay-row";
+import { CarFavoriteButton } from "@/components/cars/car-favorite-button";
+import { CarGallery } from "@/components/cars/car-gallery";
+import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
 import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
 import { InquiryPanel } from "@/components/inquiry/inquiry-panel";
+import { SharePageButton } from "@/components/sharing/share-page-button";
 import { Badge } from "@/components/ui/badge";
+import { PageHeading } from "@/components/typography/page-headings";
 import { CarListingState } from "@prisma/client";
 
+import { auth } from "@/auth";
 import {
   formatVehiclePriceFromRmb,
   getCarDisplayPrice,
   getGlobalCurrencySettings,
   parseDisplayCurrency,
 } from "@/lib/currency";
+import { getPublicAppUrl } from "@/lib/app-url";
+import { buildCarGalleryImages } from "@/lib/car-gallery";
+import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -52,17 +59,29 @@ export default async function CarDetailPage(props: Props) {
 
   if (!car) notFound();
 
+  const session = await auth();
+  const userId = session?.user?.id;
+  const carFavorite =
+    userId != null
+      ? await prisma.favorite.findUnique({
+          where: { userId_carId: { userId, carId: car.id } },
+          select: { id: true },
+        })
+      : null;
+
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
   const priceLabel = formatVehiclePriceFromRmb(Number(car.basePriceRmb), displayCurrency, fx);
   const listPriceAsCifHintGhs = getCarDisplayPrice(Number(car.basePriceRmb), "GHS", fx);
 
-  const cover = car.coverImageUrl ?? car.images[0]?.url;
-  const isSold = car.listingState === CarListingState.SOLD;
+  const galleryImages = buildCarGalleryImages(car);
+  const stockBadge = getVehicleStockBadgeForDisplay(car);
+  const isSold = stockBadge.variant === "sold";
   const checkoutBlocked = getCarCheckoutIneligibleReason(car);
   const checkoutBlockedMessage = checkoutBlocked ? customerCheckoutBlockedMessage(checkoutBlocked) : null;
   const canPayOnline = checkoutBlocked === null;
+  const shareUrl = `${getPublicAppUrl()}/cars/${car.slug}`;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -79,20 +98,9 @@ export default async function CarDetailPage(props: Props) {
       ) : null}
       <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
-          <div className="relative aspect-[16/10] overflow-hidden rounded-3xl border border-border bg-muted dark:border-white/10 dark:bg-zinc-900">
-            {cover ? (
-              <Image src={cover} alt={car.title} fill priority className="object-cover" sizes="(max-width:1024px) 100vw, 58vw" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No image</div>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {car.images.slice(0, 9).map((im) => (
-              <div key={im.id} className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted dark:border-white/10 dark:bg-zinc-900">
-                <Image src={im.url} alt={im.altText ?? car.title} fill className="object-cover" sizes="200px" />
-              </div>
-            ))}
-          </div>
+          <CarGallery images={galleryImages}>
+            <VehicleImageStockBadges car={car} />
+          </CarGallery>
           <div className="space-y-3">
             <p className="text-xs tracking-[0.25em] text-muted-foreground uppercase">Walkthrough</p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -115,9 +123,16 @@ export default async function CarDetailPage(props: Props) {
         <div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{sourceLabel[car.sourceType]}</Badge>
-            <Badge variant="outline">{car.availabilityStatus.replaceAll("_", " ")}</Badge>
-            {isSold && (
-              <Badge className="border-red-500/50 bg-red-500/20 text-red-100">Sold</Badge>
+            {stockBadge.variant === "sold" ? (
+              <Badge className="border-red-500/60 bg-red-600/25 font-semibold uppercase tracking-wide text-red-100">
+                {stockBadge.label}
+              </Badge>
+            ) : stockBadge.variant === "reserved" ? (
+              <Badge className="border-amber-500/50 bg-amber-500/15 font-semibold text-amber-100">
+                {stockBadge.label}
+              </Badge>
+            ) : (
+              <Badge variant="outline">{stockBadge.label}</Badge>
             )}
             {car.featured && <Badge>Featured</Badge>}
           </div>
@@ -136,35 +151,35 @@ export default async function CarDetailPage(props: Props) {
 
           <div className="mt-8 grid gap-3 rounded-2xl border border-border bg-card/90 p-5 text-sm text-card-foreground shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-200 dark:ring-transparent">
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Engine</span>
+              <span className="font-semibold text-[var(--brand)]">Engine</span>
               <span>{car.engineType.replaceAll("_", " ")}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Transmission</span>
+              <span className="font-semibold text-[var(--brand)]">Transmission</span>
               <span>{car.transmission ?? "—"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Mileage</span>
+              <span className="font-semibold text-[var(--brand)]">Mileage</span>
               <span>{car.mileage != null ? `${car.mileage.toLocaleString()} km` : "—"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Exterior</span>
+              <span className="font-semibold text-[var(--brand)]">Exterior</span>
               <span>{car.colorExterior ?? "—"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Interior</span>
+              <span className="font-semibold text-[var(--brand)]">Interior</span>
               <span>{car.colorInterior ?? "—"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">VIN / chassis</span>
+              <span className="font-semibold text-[var(--brand)]">VIN / chassis</span>
               <span className="text-right">{car.vin ?? "Available on request"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Inspection</span>
+              <span className="font-semibold text-[var(--brand)]">Inspection</span>
               <span>{car.inspectionStatus ?? "—"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Delivery window</span>
+              <span className="font-semibold text-[var(--brand)]">Delivery window</span>
               <span>{car.estimatedDelivery ?? "—"}</span>
             </div>
             {car.seaShippingFeeGhs != null && Number(car.seaShippingFeeGhs) > 0 ? (
@@ -185,7 +200,12 @@ export default async function CarDetailPage(props: Props) {
                 <span className="font-medium text-foreground">non-CIF</span> placeholder only. Adjust to the valuation you will declare.
               </p>
               <div className="mt-4">
-                <DutyCalculatorPanel defaultYear={car.year} defaultCifGhs={listPriceAsCifHintGhs} compact />
+                <DutyCalculatorPanel
+                  defaultYear={car.year}
+                  defaultCifGhs={listPriceAsCifHintGhs}
+                  defaultPowertrain={car.engineType}
+                  compact
+                />
               </div>
             </div>
           )}
@@ -224,32 +244,19 @@ export default async function CarDetailPage(props: Props) {
           )}
 
           <div className="mt-10 flex flex-wrap gap-3">
-            {canPayOnline ? (
-              <>
-                <Link
-                  href={`/checkout?carId=${car.id}&type=FULL`}
-                  className="inline-flex h-8 items-center justify-center rounded-lg bg-white px-3 text-sm font-medium text-black transition hover:bg-white/90"
-                >
-                  Pay now
-                </Link>
-                <Link
-                  href={`/checkout?carId=${car.id}&type=RESERVATION_DEPOSIT`}
-                  className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-sm font-medium text-foreground transition hover:bg-muted dark:border-white/15 dark:text-white dark:hover:bg-white/5"
-                >
-                  Reserve with deposit
-                </Link>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Pay now and reserve checkout are disabled for this listing.</p>
-            )}
-            <a
-              href="https://wa.me/233200000000"
-              className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-muted px-3 text-sm font-medium text-foreground transition hover:bg-muted/80 dark:border-transparent dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-              target="_blank"
-              rel="noreferrer"
-            >
-              WhatsApp
-            </a>
+            <CarCheckoutPayRow
+              carId={car.id}
+              canPayOnline={canPayOnline}
+              blockTitle={car.title}
+              blockMessage={checkoutBlockedMessage ?? ""}
+            />
+            <SharePageButton url={shareUrl} title={car.title} text={`${car.title} — Spark and Drive Autos`} />
+            <CarFavoriteButton
+              carId={car.id}
+              carSlug={car.slug}
+              isSignedIn={Boolean(userId)}
+              initialFavorite={Boolean(carFavorite)}
+            />
           </div>
 
           <div className="mt-12 border-t border-border pt-10 dark:border-white/10">

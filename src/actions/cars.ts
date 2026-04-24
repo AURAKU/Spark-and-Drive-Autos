@@ -11,6 +11,7 @@ import { detectLikelyCarDuplicates } from "@/lib/duplicate-detection";
 import { auditLog } from "@/lib/leads";
 import { getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
+import { carHasSuccessfulFullVehiclePayment } from "@/lib/sold-vehicle";
 
 function slugify(title: string) {
   const base = title
@@ -233,6 +234,19 @@ export async function updateCar(_prev: unknown, formData: FormData) {
     const existing = await prisma.car.findUnique({ where: { id: d.id } });
     if (!existing) return { error: "Vehicle not found" };
 
+    const inventoryOverride =
+      raw.inventoryOverride === "on" || raw.inventoryOverride === "true" || raw.inventoryOverride === "1";
+    const hadFullVehiclePayment = await carHasSuccessfulFullVehiclePayment(existing.id);
+    const wantsNotSoldInventory =
+      d.listingState !== CarListingState.SOLD || d.availabilityStatus !== AvailabilityStatus.SOLD;
+    if (hadFullVehiclePayment && wantsNotSoldInventory && !inventoryOverride) {
+      return {
+        error:
+          "This vehicle has a successful full payment on record. It must stay sold in inventory unless you confirm an administrative override below.",
+      };
+    }
+    const loggedInventoryOverride = Boolean(hadFullVehiclePayment && wantsNotSoldInventory && inventoryOverride);
+
     let nextSlug = existing.slug;
     if (d.slug && d.slug !== existing.slug) {
       const taken = await prisma.car.findUnique({ where: { slug: d.slug } });
@@ -300,7 +314,10 @@ export async function updateCar(_prev: unknown, formData: FormData) {
         coverImagePublicId: d.coverImagePublicId,
       },
     });
-    await auditLog(session.user.id, "car.update", "Car", car.id, { slug: car.slug });
+    await auditLog(session.user.id, "car.update", "Car", car.id, {
+      slug: car.slug,
+      ...(loggedInventoryOverride ? { inventoryOverride: true } : {}),
+    });
     if (duplicates.length > 0) {
       const summary =
         duplicates.length === 1

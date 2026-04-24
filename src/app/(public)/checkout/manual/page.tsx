@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { PageHeading } from "@/components/typography/page-headings";
+import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links";
 import { notFound } from "next/navigation";
 
 import { ManualCheckoutClient } from "./manual-checkout-client";
@@ -22,9 +23,7 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
     return (
       <div className="mx-auto max-w-xl px-4 py-16">
         <p className="text-sm text-zinc-400">Add a vehicle from checkout first.</p>
-        <Link className="mt-4 inline-block text-[var(--brand)] hover:underline" href="/inventory">
-          Browse inventory
-        </Link>
+        <BrowseCarsCtaLink className="mt-4 inline-flex" href="/inventory" size="compact" />
       </div>
     );
   }
@@ -55,12 +54,7 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
         <p className="mt-2 text-sm font-medium text-white">{car.title}</p>
         <p className="mt-4 text-sm leading-relaxed text-amber-100/90">{customerCheckoutBlockedMessage(ineligible)}</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/inventory"
-            className="inline-flex h-10 items-center rounded-lg bg-[var(--brand)] px-4 text-sm font-medium text-black hover:opacity-90"
-          >
-            Browse inventory
-          </Link>
+          <BrowseCarsCtaLink href="/inventory" size="compact" />
           <Link href="/contact" className="inline-flex h-10 items-center rounded-lg border border-white/15 px-4 text-sm text-white hover:bg-white/5">
             Contact support
           </Link>

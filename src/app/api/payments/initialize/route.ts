@@ -1,4 +1,4 @@
-import { PaymentType } from "@prisma/client";
+import { OrderKind, PaymentType, Prisma } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import {
   getPaystackSecrets,
 } from "@/lib/payment-provider-registry";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
 import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
@@ -19,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
+import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -93,6 +95,12 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
+  if (await carHasSuccessfulVehiclePayment(car.id)) {
+    return NextResponse.json(
+      { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
+      { status: 409 },
+    );
+  }
   if (!parsed.data.agreementAccepted) {
     return NextResponse.json({ error: "You must accept checkout agreement before payment." }, { status: 400 });
   }
@@ -116,7 +124,6 @@ export async function POST(req: Request) {
   }
 
   const settings = await getGlobalCurrencySettings();
-  const amount = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), parsed.data.paymentType, settings);
 
   const reference = `SDA-${nanoid(12).toUpperCase()}`;
   const selectedProvider = await getDefaultPaymentProvider();
@@ -137,46 +144,120 @@ export async function POST(req: Request) {
   const callbackOrigin = await getPaystackCallbackOrigin();
   const callbackUrl = `${callbackOrigin}/checkout/return?reference=${encodeURIComponent(reference)}`;
 
-  const order = await prisma.order.create({
-    data: {
+  let order: { id: string; currency: string };
+  let payment: { id: string };
+  let amount: number;
+  try {
+    const created = await prisma.$transaction(
+      async (tx) => {
+        const carFresh = await tx.car.findUnique({ where: { id: parsed.data.carId } });
+        if (!carFresh) throwCheckoutConflict("CAR_NOT_FOUND");
+        const block = getCarCheckoutIneligibleReason(carFresh);
+        if (block) throwCheckoutConflict("INELIGIBLE", block);
+        const dup = await tx.payment.findFirst({
+          where: {
+            status: "SUCCESS",
+            order: { carId: carFresh.id, kind: OrderKind.CAR },
+          },
+          select: { id: true },
+        });
+        if (dup) throwCheckoutConflict("ALREADY_PURCHASED");
+        const amountTx = getVehicleCheckoutAmountGhs(Number(carFresh.basePriceRmb), parsed.data.paymentType, settings);
+        const ord = await tx.order.create({
+          data: {
+            reference,
+            userId: session.user.id,
+            carId: carFresh.id,
+            kind: OrderKind.CAR,
+            orderStatus: "PENDING_PAYMENT",
+            paymentType: parsed.data.paymentType,
+            amount: amountTx,
+            currency: carFresh.currency,
+          },
+        });
+        const pay = await tx.payment.create({
+          data: {
+            orderId: ord.id,
+            userId: session.user.id,
+            provider: "PAYSTACK",
+            settlementMethod: "PAYSTACK",
+            providerReference: reference,
+            amount: amountTx,
+            currency: carFresh.currency,
+            status: "PENDING",
+            paymentType: parsed.data.paymentType,
+            idempotencyKey: reference,
+          },
+        });
+        return { order: ord, payment: pay, amount: amountTx };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 20_000,
+      },
+    );
+    order = created.order;
+    payment = created.payment;
+    amount = created.amount;
+  } catch (e: unknown) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return NextResponse.json(
+        { error: "Checkout is busy for this vehicle. Please try again in a moment.", code: "SERIALIZATION_RETRY" },
+        { status: 409 },
+      );
+    }
+    if (isCheckoutConflictError(e)) {
+      if (e.checkoutCode === "CAR_NOT_FOUND") {
+        return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+      }
+      if (e.checkoutCode === "INELIGIBLE" && e.checkoutReason) {
+        return NextResponse.json(
+          { error: customerCheckoutBlockedMessage(e.checkoutReason), code: e.checkoutReason },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "ALREADY_PURCHASED") {
+        return NextResponse.json(
+          { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
+          { status: 409 },
+        );
+      }
+    }
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Unable to start payment", code: "SERVER_ERROR" },
+      { status: 500 },
+    );
+  }
+
+  let init: { authorization_url: string; reference: string };
+  try {
+    init = await paystackInitialize({
+      email,
+      amountMinorUnits: Math.round(amount * 100),
       reference,
-      userId: session.user.id,
-      carId: car.id,
-      orderStatus: "PENDING_PAYMENT",
-      paymentType: parsed.data.paymentType,
-      amount,
-      currency: car.currency,
-    },
-  });
-
-  const payment = await prisma.payment.create({
-    data: {
-      orderId: order.id,
-      userId: session.user.id,
-      provider: "PAYSTACK",
-      settlementMethod: "PAYSTACK",
-      providerReference: reference,
-      amount,
-      currency: car.currency,
-      status: "PENDING",
-      paymentType: parsed.data.paymentType,
-      idempotencyKey: reference,
-    },
-  });
-
-  const init = await paystackInitialize({
-    email,
-    amountMinorUnits: Math.round(amount * 100),
-    reference,
-    currency: car.currency,
-    metadata: {
-      orderId: order.id,
-      paymentId: payment.id,
-      carId: car.id,
-    },
-    callbackUrl,
-    secretKey,
-  });
+      currency: order.currency,
+      metadata: {
+        orderId: order.id,
+        paymentId: payment.id,
+        carId: parsed.data.carId,
+      },
+      callbackUrl,
+      secretKey,
+    });
+  } catch (e) {
+    console.error("[payments/initialize] paystack", e);
+    return NextResponse.json(
+      {
+        error:
+          e instanceof Error
+            ? e.message
+            : "Could not open Paystack. Check configuration or try again in a moment.",
+        code: "PAYSTACK_ERROR",
+      },
+      { status: 502 },
+    );
+  }
 
   const activeContract = requiresSourcingContract(car.sourceType)
     ? await prisma.contract.findFirst({
@@ -185,38 +266,49 @@ export async function POST(req: Request) {
         select: { id: true },
       })
     : null;
-  await prisma.$transaction(async (tx) => {
-    await tx.agreementLog.create({
-      data: {
-        userId: session.user.id,
-        orderId: order.id,
-        agreementVersion: parsed.data.agreementVersion,
-        policyIds: [parsed.data.agreementVersion],
-        accepted: true,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.agreementLog.create({
+        data: {
+          userId: session.user.id,
+          orderId: order.id,
+          agreementVersion: parsed.data.agreementVersion,
+          policyIds: [parsed.data.agreementVersion],
+          accepted: true,
+        },
+      });
+      if (requiresSourcingContract(car.sourceType) && parsed.data.contractAccepted && parsed.data.contractVersion) {
+        await tx.contractAcceptance.create({
+          data: {
+            userId: session.user.id,
+            orderId: order.id,
+            contractId: activeContract?.id ?? null,
+            contractVersion: parsed.data.contractVersion,
+            context: "CAR_SOURCING",
+          },
+        });
+      }
+      if (requiresRiskAcknowledgement(car.sourceType) && parsed.data.riskAccepted && parsed.data.riskVersion) {
+        await tx.riskAcknowledgement.create({
+          data: {
+            userId: session.user.id,
+            orderId: order.id,
+            acknowledgementVersion: parsed.data.riskVersion,
+            context: car.sourceType,
+          },
+        });
+      }
     });
-    if (requiresSourcingContract(car.sourceType) && parsed.data.contractAccepted && parsed.data.contractVersion) {
-      await tx.contractAcceptance.create({
-        data: {
-          userId: session.user.id,
-          orderId: order.id,
-          contractId: activeContract?.id ?? null,
-          contractVersion: parsed.data.contractVersion,
-          context: "CAR_SOURCING",
-        },
-      });
-    }
-    if (requiresRiskAcknowledgement(car.sourceType) && parsed.data.riskAccepted && parsed.data.riskVersion) {
-      await tx.riskAcknowledgement.create({
-        data: {
-          userId: session.user.id,
-          orderId: order.id,
-          acknowledgementVersion: parsed.data.riskVersion,
-          context: car.sourceType,
-        },
-      });
-    }
-  });
+  } catch (e) {
+    console.error("[payments/initialize] agreement persistence", e);
+    return NextResponse.json(
+      {
+        error: "We could not save your agreement acceptances. Please try again or contact support.",
+        code: "AGREEMENT_PERSIST_ERROR",
+      },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({
     authorizationUrl: init.authorization_url,

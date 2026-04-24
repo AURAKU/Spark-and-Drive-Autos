@@ -5,7 +5,9 @@ import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-d
 import { PageHeading } from "@/components/typography/page-headings";
 import { AdminOrdersExportButtons } from "@/components/admin/admin-orders-export-buttons";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { formatMoney } from "@/lib/format";
+import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
 import type { OrderKind } from "@prisma/client";
@@ -16,6 +18,15 @@ import { orderItemTitleSummary } from "@/lib/order-item-display";
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+const PAGE_SIZE = 15;
+
+function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
+  const v = sp[key];
+  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  if (s == null || s === "") return 1;
+  const n = parseInt(s, 10);
+  return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
+}
 
 export default async function AdminOrdersPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
@@ -24,20 +35,28 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
     kindRaw === "CAR" || kindRaw === "PARTS" ? (kindRaw as OrderKind) : null;
 
   const ops = parseOpsDateFromSearchParams(sp);
+  const pageReq = readPage(sp, "page");
+
+  const where = {
+    ...(kindFilter ? { kind: kindFilter } : {}),
+    ...(ops.range ? { createdAt: { gte: ops.range.gte, lt: ops.range.lt } } : {}),
+  };
+  const total = await prisma.order.count({ where });
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+  const page = Math.min(Math.max(1, pageReq), totalPages);
 
   const rows = await prisma.order.findMany({
-    where: {
-      ...(kindFilter ? { kind: kindFilter } : {}),
-      ...(ops.range ? { createdAt: { gte: ops.range.gte, lt: ops.range.lt } } : {}),
-    },
+    where,
     orderBy: { createdAt: "desc" },
-    take: 100,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
     include: { user: true, car: true, partItems: true, payments: { orderBy: { createdAt: "desc" }, take: 1 } },
   });
 
-  const buildHref = (kind: "" | "CAR" | "PARTS") => {
+  const buildHref = (kind: "" | "CAR" | "PARTS", nextPage = 1) => {
     const p = new URLSearchParams();
     if (kind) p.set("kind", kind);
+    if (nextPage > 1) p.set("page", String(nextPage));
     appendOpsDateParams(p, sp);
     const qs = p.toString();
     return qs ? `/admin/orders?${qs}` : "/admin/orders";
@@ -61,7 +80,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
 
       <div className="mt-6 flex flex-wrap gap-2">
         <Link
-          href={buildHref("")}
+          href={buildHref("", 1)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             !kindFilter ? "bg-[var(--brand)] text-black" : "border border-white/15 text-zinc-300"
           }`}
@@ -69,7 +88,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           All
         </Link>
         <Link
-          href={buildHref("CAR")}
+          href={buildHref("CAR", 1)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             kindFilter === "CAR" ? "bg-[var(--brand)] text-black" : "border border-white/15 text-zinc-300"
           }`}
@@ -77,7 +96,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           Cars Inventory
         </Link>
         <Link
-          href={buildHref("PARTS")}
+          href={buildHref("PARTS", 1)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             kindFilter === "PARTS" ? "bg-[var(--brand)] text-black" : "border border-white/15 text-zinc-300"
           }`}
@@ -142,6 +161,17 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           </tbody>
         </table>
       </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Orders"
+          prevHref={page > 1 ? buildHref(kindFilter ?? "", page - 1) : null}
+          nextHref={page < totalPages ? buildHref(kindFilter ?? "", page + 1) : null}
+        />
+      ) : null}
     </div>
   );
 }

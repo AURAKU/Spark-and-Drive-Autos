@@ -1,4 +1,4 @@
-import { NotificationType, PaymentStatus, type Prisma } from "@prisma/client";
+import { NotificationType, PaymentProvider, PaymentStatus, PaymentType, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { canUploadPaymentProof } from "@/lib/payment-status-utils";
 import { syncDutyWorkflowAfterDutyPaymentSuccessInTx } from "@/lib/duty/sync-from-payment";
 import { ensureCarSeaShipmentInTx } from "@/lib/shipping/shipment-service";
-import { markCarSoldAndNotifyUsersFromPayment } from "@/lib/sold-vehicle";
+import { syncCarInventoryAfterSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
 
 export { canUploadPaymentProof, PAYMENT_FINAL_STATUSES } from "@/lib/payment-status-utils";
 
@@ -36,7 +36,7 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
           kind: true,
           reference: true,
           receiptReference: true,
-          car: { select: { seaShippingFeeGhs: true, estimatedDelivery: true } },
+          car: { select: { seaShippingFeeGhs: true, estimatedDelivery: true, title: true, slug: true } },
         },
       },
     },
@@ -48,7 +48,7 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
     if (payment.orderId) {
       await syncCarOrderReceiptPdf(payment.orderId);
     }
-    await markCarSoldAndNotifyUsersFromPayment(paymentId);
+    await syncCarInventoryAfterSuccessfulVehiclePayment(paymentId);
     revalidatePaymentPaths(paymentId, payment.userId);
     if (payment.orderId) void revalidatePathsForOrder(payment.orderId);
     return;
@@ -165,22 +165,41 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
       if (payment.orderId) {
         await syncCarOrderReceiptPdf(payment.orderId);
       }
-      await markCarSoldAndNotifyUsersFromPayment(paymentId);
+      await syncCarInventoryAfterSuccessfulVehiclePayment(paymentId);
     } catch (e) {
-      console.error("[transitionPaymentStatus] markCarSold", e);
+      console.error("[transitionPaymentStatus] syncCarInventory", e);
     }
   }
 
   if (payment.userId) {
-    const title = paymentStatusNotificationTitle(opts.toStatus);
-    const body = opts.note ?? `Your payment ${payment.providerReference ?? paymentId.slice(0, 8)} was updated.`;
+    let title = paymentStatusNotificationTitle(opts.toStatus);
+    let body = opts.note ?? `Your payment ${payment.providerReference ?? paymentId.slice(0, 8)} was updated.`;
+    let notificationHref = `/dashboard/payments/${paymentId}`;
+    if (
+      opts.toStatus === "SUCCESS" &&
+      payment.order?.kind === "CAR" &&
+      (payment.paymentType === PaymentType.FULL || payment.paymentType === PaymentType.RESERVATION_DEPOSIT)
+    ) {
+      const vehicleLabel = payment.order.car?.title ?? "your vehicle";
+      if (payment.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+        title = "Reservation confirmed";
+        body = `Your deposit for ${vehicleLabel} is confirmed. This vehicle is now reserved for you while you complete your purchase—follow the next steps on your order. Need help or a similar model? Contact our support team for details.`;
+      } else if (payment.paymentType === PaymentType.FULL) {
+        title = "Vehicle fully paid";
+        body = `Your payment for ${vehicleLabel} is confirmed; the vehicle is recorded as fully paid. Thank you. Interested in another unit? Contact support to arrange similar options.`;
+      }
+      if (payment.provider === PaymentProvider.MANUAL && payment.orderId) {
+        body += ` Your official purchase receipt is ready—open your order to confirm the details and download your PDF receipt.`;
+        notificationHref = `/dashboard/orders/${payment.orderId}`;
+      }
+    }
     await prisma.notification.create({
       data: {
         userId: payment.userId,
         type: NotificationType.PAYMENT,
         title,
         body,
-        href: `/dashboard/payments/${paymentId}`,
+        href: notificationHref,
       },
     });
   }
@@ -322,7 +341,7 @@ export async function recordPaymentProofSubmission(paymentId: string, userId: st
         title: "Payment proof received",
         body:
           next !== prev
-            ? "We received your screenshot and will verify it shortly."
+            ? "We received your payment proof. Our team will review and confirm it—once approved, your purchase is finalized and your receipt will be available on your order."
             : "An additional screenshot was added to your payment record.",
         href: `/dashboard/payments/${paymentId}`,
       },

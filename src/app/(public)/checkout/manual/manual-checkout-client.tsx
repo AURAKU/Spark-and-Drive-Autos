@@ -21,13 +21,8 @@ import { getSettlementInstructions, settlementMethodLabel } from "@/lib/payment-
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const MANUAL_OPTIONS = [
-  "MOBILE_MONEY",
-  "BANK_GHS_COMPANY",
-  "ALIPAY_RMB",
-  "CASH_OFFICE_GHS",
-  "CASH_OFFICE_USD",
-] as const;
+/** Offline vehicle checkout: bank, Alipay, or office cash only (no mobile-money receipt path). */
+const MANUAL_OPTIONS = ["BANK_GHS_COMPANY", "ALIPAY_RMB", "CASH_OFFICE_GHS", "CASH_OFFICE_USD"] as const;
 
 type ManualMethod = (typeof MANUAL_OPTIONS)[number];
 
@@ -74,7 +69,11 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
         return;
       }
       if (!res.ok) throw new Error(data.error ?? "Could not create payment");
-      toast.success("Payment record created — upload your receipt from the next screen.");
+      toast.success("Payment record created", {
+        description:
+          "Pay using your chosen method, then open your payment page and upload a screenshot or receipt so we can verify and secure your vehicle.",
+        duration: 8000,
+      });
       router.push(data.redirectTo ?? "/dashboard/payments");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -84,16 +83,19 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-16">
-      <Link href={`/checkout?carId=${encodeURIComponent(carId)}&type=${encodeURIComponent(paymentType)}`} className="text-xs text-[var(--brand)] hover:underline">
-        ← Paystack checkout
+    <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-16">
+      <Link
+        href={`/checkout?carId=${encodeURIComponent(carId)}&type=${encodeURIComponent(paymentType)}`}
+        className="text-sm font-medium text-[var(--brand)] hover:underline"
+      >
+        ← Secured online payment
       </Link>
-      <PageHeading variant="dashboard" className="mt-4">
-        Offline payment
+      <PageHeading variant="dashboard" className="mt-4 text-2xl sm:text-3xl">
+        Arrange offline payment
       </PageHeading>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-        Choose how you will pay (bank transfer, Alipay, cash, or Mobile Money). We create a payment record and you upload
-        proof from your dashboard — Paystack remains available from the previous step.
+      <p className="mt-4 max-w-prose text-base leading-relaxed text-zinc-400 sm:text-lg">
+        Choose how you will pay (bank transfer, Alipay transfer, or cash). We create a payment record and you upload proof
+        of payment from your dashboard. Secured online payment channels remain available from the previous step.
       </p>
 
       <div className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm">

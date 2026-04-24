@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CartIconButton } from "@/components/parts/cart-icon-button";
+import { SharePageButton } from "@/components/sharing/share-page-button";
 import { partOutOfStockCustomerMessage } from "@/lib/parts-stock-customer";
 import type { PartsChinaQuotes } from "@/lib/shipping/parts-china-fees";
 
@@ -24,6 +25,9 @@ type Props = {
   partId: string;
   partSlug: string;
   partTitle: string;
+  /** Absolute URL to this part detail page (for native share / copy). */
+  shareUrl: string;
+  shareDescription?: string | null;
   stockQty: number;
   unitPrice: number;
   currency: string;
@@ -40,6 +44,8 @@ export function PartDetailActions({
   partId,
   partSlug,
   partTitle,
+  shareUrl,
+  shareDescription = null,
   stockQty,
   unitPrice,
   currency,
@@ -227,6 +233,12 @@ export function PartDetailActions({
           </Link>
         )}
         <CartIconButton className="size-10 rounded-lg border border-white/20 bg-white/[0.03] text-[var(--brand)] transition hover:bg-white/8" />
+        <SharePageButton
+          url={shareUrl}
+          title={partTitle}
+          text={shareDescription?.trim() || `Parts & accessories: ${partTitle}`}
+          className="h-10 rounded-lg border border-white/20 bg-white/[0.03] px-3 text-zinc-200 transition hover:bg-white/8 dark:border-white/20 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/8"
+        />
         <button
           type="button"
           aria-label={favorite ? "Remove from favorites" : "Add to favorites"}

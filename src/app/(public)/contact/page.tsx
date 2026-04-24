@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DealershipSocialIconRow } from "@/components/social/dealership-social-icon-row";
 import { PageHeading, SectionHeading } from "@/components/typography/page-headings";
 import { LEGAL_COMPANY } from "@/lib/legal";
 
@@ -81,6 +82,10 @@ export default function ContactPage() {
           </Link>{" "}
           for faster assistance.
         </p>
+        <div className="mt-6 border-t border-[var(--brand)]/15 pt-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Follow us</p>
+          <DealershipSocialIconRow className="mt-3" />
+        </div>
       </section>
     </div>
   );

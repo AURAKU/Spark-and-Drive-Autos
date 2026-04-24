@@ -3,24 +3,33 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
+import { AlipaySupportHandoffDialog } from "@/components/payments/alipay-support-handoff-dialog";
 import { PaymentProofUpload } from "@/components/payments/payment-proof-upload";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
 import { getSettlementInstructions, settlementMethodLabel } from "@/lib/payment-settlement";
+import { isPaymentProofPdfUrl } from "@/lib/payment-proof-url";
 import { prisma } from "@/lib/prisma";
+import { PaymentProvider } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ paymentId: string }> };
+type Props = {
+  params: Promise<{ paymentId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { paymentId } = await params;
   return { title: `Payment ${paymentId.slice(0, 8)}…` };
 }
 
-export default async function DashboardPaymentDetailPage({ params }: Props) {
+export default async function DashboardPaymentDetailPage({ params, searchParams }: Props) {
   const { paymentId } = await params;
+  const sp = await searchParams;
+  const alipayParam = sp.alipay;
+  const alipayFromCheckout = alipayParam === "1" || alipayParam === "true";
   const session = await requireSessionOrRedirect(`/dashboard/payments/${paymentId}`);
   const userId = session.user.id;
 
@@ -35,8 +44,12 @@ export default async function DashboardPaymentDetailPage({ params }: Props) {
 
   if (!payment) notFound();
 
+  const showAlipayHandoff = payment.settlementMethod === "ALIPAY_RMB" && alipayFromCheckout;
+
   return (
     <div>
+      {showAlipayHandoff ? <AlipaySupportHandoffDialog paymentId={paymentId} showHandoff /> : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/dashboard/payments" className="text-xs text-[var(--brand)] hover:underline">
@@ -49,6 +62,44 @@ export default async function DashboardPaymentDetailPage({ params }: Props) {
         </div>
         <PaymentStatusBadge status={payment.status} />
       </div>
+
+      {payment.provider === PaymentProvider.MANUAL &&
+      (payment.status === "AWAITING_PROOF" || payment.status === "PROCESSING") ? (
+        <div className="mt-6 rounded-2xl border border-amber-500/35 bg-amber-500/[0.12] p-5 text-sm leading-relaxed text-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50/95">
+          <p className="text-base font-semibold text-amber-950 dark:text-amber-100">Complete payment to secure your vehicle</p>
+          <p className="mt-2 text-amber-950/90 dark:text-amber-50/90">
+            {payment.order?.car ? (
+              <>
+                For <span className="font-medium text-amber-950 dark:text-white">{payment.order.car.title}</span>, send
+                funds using the instructions below. Then upload a clear payment screenshot or official receipt here.
+                Our team will review and approve it—only after approval is your purchase confirmed and your inventory
+                position secured per your payment type (reservation or full payment).
+              </>
+            ) : (
+              <>
+                Send funds using the instructions below, then upload a clear payment screenshot or official receipt.
+                Our team will verify it before your purchase is fully confirmed.
+              </>
+            )}
+          </p>
+        </div>
+      ) : null}
+
+      {payment.provider === PaymentProvider.MANUAL && payment.status === "SUCCESS" && payment.orderId ? (
+        <div className="mt-6 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.1] p-5 text-sm leading-relaxed text-emerald-50 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-50/95">
+          <p className="text-base font-semibold text-emerald-950 dark:text-emerald-100">Payment approved</p>
+          <p className="mt-2 text-emerald-950/90 dark:text-emerald-50/90">
+            Your purchase receipt has been generated. Open your order to review line items, totals, and download your
+            PDF receipt for your records.
+          </p>
+          <Link
+            href={`/dashboard/orders/${payment.orderId}`}
+            className="mt-4 inline-flex text-sm font-semibold text-emerald-800 underline-offset-4 hover:underline dark:text-emerald-200"
+          >
+            View order &amp; receipt →
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.03] dark:ring-transparent">
@@ -116,8 +167,22 @@ export default async function DashboardPaymentDetailPage({ params }: Props) {
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {payment.proofs.map((p) => (
               <div key={p.id} className="overflow-hidden rounded-xl border border-border bg-card dark:border-white/10">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.imageUrl} alt="" className="aspect-video w-full object-cover" />
+                {isPaymentProofPdfUrl(p.imageUrl) ? (
+                  <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 bg-muted dark:bg-zinc-900">
+                    <span className="text-xs font-medium text-muted-foreground">PDF</span>
+                    <a
+                      href={p.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-[var(--brand)] hover:underline"
+                    >
+                      View PDF
+                    </a>
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={p.imageUrl} alt="" className="aspect-video w-full object-cover" />
+                )}
                 <div className="p-3 text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground dark:text-zinc-300">{p.status}</span>
                   {p.note ? <p className="mt-1">{p.note}</p> : null}

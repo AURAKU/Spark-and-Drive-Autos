@@ -15,7 +15,7 @@ export const SETTLEMENT_METHOD_LABEL: Record<PaymentSettlementMethod, string> = 
   PAYSTACK: "Paystack",
   MOBILE_MONEY: "Mobile Money (receipt)",
   BANK_GHS_COMPANY: "Spark bank account (GHS)",
-  ALIPAY_RMB: "Alipay (RMB)",
+  ALIPAY_RMB: "Alipay in RMB (details from support)",
   CASH_OFFICE_GHS: "Cash — office (GHS)",
   CASH_OFFICE_USD: "Cash — office (USD)",
 };
@@ -50,20 +50,24 @@ export function getSettlementInstructions(method: PaymentSettlementMethod): Sett
       };
     case "BANK_GHS_COMPANY":
       return {
-        title: "Authorised company account (GHS)",
+        title: "Bank transfer (GHS) — CalBank",
         lines: [
-          "Transfer Ghana Cedis (GHS) only to the Spark and Drive Autos business account on file with your relationship manager.",
-          "Use your order reference in the transfer narration when possible.",
+          "Transfer Ghana Cedis (GHS) only to the Spark and Drive Autos business account.",
+          "Bank: CalBank PLC",
+          "Account name: SPARK AND DRIVE GEAR",
+          "Account number: 1400009741641",
+          "Branch: Spintex",
+          "Use your order reference number in the transfer narration for tracking.",
           "Upload the bank receipt or screenshot after payment.",
         ],
       };
     case "ALIPAY_RMB":
       return {
-        title: "Alipay (RMB)",
+        title: "Alipay in Chinese Yuan (RMB)",
         lines: [
-          "Pay in Chinese Yuan (RMB) via Alipay using the merchant details shared by our team.",
-          "Confirm the exchange arrangement with us before sending — amounts on the vehicle page are shown in GHS for reference.",
-          "Upload the Alipay confirmation screenshot.",
+          "Pay in RMB through Alipay. We share merchant/QR and the exact CNY amount with you directly — call or WhatsApp support first.",
+          "Agree the exchange and amount with us before you send. Vehicle list prices in GHS are for reference only.",
+          "When done, upload a clear screenshot of your Alipay confirmation on this page.",
         ],
       };
     case "CASH_OFFICE_GHS":

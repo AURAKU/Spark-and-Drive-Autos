@@ -18,5 +18,9 @@ export function getPostAuthRedirectUrl(callbackUrl: string | null | undefined): 
   if (trimmed.includes("://") || trimmed.includes("\\")) {
     return "/dashboard";
   }
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("/\\") || lower.includes("%2f%2f") || lower.includes("javascript:")) {
+    return "/dashboard";
+  }
   return trimmed;
 }

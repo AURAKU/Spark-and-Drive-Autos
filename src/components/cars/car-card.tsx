@@ -2,11 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 
 import type { Car } from "@prisma/client";
-import { CarListingState } from "@prisma/client";
 
+import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
 import type { DisplayCurrency } from "@/lib/currency";
 import { formatConverted } from "@/lib/currency";
-import { Badge } from "@/components/ui/badge";
+import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { Card } from "@/components/ui/card";
 
 type CarCardProps = {
@@ -28,15 +28,10 @@ type CarCardProps = {
   displayCurrency: DisplayCurrency;
 };
 
-const sourceLabel: Record<string, string> = {
-  IN_GHANA: "Ghana stock",
-  IN_CHINA: "China source",
-  IN_TRANSIT: "In transit",
-};
-
 export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
   const href = `/cars/${car.slug}`;
-  const isSold = car.listingState === CarListingState.SOLD;
+  const stock = getVehicleStockBadgeForDisplay(car);
+  const isSold = stock.variant === "sold";
 
   return (
     <Link href={href} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]">
@@ -53,19 +48,7 @@ export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No cover image</div>
           )}
-          <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-            {isSold && (
-              <Badge className="border-red-500/60 bg-red-600/90 text-[10px] font-semibold text-white uppercase backdrop-blur">
-                Sold
-              </Badge>
-            )}
-            <Badge variant="secondary" className="bg-black/50 text-[10px] text-white uppercase backdrop-blur">
-              {sourceLabel[car.sourceType] ?? car.sourceType}
-            </Badge>
-            <Badge variant="outline" className="border-white/20 bg-black/40 text-[10px] text-white backdrop-blur">
-              {car.availabilityStatus.replaceAll("_", " ")}
-            </Badge>
-          </div>
+          <VehicleImageStockBadges car={car} />
         </div>
         <div className="space-y-2 p-4">
           <p className="text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
@@ -76,6 +59,11 @@ export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
           <p className="text-lg font-semibold text-[var(--brand)]">
             {formatConverted(displayAmount, displayCurrency)}
           </p>
+          {isSold ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-500">
+              Not available — sold
+            </p>
+          ) : null}
         </div>
       </Card>
     </Link>

@@ -82,10 +82,20 @@ export async function saveDutyEstimateAction(_prev: DutyAdminState | null, formD
     const dutyId = z.string().cuid().safeParse(formData.get("dutyId"));
     if (!dutyId.success) return { error: "Invalid duty record." };
 
+    const ptRaw = formData.get("powertrain");
+    const powertrain =
+      typeof ptRaw === "string" && ["GASOLINE", "ELECTRIC", "HYBRID", "PLUGIN_HYBRID"].includes(ptRaw)
+        ? (ptRaw as "GASOLINE" | "ELECTRIC" | "HYBRID" | "PLUGIN_HYBRID")
+        : "GASOLINE";
+    const waiverRaw = formData.get("applyEvDutyWaiver");
+    const applyEvDutyWaiver = waiverRaw === "on" || waiverRaw === "true" || waiverRaw === "1";
+
     const parsed = dutyEstimateInputSchema.safeParse({
       cifGhs: Number(formData.get("cifGhs")),
       vehicleYear: Number(formData.get("vehicleYear")),
       engineCc: formData.get("engineCc") ? Number(formData.get("engineCc")) : undefined,
+      powertrain,
+      applyEvDutyWaiver,
     });
     if (!parsed.success) return { error: "Invalid calculator inputs." };
 

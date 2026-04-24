@@ -18,6 +18,8 @@ const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin/payments/intelligence", label: "Payment intelligence" },
   { href: "/admin/shipping", label: "Shipping" },
   { href: "/admin/duty", label: "Duty" },
+  { href: "/admin/duty-estimator", label: "Vehicle import estimates" },
+  { href: "/admin/parts-finder", label: "Parts Finder" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/settings", label: "API providers" },
   { href: "/admin/settings/receipt-template", label: "Receipt templates" },
@@ -40,9 +42,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const links = isAssistant ? assistantLinks : fullAdminLinks;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen min-w-0 flex-col">
       <DashboardTopHeader showPartnerStrip={false} />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-5 text-sidebar-foreground lg:block">
           <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
             {isAssistant ? "Support inbox" : "Operations"}
@@ -67,19 +69,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ))}
           </nav>
         </aside>
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <AdminMobileNav links={links} sectionLabel={isAssistant ? "Support inbox" : "Operations"} />
-              <Link href="/admin" className="truncate text-sm text-[var(--brand)]">
+              <Link href="/admin" className="truncate text-sm font-medium text-[var(--brand)]">
                 Command Center
               </Link>
             </div>
-            <ViewModeButton targetMode="user" redirectTo="/dashboard" className="text-[11px]">
+            <ViewModeButton targetMode="user" redirectTo="/dashboard" className="shrink-0 text-[11px]">
               Back to user view
             </ViewModeButton>
           </div>
-          <div className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
+          <div className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>
       </div>
     </div>

@@ -25,7 +25,13 @@ type State = {
   issues?: { fieldErrors: Record<string, string[] | undefined>; formErrors: string[] };
 } | null;
 
-export function EditCarForm({ car }: { car: CarForClientEdit }) {
+export function EditCarForm({
+  car,
+  hasSuccessfulFullPayment = false,
+}: {
+  car: CarForClientEdit;
+  hasSuccessfulFullPayment?: boolean;
+}) {
   const router = useRouter();
   const [state, action] = useActionState(updateCar, null as State);
   const [, startTransition] = useTransition();
@@ -150,6 +156,26 @@ export function EditCarForm({ car }: { car: CarForClientEdit }) {
         </div>
 
         <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Commerce</p>
+        {hasSuccessfulFullPayment ? (
+          <div className="sm:col-span-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
+            <p className="font-semibold text-amber-100">Fully paid in the system</p>
+            <p className="mt-1 leading-relaxed text-amber-50/95">
+              This unit is marked sold automatically after a successful full payment. The public inventory page shows it as
+              unavailable with a sold badge. Only administrators can edit this record; changing stock or listing status away
+              from sold requires the override below.
+            </p>
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-amber-500/25 bg-black/20 p-3">
+              <input
+                type="checkbox"
+                name="inventoryOverride"
+                className="mt-1 size-4 shrink-0 rounded border-white/20"
+              />
+              <span className="leading-relaxed text-amber-50/95">
+                I am deliberately overriding sold inventory (admin correction only).
+              </span>
+            </label>
+          </div>
+        ) : null}
         <div>
           <Label htmlFor="sourceType">Source</Label>
           <select id="sourceType" name="sourceType" className={select} required defaultValue={car.sourceType}>
@@ -345,6 +371,12 @@ export function EditCarForm({ car }: { car: CarForClientEdit }) {
         </div>
         <div className="sm:col-span-2 flex flex-wrap gap-3">
           <Button type="submit">Save changes</Button>
+          <Link
+            href={`/admin/duty-estimator?vehicleName=${encodeURIComponent(car.title)}`}
+            className="inline-flex h-8 items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand)]/20"
+          >
+            Generate import estimate
+          </Link>
           <Link
             href="/admin/cars"
             className="inline-flex h-8 items-center rounded-lg border border-white/15 px-3 text-sm text-zinc-300 hover:bg-white/5"

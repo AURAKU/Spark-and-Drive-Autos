@@ -28,7 +28,7 @@ export function FavoritesClientActions({ partId, hasItems = false }: Props) {
       toast.error("Could not clear favorites.");
       return;
     }
-    toast.success("All favorites cleared.");
+    toast.success("All part favorites cleared.");
     router.refresh();
   }
 
@@ -52,7 +52,7 @@ export function FavoritesClientActions({ partId, hasItems = false }: Props) {
       onClick={() => void clearAll()}
       className="inline-flex h-9 items-center rounded-lg border border-white/20 px-3 text-xs text-zinc-300 transition hover:bg-white/8"
     >
-      Remove all favorites
+      Clear all part favorites
     </button>
   );
 }

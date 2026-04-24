@@ -17,22 +17,34 @@ import { Label } from "@/components/ui/label";
 import { getPostAuthRedirectUrl } from "@/lib/post-auth-redirect";
 import { cn } from "@/lib/utils";
 
-function credentialsMessage(code: string | undefined): string {
-  if (!code || code === "CredentialsSignin") {
+function credentialsMessage(error: string | undefined, detailCode?: string | null): string {
+  const code = detailCode?.trim() || undefined;
+  if (code === "account-suspended") {
+    return "This account has been suspended. Contact support if you believe this is a mistake.";
+  }
+  if (code === "oauth_only") {
+    return "This account does not have a password on file (often created with Google or Apple). Use those sign-in options when available, or contact support for help.";
+  }
+  if (code === "ambiguous_phone") {
+    return "This phone number is linked to more than one account. Sign in with your email instead, or contact support.";
+  }
+  if (!error || error === "CredentialsSignin") {
     return "Invalid email or password. Check your details and try again.";
   }
-  if (code === "Configuration") return "Sign-in is not configured correctly. Please contact support.";
-  if (code === "AccessDenied") return "Access was denied. Try another sign-in method.";
-  if (code === "account-suspended") return "This account has been suspended. Contact support if you believe this is a mistake.";
+  if (error === "Configuration") return "Sign-in is not configured correctly. Please contact support.";
+  if (error === "AccessDenied") return "Access was denied. Try another sign-in method.";
+  if (error === "account-suspended") {
+    return "This account has been suspended. Contact support if you believe this is a mistake.";
+  }
   return "Could not sign in. Please try again.";
 }
 
 /** NextAuth / OAuth can redirect here with ?error=… — surface once for the user. */
-function mapQueryError(param: string | null): string | null {
+function mapQueryError(param: string | null, detailCode: string | null): string | null {
   if (!param) return null;
   switch (param) {
     case "CredentialsSignin":
-      return "Invalid email or password. Check your details and try again.";
+      return credentialsMessage("CredentialsSignin", detailCode);
     case "OAuthAccountNotLinked":
       return "This email is linked to another sign-in method. Use email and password, or the provider you used before.";
     case "Configuration":
@@ -41,6 +53,8 @@ function mapQueryError(param: string | null): string | null {
       return "Access was denied. Try another sign-in method.";
     case "account-suspended":
       return "This account has been suspended. Contact support if you believe this is a mistake.";
+    case "SessionRequired":
+      return "Please sign in to continue.";
     default:
       return "Could not sign in. Please try again.";
   }
@@ -71,6 +85,9 @@ export function LoginClient({
   const router = useRouter();
   const params = useSearchParams();
   const afterAuth = getPostAuthRedirectUrl(params.get("callbackUrl"));
+  const urlError = params.get("error");
+  const urlErrorCode = params.get("code");
+  const urlRegistered = params.get("registered");
   const formId = useId();
   const showedUrlMessage = useRef(false);
 
@@ -80,21 +97,19 @@ export function LoginClient({
 
   useEffect(() => {
     if (showedUrlMessage.current) return;
-    const err = params.get("error");
-    const registered = params.get("registered");
-    if (registered === "1") {
+    if (urlRegistered === "1") {
       showedUrlMessage.current = true;
       toast.success("Account created. Sign in with your email and password.");
       router.replace(`/login?callbackUrl=${encodeURIComponent(afterAuth)}`, { scroll: false });
       return;
     }
-    const msg = mapQueryError(err);
+    const msg = mapQueryError(urlError, urlErrorCode);
     if (msg) {
       showedUrlMessage.current = true;
       toast.error(msg);
       router.replace(`/login?callbackUrl=${encodeURIComponent(afterAuth)}`, { scroll: false });
     }
-  }, [params, router, afterAuth]);
+  }, [router, afterAuth, urlError, urlErrorCode, urlRegistered]);
 
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash !== "#email") return;
@@ -126,6 +141,7 @@ export function LoginClient({
         password,
         redirect: false,
         callbackUrl: afterAuth,
+        redirectTo: afterAuth,
       });
 
       if (!res) {
@@ -134,7 +150,7 @@ export function LoginClient({
       }
 
       if (res.error) {
-        toast.error(credentialsMessage(res.error));
+        toast.error(credentialsMessage(res.error, res.code));
         return;
       }
 
@@ -154,11 +170,15 @@ export function LoginClient({
   }
 
   const registerHref = `/register?callbackUrl=${encodeURIComponent(afterAuth)}`;
+  const oauthAvailable = googleEnabled || appleEnabled;
+  const loginDescription = oauthAvailable
+    ? "Sign in to manage your profile, orders, payments, and saved items. Use Google, Apple, or your registered email and password."
+    : "Sign in to manage your profile, orders, payments, and saved items using your registered email and password.";
 
   return (
     <AuthPageShell
       title="Sign in"
-      description="Sign in to manage your profile, orders, payments, and saved items. Use Google, Apple, or your registered email and password."
+      description={loginDescription}
       footer={
         <div className="space-y-3 text-center text-sm">
           <p>
@@ -182,7 +202,7 @@ export function LoginClient({
         </div>
       }
     >
-      {googleEnabled || appleEnabled ? (
+      {oauthAvailable ? (
         <div className="space-y-3">
           {appleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
           {googleEnabled ? <GoogleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
@@ -197,7 +217,7 @@ export function LoginClient({
       <form
         id={`${formId}-form`}
         onSubmit={onSubmit}
-        className={cn("scroll-mt-28 space-y-5", googleEnabled || appleEnabled ? "mt-8" : "mt-2")}
+        className={cn("scroll-mt-28 space-y-5", oauthAvailable ? "mt-8" : "mt-2")}
         aria-busy={loading}
         noValidate
       >
@@ -246,10 +266,12 @@ export function LoginClient({
         <p className="text-sm text-muted-foreground dark:text-zinc-400">New here?</p>
         <Link
           href={registerHref}
+          aria-busy={loading}
           className={cn(
             buttonVariants({ variant: "outline", size: "lg" }),
             "h-11 min-h-11 w-full justify-center border-border bg-background/80 text-foreground hover:bg-muted sm:w-auto sm:min-w-[11rem]",
             "dark:border-white/20 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/10",
+            loading && "pointer-events-none opacity-60",
           )}
         >
           Create an account

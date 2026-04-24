@@ -109,10 +109,9 @@ export function SiteHeaderClient({
             href={dashboardHref}
             aria-label="Open dashboard"
             title="Open dashboard"
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition hover:border-[var(--brand)]/45 hover:bg-muted sm:h-11 sm:px-3.5 sm:text-sm dark:border-white/20 dark:bg-gradient-to-b dark:from-white/[0.12] dark:to-white/[0.04] dark:text-zinc-100 dark:shadow-[0_0_26px_-14px_rgba(20,216,230,0.8)] dark:hover:bg-white/[0.12]"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:border-[var(--brand)]/45 hover:bg-muted sm:h-11 sm:w-11 dark:border-white/20 dark:bg-gradient-to-b dark:from-white/[0.12] dark:to-white/[0.04] dark:text-zinc-100 dark:shadow-[0_0_26px_-14px_rgba(20,216,230,0.8)] dark:hover:bg-white/[0.12]"
           >
             {isLoggedIn ? <LayoutDashboard className="size-5" aria-hidden /> : <UserCircle2 className="size-5" aria-hidden />}
-            <span>{isLoggedIn ? "Dashboard" : "Profile"}</span>
           </Link>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-2.5">

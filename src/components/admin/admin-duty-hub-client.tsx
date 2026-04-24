@@ -1,5 +1,6 @@
 "use client";
 
+import type { EngineType } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -242,7 +243,14 @@ export function AdminDutyHubClient({ rows }: Props) {
                   <p className="text-xs text-zinc-500">
                     Use the same inputs as the calculator panel (right). Saving stores the breakdown JSON and sets the workflow to estimate-generated when appropriate.
                   </p>
-                  <SaveEstimateInline dutyId={selected.duty.id} carYear={selected.carYear} disabled={pending} onRun={run} />
+                  <SaveEstimateInline
+                    key={selected.duty.id}
+                    dutyId={selected.duty.id}
+                    carYear={selected.carYear}
+                    carEngineType={selected.carEngineType}
+                    disabled={pending}
+                    onRun={run}
+                  />
                 </section>
 
                 <section className="space-y-3">
@@ -309,6 +317,7 @@ export function AdminDutyHubClient({ rows }: Props) {
         <DutyCalculatorPanel
           defaultYear={selected?.carYear ?? undefined}
           defaultCifGhs={selected?.orderAmountGhs}
+          defaultPowertrain={selected?.carEngineType ?? undefined}
           compact
         />
         <DutyOfficialLinks compact />
@@ -320,30 +329,36 @@ export function AdminDutyHubClient({ rows }: Props) {
 function SaveEstimateInline({
   dutyId,
   carYear,
+  carEngineType,
   disabled,
   onRun,
 }: {
   dutyId: string;
   carYear: number | null;
+  carEngineType: EngineType | null;
   disabled: boolean;
   onRun: (fn: () => Promise<{ ok?: boolean; error?: string }>, msg: string) => void;
 }) {
   const [cif, setCif] = useState("");
   const [year, setYear] = useState(carYear != null ? String(carYear) : String(new Date().getFullYear() - 3));
   const [cc, setCc] = useState("");
+  const [powertrain, setPowertrain] = useState<string>(carEngineType ?? "GASOLINE");
+  const [evWaiver, setEvWaiver] = useState(false);
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3"
+      className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         const parsed = dutyEstimateInputSchema.safeParse({
           cifGhs: Number(cif),
           vehicleYear: Number(year),
           engineCc: cc.trim() ? Number(cc) : undefined,
+          powertrain,
+          applyEvDutyWaiver: evWaiver,
         });
         if (!parsed.success) {
-          toast.error("Invalid CIF / year / engine for estimate.");
+          toast.error("Invalid CIF / year / powertrain for estimate.");
           return;
         }
         computeDutyEstimate(parsed.data);
@@ -351,25 +366,54 @@ function SaveEstimateInline({
         fd.set("dutyId", dutyId);
         fd.set("cifGhs", String(parsed.data.cifGhs));
         fd.set("vehicleYear", String(parsed.data.vehicleYear));
+        fd.set("powertrain", parsed.data.powertrain);
+        if (parsed.data.applyEvDutyWaiver) fd.set("applyEvDutyWaiver", "true");
         if (parsed.data.engineCc != null) fd.set("engineCc", String(parsed.data.engineCc));
         onRun(async () => saveDutyEstimateAction(null, fd), "Estimate saved to order");
       }}
     >
-      <div className="space-y-1">
-        <Label className="text-xs text-zinc-500">CIF (GHS)</Label>
-        <Input value={cif} onChange={(e) => setCif(e.target.value)} className="w-40 border-white/15 bg-black/40" required />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-zinc-500">CIF (GHS)</Label>
+          <Input value={cif} onChange={(e) => setCif(e.target.value)} className="w-40 border-white/15 bg-black/40" required />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-zinc-500">Year</Label>
+          <Input value={year} onChange={(e) => setYear(e.target.value)} className="w-28 border-white/15 bg-black/40" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-zinc-500">Powertrain</Label>
+          <select
+            value={powertrain}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPowertrain(v);
+              if (v !== "ELECTRIC") setEvWaiver(false);
+            }}
+            className="h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-sm text-white"
+          >
+            <option value="GASOLINE">ICE</option>
+            <option value="HYBRID">Hybrid</option>
+            <option value="PLUGIN_HYBRID">PHEV</option>
+            <option value="ELECTRIC">BEV</option>
+          </select>
+        </div>
+        {powertrain !== "ELECTRIC" ? (
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Cc</Label>
+            <Input value={cc} onChange={(e) => setCc(e.target.value)} className="w-24 border-white/15 bg-black/40" />
+          </div>
+        ) : null}
+        {powertrain === "ELECTRIC" ? (
+          <label className="flex max-w-xs items-center gap-2 text-[11px] text-zinc-400">
+            <input type="checkbox" checked={evWaiver} onChange={(e) => setEvWaiver(e.target.checked)} className="rounded border-white/20" />
+            Model EV duty relief
+          </label>
+        ) : null}
+        <Button type="submit" disabled={disabled}>
+          Save estimate to order
+        </Button>
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs text-zinc-500">Year</Label>
-        <Input value={year} onChange={(e) => setYear(e.target.value)} className="w-28 border-white/15 bg-black/40" />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs text-zinc-500">Cc</Label>
-        <Input value={cc} onChange={(e) => setCc(e.target.value)} className="w-24 border-white/15 bg-black/40" />
-      </div>
-      <Button type="submit" disabled={disabled}>
-        Save estimate to order
-      </Button>
     </form>
   );
 }

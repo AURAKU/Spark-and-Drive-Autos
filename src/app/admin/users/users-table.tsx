@@ -9,6 +9,7 @@ import {
   adjustUserWalletAdmin,
   createUserAdmin,
   deleteUserAdmin,
+  setUserPartsFinderMembership,
   setUserAccountBlocked,
   updateUserRole,
   type AdminUserActionState,
@@ -36,6 +37,8 @@ export type UserRow = {
   createdAt: string;
   messagingBlocked: boolean;
   accountBlocked: boolean;
+  partsFinderMembershipStatus: "ACTIVE" | "EXPIRED" | "SUSPENDED" | null;
+  partsFinderMembershipEndsAt: string | null;
 };
 
 function userRowMatchesQuery(u: UserRow, q: string): boolean {
@@ -60,13 +63,14 @@ export function UsersTable({
   const [deleteState, deleteAction] = useActionState(deleteUserAdmin, null as AdminUserActionState);
   const [walletState, walletAction] = useActionState(adjustUserWalletAdmin, null as AdminUserActionState);
   const [blockState, blockAction] = useActionState(setUserAccountBlocked, null as AdminUserActionState);
+  const [partsFinderState, partsFinderAction] = useActionState(setUserPartsFinderMembership, null as AdminUserActionState);
   const router = useRouter();
 
   useEffect(() => {
-    if (roleState?.ok || blockState?.ok || createState?.ok || deleteState?.ok || walletState?.ok) {
+    if (roleState?.ok || blockState?.ok || createState?.ok || deleteState?.ok || walletState?.ok || partsFinderState?.ok) {
       router.refresh();
     }
-  }, [roleState, blockState, createState, deleteState, walletState, router]);
+  }, [roleState, blockState, createState, deleteState, walletState, partsFinderState, router]);
 
   return (
     <div className="mt-8 space-y-4">
@@ -85,6 +89,8 @@ export function UsersTable({
       {deleteState?.ok ? <p className="text-sm text-emerald-400/90">User deleted successfully.</p> : null}
       {walletState?.error ? <p className="text-sm text-red-400">{walletState.error}</p> : null}
       {walletState?.ok ? <p className="text-sm text-emerald-400/90">Wallet adjusted successfully.</p> : null}
+      {partsFinderState?.error ? <p className="text-sm text-red-400">{partsFinderState.error}</p> : null}
+      {partsFinderState?.ok ? <p className="text-sm text-emerald-400/90">Parts Finder membership updated.</p> : null}
 
       {qRaw ? (
         <p className="text-sm text-zinc-400">
@@ -131,13 +137,14 @@ export function UsersTable({
         </form>
       ) : null}
       <div className="overflow-x-auto rounded-2xl border border-white/10">
-        <table className="w-full min-w-[1080px] text-left text-sm">
+        <table className="w-full min-w-[1240px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Live Support Chat</th>
               <th className="px-4 py-3">Account</th>
+              <th className="px-4 py-3">Parts Finder</th>
               <th className="px-4 py-3">Wallet (GHS)</th>
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Joined</th>
@@ -147,13 +154,13 @@ export function UsersTable({
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-10 text-center text-zinc-500">
                   No users found.
                 </td>
               </tr>
             ) : visibleUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-10 text-center text-zinc-500">
                   No users match this search.{" "}
                   <Link href="/admin/users" className="text-[var(--brand)] hover:underline">
                     Clear filter
@@ -202,6 +209,28 @@ export function UsersTable({
                       {u.accountBlocked ? "Suspended" : "OK"}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-xs">
+                    {u.partsFinderMembershipStatus ? (
+                      <>
+                        <span
+                          className={
+                            u.partsFinderMembershipStatus === "ACTIVE"
+                              ? "rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-0.5 text-emerald-200/90"
+                              : u.partsFinderMembershipStatus === "SUSPENDED"
+                                ? "rounded-md border border-red-500/35 bg-red-500/10 px-2 py-0.5 text-red-200/95"
+                                : "rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200"
+                          }
+                        >
+                          {u.partsFinderMembershipStatus}
+                        </span>
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          {u.partsFinderMembershipEndsAt ? `Ends ${u.partsFinderMembershipEndsAt.slice(0, 10)}` : "No expiry"}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-zinc-500">Not activated</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-zinc-200">{u.walletBalance.toFixed(2)}</td>
                   <td className="px-4 py-3 text-zinc-400">{u.phone ?? "—"}</td>
                   <td className="px-4 py-3 text-xs text-zinc-500">{u.createdAt.slice(0, 10)}</td>
@@ -225,13 +254,31 @@ export function UsersTable({
                       </Button>
                     </form>
                     {u.role !== "SUPER_ADMIN" ? (
-                      <form action={blockAction} className="mt-2 inline-flex justify-end">
-                        <input type="hidden" name="userId" value={u.id} />
-                        <input type="hidden" name="blocked" value={u.accountBlocked ? "0" : "1"} />
-                        <Button type="submit" size="sm" variant={u.accountBlocked ? "outline" : "destructive"} className="text-xs">
-                          {u.accountBlocked ? "Lift suspension" : "Suspend account"}
-                        </Button>
-                      </form>
+                      <>
+                        <form action={blockAction} className="mt-2 inline-flex justify-end">
+                          <input type="hidden" name="userId" value={u.id} />
+                          <input type="hidden" name="blocked" value={u.accountBlocked ? "0" : "1"} />
+                          <Button type="submit" size="sm" variant={u.accountBlocked ? "outline" : "destructive"} className="text-xs">
+                            {u.accountBlocked ? "Lift suspension" : "Suspend account"}
+                          </Button>
+                        </form>
+                        <form action={partsFinderAction} className="mt-2 inline-flex justify-end">
+                          <input type="hidden" name="userId" value={u.id} />
+                          <input
+                            type="hidden"
+                            name="action"
+                            value={u.partsFinderMembershipStatus === "ACTIVE" ? "DEACTIVATE" : "ACTIVATE"}
+                          />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant={u.partsFinderMembershipStatus === "ACTIVE" ? "destructive" : "outline"}
+                            className="text-xs"
+                          >
+                            {u.partsFinderMembershipStatus === "ACTIVE" ? "Deactivate Parts Finder" : "Activate Parts Finder"}
+                          </Button>
+                        </form>
+                      </>
                     ) : (
                       <p className="mt-2 text-[10px] text-zinc-600">Super admin — use DB for emergencies.</p>
                     )}

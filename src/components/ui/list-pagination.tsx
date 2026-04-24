@@ -12,6 +12,10 @@ type Props = {
   /** Shown in the summary line, e.g. "payments" or "wallet transactions". */
   itemLabel: string;
   className?: string;
+  /** When false, only Previous/Next controls render (e.g. duplicate nav above a list). Default true. */
+  showSummary?: boolean;
+  /** When true, appends “· {pageSize} per page” to the summary. Default false. */
+  showPerPageNote?: boolean;
 };
 
 export function ListPaginationFooter({
@@ -23,6 +27,8 @@ export function ListPaginationFooter({
   pageSize,
   itemLabel,
   className,
+  showSummary = true,
+  showPerPageNote = false,
 }: Props) {
   const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalItems);
@@ -38,42 +44,50 @@ export function ListPaginationFooter({
         className,
       )}
     >
-      <p className="text-xs text-muted-foreground">
-        <span className="text-foreground/80">{itemLabel}</span>
-        {totalItems > 0 ? (
-          <>
-            {" "}
-            · Showing <span className="font-mono text-foreground/90">{from}</span>–<span className="font-mono text-foreground/90">{to}</span> of{" "}
-            <span className="font-mono text-foreground/90">{totalItems}</span>
-            {totalPages > 1 ? (
-              <>
-                {" "}
-                · Page <span className="font-mono text-foreground/90">{page}</span> of{" "}
-                <span className="font-mono text-foreground/90">{totalPages}</span>
-              </>
-            ) : null}
-          </>
-        ) : (
-          <> · No rows</>
-        )}
-      </p>
-      {totalPages > 1 ? (
+      {showSummary ? (
+        <p className="text-xs text-muted-foreground">
+          <span className="text-foreground/80">{itemLabel}</span>
+          {totalItems > 0 ? (
+            <>
+              {" "}
+              · Showing <span className="font-mono text-foreground/90">{from}</span>–<span className="font-mono text-foreground/90">{to}</span> of{" "}
+              <span className="font-mono text-foreground/90">{totalItems}</span>
+              {totalPages > 1 ? (
+                <>
+                  {" "}
+                  · Page <span className="font-mono text-foreground/90">{page}</span> of{" "}
+                  <span className="font-mono text-foreground/90">{totalPages}</span>
+                </>
+              ) : null}
+              {showPerPageNote ? (
+                <>
+                  {" "}
+                  · <span className="font-mono text-foreground/90">{pageSize}</span> per page
+                </>
+              ) : null}
+            </>
+          ) : (
+            <> · No rows</>
+          )}
+        </p>
+      ) : null}
+      {totalItems > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           {prevHref ? (
-            <Link href={prevHref} className={linkClass}>
+            <Link href={prevHref} className={linkClass} aria-label="Previous page">
               Previous
             </Link>
           ) : (
-            <span className={disabledClass} aria-disabled>
+            <span className={disabledClass} aria-disabled aria-label="Previous page (unavailable)">
               Previous
             </span>
           )}
           {nextHref ? (
-            <Link href={nextHref} className={linkClass}>
+            <Link href={nextHref} className={linkClass} aria-label="Next page">
               Next
             </Link>
           ) : (
-            <span className={disabledClass} aria-disabled>
+            <span className={disabledClass} aria-disabled aria-label="Next page (unavailable)">
               Next
             </span>
           )}

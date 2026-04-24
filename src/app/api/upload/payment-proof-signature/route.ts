@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { createPaymentProofUploadSignature } from "@/lib/cloudinary";
 import { canUploadPaymentProof } from "@/lib/payment-status-utils";
-import { createUploadSignature } from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
 const schema = z.object({
   paymentId: z.string().cuid(),
+  kind: z.enum(["image", "pdf"]).optional(),
 });
 
 /**
@@ -42,12 +43,20 @@ export async function POST(req: Request) {
   }
 
   const folder = `sda/payments/${parsed.data.paymentId}/proofs`;
+  const kind = parsed.data.kind ?? "image";
 
   try {
-    const sig = await createUploadSignature({ folder });
-    const cloud = sig.cloudName as string;
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloud}/image/upload`;
-    return NextResponse.json({ ...sig, uploadUrl, folder });
+    const sig = await createPaymentProofUploadSignature({ folder, kind });
+    return NextResponse.json({
+      timestamp: sig.timestamp,
+      signature: sig.signature,
+      apiKey: sig.apiKey,
+      cloudName: sig.cloudName,
+      folder: sig.folder,
+      uploadUrl: sig.uploadUrl,
+      kind: sig.kind,
+      eager: sig.eager,
+    });
   } catch {
     return NextResponse.json({ error: "Cloudinary not configured" }, { status: 501 });
   }

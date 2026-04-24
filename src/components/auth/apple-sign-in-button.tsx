@@ -1,6 +1,8 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
@@ -13,12 +15,22 @@ type Props = {
 
 /** Continues with Apple; relies on Apple provider in `src/auth.ts`. */
 export function AppleSignInButton({ callbackUrl, disabled, className, children }: Props) {
+  const [pending, setPending] = useState(false);
+  const busy = Boolean(disabled || pending);
+
   return (
     <button
       type="button"
-      disabled={disabled}
-      aria-busy={disabled}
-      onClick={() => void signIn("apple", { callbackUrl })}
+      disabled={busy}
+      aria-busy={pending}
+      onClick={() => {
+        if (busy) return;
+        setPending(true);
+        void signIn("apple", { callbackUrl, redirectTo: callbackUrl }).catch(() => {
+          setPending(false);
+          toast.error("Could not start Apple sign-in. Check your connection and try again.");
+        });
+      }}
       className={cn(
         "inline-flex h-11 min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition",
         "border-zinc-900 bg-zinc-950 text-white hover:bg-zinc-900",
@@ -28,7 +40,7 @@ export function AppleSignInButton({ callbackUrl, disabled, className, children }
       )}
     >
       <AppleGlyph className="size-5 shrink-0" />
-      {children ?? "Continue with Apple"}
+      {pending ? "Redirecting…" : (children ?? "Continue with Apple")}
     </button>
   );
 }

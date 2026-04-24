@@ -68,10 +68,10 @@ export function PasswordField({
         />
         <button
           type="button"
-          tabIndex={-1}
           disabled={disabled}
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Hide password" : "Show password"}
+          aria-pressed={visible}
           className={cn(
             "absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md",
             "text-muted-foreground transition hover:bg-muted hover:text-foreground",

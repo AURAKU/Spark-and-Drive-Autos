@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { ShipmentFlowVisual } from "@/components/shipping/shipment-flow-visual";
+import { ShippingPagination, ShippingTypeFilters } from "@/components/shipping/shipping-list-controls";
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
@@ -17,46 +19,93 @@ function getSearchValue(sp: Record<string, string | string[] | undefined>, key: 
   return raw?.trim() ?? "";
 }
 
+function parseIntPage(sp: Record<string, string | string[] | undefined>): number {
+  const raw = getSearchValue(sp, "page");
+  if (!raw) return 1;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function parseTypeFilter(sp: Record<string, string | string[] | undefined>): string {
+  const t = getSearchValue(sp, "type").toLowerCase();
+  if (t === "cars" || t === "car") return "cars";
+  if (t === "parts" || t === "part" || t === "accessories") return "parts";
+  return "all";
+}
+
+function buildClearSearchHref(typeFilter: string) {
+  const p = new URLSearchParams();
+  if (typeFilter !== "all") p.set("type", typeFilter);
+  const qs = p.toString();
+  return qs ? `/dashboard/shipping?${qs}` : "/dashboard/shipping";
+}
+
 export default async function DashboardShippingPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/dashboard/shipping");
   const sp = await searchParams;
   const query = getSearchValue(sp, "q");
-  const rows = await listShipmentsForUser(session.user.id, query);
+  const typeFilter = parseTypeFilter(sp);
+  const pageReq = parseIntPage(sp);
+  const typeParam = typeFilter === "all" ? undefined : typeFilter;
+
+  const { items: rows, total, page, totalPages } = await listShipmentsForUser(session.user.id, {
+    q: query,
+    type: typeParam,
+    page: pageReq,
+  });
 
   return (
     <div>
-      <PageHeading variant="dashboard">Shipping &amp; tracking</PageHeading>
+      <PageHeading variant="dashboard">Shipping &amp; Delivery Tracking</PageHeading>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-        Live progress for your parts and vehicle orders. Updates appear when operations posts new milestones.
+        <span className="font-medium text-foreground/90">Shipping &amp; tracking</span>
+        <span className="text-muted-foreground"> (Shipping &amp; Delivery Tracking)</span>
+        {" — "}
+        See delivery milestones for your cars and for parts &amp; accessories. Operations post updates as they move.
       </p>
-      <form className="mt-5 flex max-w-xl flex-wrap items-center gap-2" method="get">
-        <input
-          type="search"
-          name="q"
-          defaultValue={query}
-          placeholder="Search tracking #, order ref, car title, or part"
-          className="h-10 min-w-[17rem] flex-1 rounded-xl border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-[var(--brand)]/45 focus:outline-none dark:border-white/10 dark:bg-black/30"
-        />
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center rounded-xl border border-border bg-muted px-3 text-sm text-foreground transition hover:bg-muted/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200"
+      <div className="mt-5 flex max-w-3xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <form
+          className="flex min-w-0 max-w-xl flex-1 flex-wrap items-center gap-2"
+          method="get"
+          action="/dashboard/shipping"
         >
-          Search
-        </button>
-        {query ? (
-          <a
-            href="/dashboard/shipping"
-            className="inline-flex h-10 items-center rounded-xl border border-border px-3 text-sm text-muted-foreground transition hover:text-foreground dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200"
+          {typeFilter !== "all" ? <input type="hidden" name="type" value={typeFilter} /> : null}
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Search tracking #, order ref, car title, or part"
+            className="h-10 min-w-[12rem] flex-1 rounded-xl border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-[var(--brand)]/45 focus:outline-none dark:border-white/10 dark:bg-black/30"
+          />
+          <button
+            type="submit"
+            className="inline-flex h-10 items-center rounded-xl border border-border bg-muted px-3 text-sm text-foreground transition hover:bg-muted/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200"
           >
-            Clear
+            Search
+          </button>
+        </form>
+        <Suspense
+          fallback={
+            <div className="h-9 min-w-[200px] animate-pulse rounded-xl border border-border bg-muted/30 dark:border-white/10" />
+          }
+        >
+          <ShippingTypeFilters />
+        </Suspense>
+      </div>
+      {query ? (
+        <p className="mt-2 text-xs">
+          <a href={buildClearSearchHref(typeFilter)} className="text-[var(--brand)] hover:underline">
+            Clear search
           </a>
-        ) : null}
-      </form>
+        </p>
+      ) : null}
 
-      <div className="mt-10 space-y-5">
+      <div className="mt-8 space-y-5">
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {query ? "No shipments matched your search." : "No active shipments yet. Completed orders will show milestones here."}
+            {query
+              ? "No shipments matched your search or filter."
+              : "No active shipments yet. Completed orders will show milestones here."}
           </p>
         ) : (
           rows.map((s) => (
@@ -73,7 +122,10 @@ export default async function DashboardShippingPage({ searchParams }: { searchPa
                       <span className="text-muted-foreground"> · {s.order.car.title}</span>
                     ) : null}
                   </p>
-                  <Link href={`/dashboard/orders/${s.order.id}`} className="mt-2 inline-block text-xs font-medium text-[var(--brand)] hover:underline">
+                  <Link
+                    href={`/dashboard/orders/${s.order.id}`}
+                    className="mt-2 inline-block text-xs font-medium text-[var(--brand)] hover:underline"
+                  >
                     View order →
                   </Link>
                 </div>
@@ -124,6 +176,9 @@ export default async function DashboardShippingPage({ searchParams }: { searchPa
           ))
         )}
       </div>
+      <Suspense fallback={null}>
+        <ShippingPagination page={page} totalPages={totalPages} total={total} />
+      </Suspense>
     </div>
   );
 }

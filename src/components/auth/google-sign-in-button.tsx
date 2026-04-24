@@ -1,6 +1,8 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
@@ -15,12 +17,22 @@ type Props = {
  * Continues with Google; relies on `Google` provider in `src/auth.ts`.
  */
 export function GoogleSignInButton({ callbackUrl, disabled, className, children }: Props) {
+  const [pending, setPending] = useState(false);
+  const busy = Boolean(disabled || pending);
+
   return (
     <button
       type="button"
-      disabled={disabled}
-      aria-busy={disabled}
-      onClick={() => void signIn("google", { callbackUrl })}
+      disabled={busy}
+      aria-busy={pending}
+      onClick={() => {
+        if (busy) return;
+        setPending(true);
+        void signIn("google", { callbackUrl, redirectTo: callbackUrl }).catch(() => {
+          setPending(false);
+          toast.error("Could not start Google sign-in. Check your connection and try again.");
+        });
+      }}
       className={cn(
         "inline-flex h-11 min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition",
         "border-zinc-300/90 bg-white text-zinc-800 shadow-sm hover:bg-zinc-50 hover:text-zinc-950",
@@ -30,7 +42,7 @@ export function GoogleSignInButton({ callbackUrl, disabled, className, children 
       )}
     >
       <GoogleGlyph className="size-5 shrink-0" />
-      {children ?? "Continue with Google"}
+      {pending ? "Redirecting…" : (children ?? "Continue with Google")}
     </button>
   );
 }

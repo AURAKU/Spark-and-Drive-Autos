@@ -1,6 +1,7 @@
 import {
   NotificationType,
   PaymentProofStatus,
+  PaymentProvider,
   PaymentSettlementMethod,
   PaymentStatus,
 } from "@prisma/client";
@@ -86,6 +87,27 @@ export async function PATCH(req: Request, ctx: RouteContext) {
           href: `/dashboard/payments/${paymentId}`,
         },
       });
+    }
+
+    if (parsed.data.proofStatus === "APPROVED") {
+      const latest = await prisma.payment.findUnique({ where: { id: paymentId } });
+      if (
+        latest &&
+        latest.provider === PaymentProvider.MANUAL &&
+        (latest.status === PaymentStatus.PROCESSING || latest.status === PaymentStatus.AWAITING_PROOF)
+      ) {
+        try {
+          await transitionPaymentStatus(paymentId, {
+            toStatus: PaymentStatus.SUCCESS,
+            source: "ADMIN_PROOF_APPROVAL",
+            actorUserId: adminId,
+            note: "Payment confirmed after proof approval",
+            review: { reviewedById: adminId, reviewedAt: now },
+          });
+        } catch (e) {
+          console.error("[admin payment] proof approval → SUCCESS", e);
+        }
+      }
     }
   }
 

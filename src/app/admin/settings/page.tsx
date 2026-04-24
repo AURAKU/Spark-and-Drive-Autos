@@ -2,6 +2,7 @@ import { PaymentProvider } from "@prisma/client";
 import { deletePaymentProviderConfig, savePaymentProviderConfig } from "@/actions/payment-providers";
 import { PageHeading } from "@/components/typography/page-headings";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { getPaystackSecrets } from "@/lib/payment-provider-registry";
 import { prisma } from "@/lib/prisma";
 
@@ -38,6 +39,7 @@ function secretState(json: ProviderJson | null | undefined, kind: "secretKey" | 
 }
 
 export default async function AdminApiProvidersPage() {
+  await requireAdmin();
   const rows = await prisma.paymentProviderConfig.findMany({
     orderBy: [{ isDefault: "desc" }, { provider: "asc" }, { updatedAt: "desc" }],
   });
@@ -54,6 +56,9 @@ export default async function AdminApiProvidersPage() {
   const appUrl = Boolean(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL);
   const dbUrl = Boolean(process.env.DATABASE_URL);
   const paystackEnv = Boolean(process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_PUBLIC_KEY);
+  const serper = Boolean(process.env.SERPER_API_KEY);
+  const openAi = Boolean(process.env.OPENAI_API_KEY);
+  const anthropic = Boolean(process.env.ANTHROPIC_API_KEY);
   const auth = Boolean(
     (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET) &&
       (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET)!.length >= 32,
@@ -383,10 +388,72 @@ export default async function AdminApiProvidersPage() {
             <dt className="text-zinc-400">PAYSTACK_* env fallback</dt>
             <dd>{flag(paystackEnv)}</dd>
           </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">SERPER_API_KEY (Parts Finder web discovery)</dt>
+            <dd>{flag(serper)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">OPENAI_API_KEY (AI summaries, optional)</dt>
+            <dd>{flag(openAi)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">ANTHROPIC_API_KEY (AI summaries, optional)</dt>
+            <dd>{flag(anthropic)}</dd>
+          </div>
         </dl>
         <p className="mt-6 text-xs text-zinc-500">
           Copy <code className="rounded bg-white/5 px-1">.env.example</code> to <code className="rounded bg-white/5 px-1">.env</code>{" "}
           and fill keys for local or hosted environments.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Backend API integration checklist</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Use this as your operational checklist when connecting or auditing backend integrations from the admin panel.
+          Registry-backed fields can be edited above; env-only fields are deployment-managed.
+        </p>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead className="border-b border-white/10 bg-black/20 text-xs uppercase tracking-wide text-zinc-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Integration</th>
+                <th className="px-3 py-2 font-medium">Required fields</th>
+                <th className="px-3 py-2 font-medium">Source</th>
+                <th className="px-3 py-2 font-medium">Current status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10 text-zinc-300">
+              <tr>
+                <td className="px-3 py-2">Paystack Checkout + Verify</td>
+                <td className="px-3 py-2">Public key, Secret key, Callback base URL</td>
+                <td className="px-3 py-2">Provider registry row (or PAYSTACK_* env fallback)</td>
+                <td className="px-3 py-2">{flag(Boolean(paystack.secretKey && paystack.publicKey))}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Paystack Webhook</td>
+                <td className="px-3 py-2">Webhook URL, Webhook secret, Header name, Hash algorithm</td>
+                <td className="px-3 py-2">Provider registry row + Paystack dashboard</td>
+                <td className="px-3 py-2">{flag(Boolean(paystack.webhookSecret))}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Parts Finder external discovery</td>
+                <td className="px-3 py-2">SERPER_API_KEY</td>
+                <td className="px-3 py-2">Environment</td>
+                <td className="px-3 py-2">{flag(serper)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Realtime chat notifications</td>
+                <td className="px-3 py-2">PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER</td>
+                <td className="px-3 py-2">Environment</td>
+                <td className="px-3 py-2">{flag(pusher)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Webhook URL to register in Paystack:{" "}
+          <code className="rounded bg-white/5 px-1 text-emerald-300/90">{webhookEndpoint}</code>
         </p>
       </section>
     </div>

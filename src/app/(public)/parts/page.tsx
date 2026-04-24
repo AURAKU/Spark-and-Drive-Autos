@@ -4,12 +4,16 @@ import { cookies } from "next/headers";
 import { SourcingFlags } from "@/components/landing/sourcing-flags";
 import { CartIconButton } from "@/components/parts/cart-icon-button";
 import { PartCard } from "@/components/parts/part-card";
+import { SharePageButton } from "@/components/sharing/share-page-button";
 import { getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { getPartDisplayPrice } from "@/lib/parts-pricing";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 import { PartsWalletPanel } from "@/components/parts/parts-wallet-panel";
 import { z } from "zod";
+import { normalizeIntelListPage } from "@/lib/ops";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +23,18 @@ export const metadata = {
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+const PAGE_SIZE = 10;
 const sortSchema = z
   .enum(["newest", "price_asc", "price_desc", "only_autoparts", "only_car_accessories"])
   .catch("newest");
+
+function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
+  const v = sp[key];
+  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  if (s == null || s === "") return 1;
+  const n = parseInt(s, 10);
+  return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
+}
 
 export default async function PartsStorefrontPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
@@ -32,6 +45,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   const category = typeof sp.category === "string" ? sp.category.trim() : "";
   const origin = typeof sp.origin === "string" ? sp.origin.trim() : "";
   const sort = sortSchema.parse(typeof sp.sort === "string" ? sp.sort.trim() : "newest");
+  const pageReq = readPage(sp, "page");
   const session = await safeAuth();
 
   let parts = await prisma.part.findMany({
@@ -52,7 +66,6 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
       ],
     },
     orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
-    take: 60,
   });
   if (sort === "price_asc") {
     parts = [...parts].sort((a, b) => {
@@ -102,6 +115,30 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   } else {
     parts = [...parts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+
+  const total = parts.length;
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+  const page = Math.min(Math.max(1, pageReq), totalPages);
+  const partsPage = parts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageHref = (nextPage: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (category) params.set("category", category);
+    if (origin) params.set("origin", origin);
+    if (sort) params.set("sort", sort);
+    if (nextPage > 1) params.set("page", String(nextPage));
+    const qs = params.toString();
+    return qs ? `/parts?${qs}` : "/parts";
+  };
+
+  const shareParams = new URLSearchParams();
+  if (q) shareParams.set("q", q);
+  if (category) shareParams.set("category", category);
+  if (origin) shareParams.set("origin", origin);
+  if (sort) shareParams.set("sort", sort);
+  if (page > 1) shareParams.set("page", String(page));
+  const sharePath = shareParams.toString() ? `/parts?${shareParams.toString()}` : "/parts";
+  const shareUrl = `${getPublicAppUrl()}${sharePath}`;
 
   const categories = await prisma.partCategory.findMany({
     where: { active: true },
@@ -155,7 +192,15 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
                 perfectly suited to your car.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <CartIconButton className="size-11 rounded-xl border border-red-300/40 bg-red-500/20 text-red-100 shadow-[0_0_26px_-10px_rgba(239,68,68,0.9)] transition hover:bg-red-500/30" />
+                <div className="flex shrink-0 items-center gap-2">
+                  <CartIconButton className="size-11 rounded-xl border border-red-300/40 bg-red-500/20 text-red-100 shadow-[0_0_26px_-10px_rgba(239,68,68,0.9)] transition hover:bg-red-500/30" />
+                  <SharePageButton
+                    url={shareUrl}
+                    title="Parts & Accessories | Spark and Drive Autos"
+                    text="Browse parts and accessories in our gear storefront."
+                    className="h-11 rounded-xl border border-red-300/40 bg-red-500/20 px-3 text-red-100 shadow-[0_0_26px_-10px_rgba(239,68,68,0.9)] transition hover:bg-red-500/30 dark:border-red-300/40 dark:bg-red-500/20 dark:text-red-100 dark:hover:bg-red-500/30"
+                  />
+                </div>
                 <form action="/parts" method="get" className="flex h-11 w-full max-w-xl items-center overflow-hidden rounded-xl border border-red-300/35 bg-black/40 shadow-[0_0_26px_-14px_rgba(239,68,68,0.85)]">
                   {category ? <input type="hidden" name="category" value={category} /> : null}
                   {origin ? <input type="hidden" name="origin" value={origin} /> : null}
@@ -227,7 +272,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
         </div>
         <div className="w-full space-y-2 sm:w-56">
           <label className="text-xs font-semibold text-zinc-300" htmlFor="sort">
-            Sort
+            Filter
           </label>
           <select
             id="sort"
@@ -235,28 +280,78 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
             defaultValue={sort}
             className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
           >
-            <option value="newest">Newest products</option>
+            <option value="newest">All items</option>
             <option value="price_asc">Price: lowest to highest</option>
             <option value="price_desc">(highest to lowest)</option>
-            <option value="only_autoparts">(Only AutoParts)</option>
-            <option value="only_car_accessories">(Only Car Accessories)</option>
+            <option value="only_autoparts">Car Parts only</option>
+            <option value="only_car_accessories">Accessories only</option>
           </select>
         </div>
         <button
           type="submit"
           className="h-10 rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_-14px_rgba(239,68,68,1)] transition hover:brightness-110"
         >
-          Search
+          Apply filters
         </button>
       </form>
 
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a
+          href={(() => {
+            const params = new URLSearchParams();
+            if (q) params.set("q", q);
+            if (category) params.set("category", category);
+            if (origin) params.set("origin", origin);
+            params.set("sort", "only_autoparts");
+            return `/parts?${params.toString()}`;
+          })()}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+            sort === "only_autoparts" ? "bg-[var(--brand)] text-white" : "border border-white/20 text-zinc-300"
+          }`}
+        >
+          Car Parts
+        </a>
+        <a
+          href={(() => {
+            const params = new URLSearchParams();
+            if (q) params.set("q", q);
+            if (category) params.set("category", category);
+            if (origin) params.set("origin", origin);
+            params.set("sort", "only_car_accessories");
+            return `/parts?${params.toString()}`;
+          })()}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+            sort === "only_car_accessories"
+              ? "bg-[var(--brand)] text-white"
+              : "border border-white/20 text-zinc-300"
+          }`}
+        >
+          Accessories
+        </a>
+        <a
+          href={(() => {
+            const params = new URLSearchParams();
+            if (q) params.set("q", q);
+            if (category) params.set("category", category);
+            if (origin) params.set("origin", origin);
+            params.set("sort", "newest");
+            return `/parts?${params.toString()}`;
+          })()}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+            sort === "newest" ? "bg-[var(--brand)] text-white" : "border border-white/20 text-zinc-300"
+          }`}
+        >
+          All
+        </a>
+      </div>
+
       <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {parts.length === 0 ? (
+        {partsPage.length === 0 ? (
           <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
             No published parts yet. Check back soon, or reach out via chat for specific requests.
           </p>
         ) : (
-          parts.map((p) => (
+          partsPage.map((p) => (
             <PartCard
               key={p.id}
               part={p}
@@ -268,6 +363,17 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
           ))
         )}
       </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Products"
+          prevHref={page > 1 ? pageHref(page - 1) : null}
+          nextHref={page < totalPages ? pageHref(page + 1) : null}
+        />
+      ) : null}
       </div>
     </div>
   );
