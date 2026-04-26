@@ -222,19 +222,54 @@ export function WalletTopupFlow({
               );
             })}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <label className="flex flex-1 cursor-text items-center gap-2 rounded-xl border border-border bg-background/95 px-3 py-2 dark:border-white/10 dark:bg-black/25">
-              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Custom</span>
-              <Input
-                type="number"
-                min={MIN_TOPUP}
-                step={1}
-                value={Number.isNaN(amount) ? "" : amount}
-                onChange={(e) => setAmount(Number(e.target.value) || 0)}
-                className="h-9 min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-base font-semibold text-foreground shadow-none focus-visible:ring-0"
-                aria-label="Custom top-up amount in GHS"
-              />
-            </label>
+          <div
+            className={cn(
+              "rounded-2xl border border-dashed border-border/90 bg-muted/20 p-3 dark:border-white/10 dark:bg-white/[0.03]",
+              isEmbed ? "p-2.5" : "p-3 sm:p-4",
+            )}
+          >
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Custom amount</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">Enter any whole number · min {formatGhs(MIN_TOPUP, true)}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div
+                className={cn(
+                  "flex w-full min-w-0 max-w-full overflow-hidden rounded-2xl border-2 border-[var(--brand)]/30 bg-card shadow-sm transition focus-within:border-[var(--brand)]/60 focus-within:shadow-md focus-within:ring-2 focus-within:ring-[var(--brand)]/15 sm:inline-flex sm:w-auto sm:max-w-[12rem] dark:border-[var(--brand)]/25 dark:bg-zinc-950/60",
+                  isEmbed && "sm:max-w-[10.5rem]",
+                )}
+              >
+                <span
+                  className="flex select-none items-center border-r-2 border-[var(--brand)]/20 bg-gradient-to-b from-[var(--brand)]/10 to-transparent px-3 text-sm font-bold tracking-tight text-[var(--brand)] dark:from-[var(--brand)]/15"
+                  aria-hidden
+                >
+                  GHS
+                </span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_TOPUP}
+                  step={1}
+                  placeholder={String(MIN_TOPUP)}
+                  value={amount > 0 ? amount : ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setAmount(0);
+                      return;
+                    }
+                    const n = Number(raw);
+                    if (!Number.isNaN(n)) setAmount(n);
+                  }}
+                  className={cn(
+                    "h-10 min-w-0 w-full border-0 bg-transparent pl-2 pr-3 text-right text-lg font-bold tabular-nums text-foreground shadow-none [appearance:textfield] placeholder:text-muted-foreground/50 focus-visible:ring-0 sm:h-11 sm:min-w-[6.5rem] sm:max-w-[7.5rem] sm:text-xl [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                  )}
+                  aria-label="Custom top-up amount in GHS"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

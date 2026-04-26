@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
       });
       const data = (await res.json()) as ForgotRes;
       if (!res.ok) throw new Error(data.error ?? "Failed to start password reset");
-      toast.success("If an account exists, reset instructions have been prepared.");
+      toast.success("If an account exists, reset instructions have been sent.");
       if (data.devResetUrl) setDevUrl(data.devResetUrl);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not start reset");
@@ -40,18 +40,17 @@ export default function ForgotPasswordPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-20">
       <PageHeading variant="auth">Forgot password</PageHeading>
-      <p className="mt-3 text-sm text-zinc-400">
-        Enter your email or phone number and we&apos;ll prepare a password reset link.
-      </p>
+      <p className="mt-3 text-sm text-zinc-400">Enter your email address and we&apos;ll send reset instructions.</p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <div>
-          <Label htmlFor="identifier">Email or phone</Label>
+          <Label htmlFor="identifier">Email address</Label>
           <Input
             id="identifier"
+            type="email"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             className="mt-1"
-            placeholder="you@example.com or +233..."
+            placeholder="you@example.com"
             required
           />
         </div>

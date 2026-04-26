@@ -3,12 +3,26 @@ import { redirect } from "next/navigation";
 import { CommandCenterDashboard } from "@/components/admin/command-center-dashboard";
 import { PageHeading } from "@/components/typography/page-headings";
 import { carWhereForOpsState } from "@/lib/admin-car-ops-state";
+import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminHome() {
+const ACTIVITY_PAGE_SIZE = 10;
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function readActivityPage(sp: Record<string, string | string[] | undefined>): number {
+  const v = sp.activityPage;
+  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  if (s == null || s === "") return 1;
+  const n = parseInt(s, 10);
+  return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
+}
+
+export default async function AdminHome(props: { searchParams: SearchParams }) {
+  const sp = await props.searchParams;
   const session = await safeAuth();
   if (session?.user?.role === "SERVICE_ASSISTANT") {
     redirect("/admin/comms");
@@ -28,7 +42,7 @@ export default async function AdminHome() {
     lowStockParts,
     preorderParts,
     revenue,
-    auditRows,
+    activityTotal,
   ] = await Promise.all([
     prisma.car.count(),
     prisma.part.count(),
@@ -53,12 +67,19 @@ export default async function AdminHome() {
       where: { status: "SUCCESS" },
       _sum: { amount: true },
     }),
-    prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 14,
-      include: { actor: { select: { name: true, email: true } } },
-    }),
+    prisma.auditLog.count(),
   ]);
+
+  const activityPageReq = readActivityPage(sp);
+  const activityTotalPages = Math.max(1, Math.ceil(Math.max(0, activityTotal) / ACTIVITY_PAGE_SIZE));
+  const activityPage = Math.min(Math.max(1, activityPageReq), activityTotalPages);
+
+  const auditRows = await prisma.auditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    skip: (activityPage - 1) * ACTIVITY_PAGE_SIZE,
+    take: ACTIVITY_PAGE_SIZE,
+    include: { actor: { select: { name: true, email: true } } },
+  });
 
   const revenueGhs = revenue._sum.amount ? Number(revenue._sum.amount) : 0;
 
@@ -114,6 +135,13 @@ export default async function AdminHome() {
     };
   });
 
+  const activityHref = (nextPage: number) => {
+    const p = new URLSearchParams();
+    if (nextPage > 1) p.set("activityPage", String(nextPage));
+    const qs = p.toString();
+    return qs ? `/admin?${qs}` : "/admin";
+  };
+
   return (
     <div>
       <PageHeading variant="dashboard">Command Center</PageHeading>
@@ -128,6 +156,17 @@ export default async function AdminHome() {
           partsHealth={partsHealth}
           revenueGhs={revenueGhs}
           activity={activity}
+          activityPage={activityPage}
+          activityTotalPages={activityTotalPages}
+          activityTotal={activityTotal}
+          activityPageSize={ACTIVITY_PAGE_SIZE}
+          activityPrevHref={activityPage > 1 ? activityHref(activityPage - 1) : null}
+          activityNextHref={activityPage < activityTotalPages ? activityHref(activityPage + 1) : null}
+          activityPageHrefs={
+            activityTotalPages > 1
+              ? Array.from({ length: activityTotalPages }, (_, i) => activityHref(i + 1))
+              : undefined
+          }
         />
       </div>
     </div>

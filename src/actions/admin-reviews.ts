@@ -116,7 +116,8 @@ export async function adminDeleteReviewAction(_prev: AdminReviewState | null, fo
 }
 
 const adminBodySchema = z.string().trim().min(3).max(4000);
-const adminEmailSchema = z.string().trim().toLowerCase().email();
+const adminUserNameSchema = z.string().trim().min(2).max(120);
+const authorNameSchema = z.string().trim().min(2).max(120);
 
 /** Creates or replaces an approved catalog review attributed to the chosen user (storefront shows no staff marker). */
 export async function adminUpsertPartReviewAsUserAction(
@@ -126,11 +127,14 @@ export async function adminUpsertPartReviewAsUserAction(
   try {
     const session = await requireAdmin();
     const partId = z.string().cuid().safeParse(formData.get("partId"));
-    const userEmail = adminEmailSchema.safeParse(formData.get("userEmail"));
+    const userNameRaw = String(formData.get("userName") ?? "").trim();
+    const userName = userNameRaw ? adminUserNameSchema.safeParse(userNameRaw) : { success: true as const, data: "" };
+    const authorName = authorNameSchema.safeParse(formData.get("authorName"));
     const rating = z.coerce.number().int().min(1).max(5).safeParse(formData.get("rating"));
     const body = adminBodySchema.safeParse(formData.get("body"));
     if (!partId.success) return { error: "Pick a product." };
-    if (!userEmail.success) return { error: "Enter a valid user email." };
+    if (!userName.success) return { error: "Enter a valid username (2-120 chars)." };
+    if (!authorName.success) return { error: "Enter reviewer name (2-120 chars)." };
     if (!rating.success) return { error: "Rating must be 1–5." };
     if (!body.success) return { error: body.error.issues.map((i) => i.message).join(" ") };
 
@@ -140,38 +144,59 @@ export async function adminUpsertPartReviewAsUserAction(
     });
     if (!part) return { error: "Product not found or not published." };
 
-    const user = await prisma.user.findUnique({
-      where: { email: userEmail.data },
-      select: { id: true },
-    });
-    if (!user) return { error: "No account with that email." };
+    const users = userName.data
+      ? await prisma.user.findMany({
+          where: { name: { equals: userName.data, mode: "insensitive" } },
+          select: { id: true },
+          take: 2,
+        })
+      : [];
+    if (userName.data && users.length === 0) return { error: "No account found for that username." };
+    if (users.length > 1) return { error: "Multiple accounts share this username. Use a unique username." };
+    const user = users[0] ?? null;
 
-    await prisma.review.upsert({
-      where: {
-        userId_partId: { userId: user.id, partId: part.id },
-      },
-      create: {
-        userId: user.id,
-        partId: part.id,
-        rating: rating.data,
-        body: body.data,
-        status: ReviewStatus.APPROVED,
-        verifiedPurchase: false,
-      },
-      update: {
-        rating: rating.data,
-        body: body.data,
-        status: ReviewStatus.APPROVED,
-        verifiedPurchase: false,
-      },
-    });
+    if (user?.id) {
+      await prisma.review.upsert({
+        where: {
+          userId_partId: { userId: user.id, partId: part.id },
+        },
+        create: {
+          userId: user.id,
+          authorName: authorName.data,
+          partId: part.id,
+          rating: rating.data,
+          body: body.data,
+          status: ReviewStatus.APPROVED,
+          verifiedPurchase: false,
+        },
+        update: {
+          authorName: authorName.data,
+          rating: rating.data,
+          body: body.data,
+          status: ReviewStatus.APPROVED,
+          verifiedPurchase: false,
+        },
+      });
+    } else {
+      await prisma.review.create({
+        data: {
+          userId: null,
+          authorName: authorName.data,
+          partId: part.id,
+          rating: rating.data,
+          body: body.data,
+          status: ReviewStatus.APPROVED,
+          verifiedPurchase: false,
+        },
+      });
+    }
 
     await writeAuditLog({
       actorId: session.user.id,
       action: "review.admin_upsert_as_user",
       entityType: "Part",
       entityId: part.id,
-      metadataJson: { attributedUserId: user.id },
+      metadataJson: { attributedUserId: user?.id ?? null, authorName: authorName.data },
     });
 
     await revalidateReviewPaths(part.id);
@@ -190,9 +215,9 @@ export async function adminReassignPartReviewUserAction(
   try {
     const session = await requireAdmin();
     const reviewId = z.string().cuid().safeParse(formData.get("reviewId"));
-    const userEmail = adminEmailSchema.safeParse(formData.get("userEmail"));
+    const userName = adminUserNameSchema.safeParse(formData.get("userName"));
     if (!reviewId.success) return { error: "Invalid review." };
-    if (!userEmail.success) return { error: "Enter a valid user email." };
+    if (!userName.success) return { error: "Enter a valid username (2-120 chars)." };
 
     const review = await prisma.review.findUnique({
       where: { id: reviewId.data },
@@ -201,11 +226,14 @@ export async function adminReassignPartReviewUserAction(
     if (!review?.partId) return { error: "Only product reviews can be reassigned." };
     if (!review.userId) return { error: "This review has no author to replace — use delete or publish-as-user instead." };
 
-    const user = await prisma.user.findUnique({
-      where: { email: userEmail.data },
+    const users = await prisma.user.findMany({
+      where: { name: { equals: userName.data, mode: "insensitive" } },
       select: { id: true },
+      take: 2,
     });
-    if (!user) return { error: "No account with that email." };
+    if (users.length === 0) return { error: "No account found for that username." };
+    if (users.length > 1) return { error: "Multiple accounts share this username. Use a unique username." };
+    const user = users[0]!;
 
     if (user.id === review.userId) {
       return { error: "That account already owns this review." };

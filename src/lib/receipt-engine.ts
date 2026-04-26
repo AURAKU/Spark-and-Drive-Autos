@@ -1,11 +1,11 @@
 import { readFile, mkdir, writeFile } from "fs/promises";
 import path from "path";
 
-import type { Order, Prisma } from "@prisma/client";
+import { ReceiptType, type Order, type Prisma } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-import { getReceiptTemplate, type ReceiptScope } from "@/lib/receipt-template";
+import { getActiveReceiptTemplate, type ReceiptScope } from "@/lib/receipt-template";
 
 type ReceiptLineItem = {
   label: string;
@@ -57,7 +57,7 @@ function wrapText(text: string, maxChars = 100): string[] {
 async function loadLogoBytes(scope: ReceiptScope): Promise<Uint8Array | null> {
   // Only paths under the deployed repo (public/ is copied into .next for runtime reads via cwd).
   const candidates =
-    scope === "CAR"
+    scope === "CAR_PAYMENT"
       ? [path.join(process.cwd(), "public", "brand", "logo-emblem.png")]
       : [
           path.join(process.cwd(), "public", "brand", "gear-storefront-theme.png"),
@@ -75,7 +75,7 @@ async function loadLogoBytes(scope: ReceiptScope): Promise<Uint8Array | null> {
 }
 
 export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfBytes: Uint8Array; templateData: Prisma.JsonObject }> {
-  const template = await getReceiptTemplate(input.scope);
+  const template = await getActiveReceiptTemplate(input.scope);
   const now = input.generatedAt ?? new Date();
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4 portrait
@@ -107,7 +107,7 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
       height: cardH,
       color: rgb(0.05, 0.05, 0.06),
     });
-    const logoW = input.scope === "CAR" ? 300 : 340;
+    const logoW = input.scope === "CAR_PAYMENT" ? 300 : 340;
     const scale = logoW / img.width;
     const logoH = img.height * scale;
     page.drawImage(img, {
@@ -119,7 +119,7 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
     cursorY = cardY - 34;
   }
 
-  page.drawText(template.companyName.toUpperCase(), {
+  page.drawText(template.businessName.toUpperCase(), {
     x: 60,
     y: cursorY,
     size: 18,
@@ -127,7 +127,7 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
     color: accent,
   });
   cursorY -= 28;
-  page.drawText(template.heading.toUpperCase(), {
+  page.drawText(template.title.toUpperCase(), {
     x: 60,
     y: cursorY,
     size: 14,
@@ -135,7 +135,7 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
     color: rgb(0.1, 0.1, 0.1),
   });
   cursorY -= 18;
-  page.drawText(template.subheading, {
+  page.drawText(template.categoryLabel, {
     x: 60,
     y: cursorY,
     size: 10,
@@ -198,19 +198,19 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
   });
   cursorY -= tableHeight + 24;
 
-  for (const ln of wrapText(template.disclaimer, 112)) {
+  for (const ln of wrapText(template.legalNote, 112)) {
     page.drawText(ln, { x: 60, y: cursorY, size: 9.5, font, color: rgb(0.2, 0.2, 0.2) });
     cursorY -= 13;
   }
   cursorY -= 12;
-  page.drawText(`Contact: ${template.contactPhone}`, { x: 60, y: cursorY, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15) });
+  page.drawText(`Contact: ${template.phone}`, { x: 60, y: cursorY, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15) });
   cursorY -= 14;
-  page.drawText(`Email: ${template.contactEmail}`, { x: 60, y: cursorY, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
+  page.drawText(`Email: ${template.email}`, { x: 60, y: cursorY, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
   cursorY -= 14;
-  page.drawText(`Office: ${template.officeAddress}`, { x: 60, y: cursorY, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
+  page.drawText(`Office: ${template.address}`, { x: 60, y: cursorY, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
   cursorY -= 26;
 
-  if (template.showSignature) {
+  if (template.showSignatureLine) {
     page.drawText(`${template.signatureLabel}: _________________________________`, {
       x: 60,
       y: cursorY,
@@ -227,23 +227,24 @@ export async function buildReceiptPdf(input: RenderReceiptInput): Promise<{ pdfB
     color: rgb(0.9, 0.9, 0.9),
     thickness: 1,
   });
-  page.drawText(template.thankYouNote, { x: 60, y: cursorY - 2, size: 11, font: fontBold, color: accent });
+  page.drawText(template.footerNote, { x: 60, y: cursorY - 2, size: 11, font: fontBold, color: accent });
 
   const pdfBytes = await doc.save();
   const templateData: Prisma.JsonObject = {
     templateId: template.id,
-    templateScope: template.scope,
-    companyName: template.companyName,
-    heading: template.heading,
-    subheading: template.subheading,
-    contactPhone: template.contactPhone,
-    contactEmail: template.contactEmail,
-    officeAddress: template.officeAddress,
-    disclaimer: template.disclaimer,
-    thankYouNote: template.thankYouNote,
+    templateType: template.type,
+    templateVersion: template.version,
+    businessName: template.businessName,
+    title: template.title,
+    categoryLabel: template.categoryLabel,
+    phone: template.phone,
+    email: template.email,
+    address: template.address,
+    legalNote: template.legalNote,
+    footerNote: template.footerNote,
     signatureLabel: template.signatureLabel,
     accentColor: template.accentColor,
-    showSignature: template.showSignature,
+    showSignatureLine: template.showSignatureLine,
     generatedAt: now.toISOString(),
   };
   return { pdfBytes, templateData };
@@ -303,7 +304,9 @@ export async function generateAndPersistOrderReceiptPdf(input: {
   customerName?: string | null;
   lines: ReceiptLineItem[];
 }): Promise<{ receiptPdfUrl: string; templateData: Prisma.JsonObject; receiptReference: string }> {
-  const receiptReference = input.order.receiptReference || createReceiptReference(input.scope === "CAR" ? "SDA-CAR-RCP" : "SDA-PART-RCP");
+  const receiptReference =
+    input.order.receiptReference ||
+    createReceiptReference(input.scope === ReceiptType.CAR_PAYMENT ? "SDA-CAR" : "SDA-PRT");
   const { pdfBytes, templateData } = await buildReceiptPdf({
     scope: input.scope,
     receiptReference,

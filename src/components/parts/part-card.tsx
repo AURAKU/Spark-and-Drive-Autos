@@ -6,6 +6,8 @@ import { getPartDisplayPrice } from "@/lib/parts-pricing";
 import { partStockStatusLabel } from "@/lib/part-stock";
 import type { Part, PartOrigin } from "@prisma/client";
 import { PartCardActions } from "@/components/parts/part-card-actions";
+import { PartOriginAvailabilityBadge } from "@/components/parts/part-origin-availability-badge";
+import { parsePartOptionsMeta } from "@/lib/part-variant-options";
 
 type Props = {
   part: Pick<
@@ -21,6 +23,7 @@ type Props = {
     | "stockStatus"
     | "stockQty"
     | "coverImageUrl"
+    | "metaJson"
   >;
   displayCurrency: DisplayCurrency;
   fx: FxRatesInput;
@@ -39,6 +42,8 @@ export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }:
     fx,
   );
   const cover = part.coverImageUrl ?? "/brand/logo-emblem.png";
+  const lists = parsePartOptionsMeta(part.metaJson);
+  const requiresOptions = lists.colors.length + lists.sizes.length + lists.types.length > 0;
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition hover:border-[var(--brand)]/35 hover:bg-muted/60 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
@@ -55,6 +60,12 @@ export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }:
         <span className="absolute left-3 top-3 rounded-full border border-border bg-background/85 px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground uppercase backdrop-blur-sm dark:border-white/15 dark:bg-black/50 dark:text-zinc-200">
           {part.category}
         </span>
+        <div className="absolute right-3 top-3 max-w-[min(100%,10rem)]">
+          <PartOriginAvailabilityBadge
+            part={part}
+            className="block w-full rounded-lg text-center text-[9px] leading-tight"
+          />
+        </div>
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h2 className="text-base font-semibold text-foreground group-hover:text-[var(--brand)] dark:text-white">{part.title}</h2>
@@ -74,6 +85,7 @@ export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }:
           stockQty={part.stockQty}
           isFavorite={isFavorite}
           canFavorite={canFavorite}
+          requiresOptions={requiresOptions}
         />
       </div>
     </article>

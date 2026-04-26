@@ -1,25 +1,26 @@
 "use client";
 
-import type { EngineType } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
+
+import { EngineType } from "@prisma/client";
 
 import {
   computeDutyEstimate,
+  DUTY_POWERTRAINS,
   dutyEstimateInputSchema,
   type DutyEstimateResult,
   type DutyPowertrain,
 } from "@/lib/duty/calculator";
+import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { formatMoney } from "@/lib/format";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
 import { DutyOfficialLinks } from "./duty-official-links";
 
-const POWERTRAIN_OPTIONS: { value: DutyPowertrain; label: string }[] = [
-  { value: "GASOLINE", label: "Gasoline / diesel (ICE)" },
-  { value: "HYBRID", label: "Hybrid (HEV)" },
-  { value: "PLUGIN_HYBRID", label: "Plug-in hybrid (PHEV)" },
-  { value: "ELECTRIC", label: "Battery electric (BEV)" },
-];
+const POWERTRAIN_OPTIONS: { value: DutyPowertrain; label: string }[] = DUTY_POWERTRAINS.map((value) => ({
+  value,
+  label: engineTypeLabel(value),
+}));
 
 type Props = {
   /** When set, pre-fill calculator fields (e.g. from inventory). */
@@ -36,7 +37,7 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
   const [vehicleYear, setVehicleYear] = useState(
     defaultYear != null ? String(defaultYear) : String(new Date().getFullYear() - 3),
   );
-  const [powertrain, setPowertrain] = useState<DutyPowertrain>(defaultPowertrain ?? "GASOLINE");
+  const [powertrain, setPowertrain] = useState<DutyPowertrain>(defaultPowertrain ?? EngineType.GASOLINE_PETROL);
   const [applyEvDutyWaiver, setApplyEvDutyWaiver] = useState(false);
   const [engineCc, setEngineCc] = useState("");
   const [result, setResult] = useState<DutyEstimateResult | null>(null);

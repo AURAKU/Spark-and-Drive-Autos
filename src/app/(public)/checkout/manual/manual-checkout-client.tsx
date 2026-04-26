@@ -155,7 +155,7 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
                 }),
               )}
             >
-              Create account
+              Create Account
             </Link>
           </div>
         </DialogContent>

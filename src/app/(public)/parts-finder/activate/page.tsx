@@ -2,8 +2,11 @@ import Link from "next/link";
 
 import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
+import { getPartsFinderActivationLegalVersions } from "@/lib/legal-enforcement";
 import { getPartsFinderAccessSnapshot } from "@/lib/parts-finder/access";
-import { getPartsFinderActivationSnapshot } from "@/lib/parts-finder/pricing";
+import { getPartsFinderActivationSnapshot, getPartsFinderChargeQuote } from "@/lib/parts-finder/pricing";
+import { prisma } from "@/lib/prisma";
+
 import { PartsFinderActivationClient } from "./activation-client";
 
 export const dynamic = "force-dynamic";
@@ -11,45 +14,78 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function PublicPartsFinderActivatePage(props: { searchParams: SearchParams }) {
-  await requireSessionOrRedirect("/parts-finder/activate");
+  const session = await requireSessionOrRedirect("/parts-finder/activate");
   const sp = await props.searchParams;
-  const reference =
-    typeof sp.reference === "string" ? sp.reference : Array.isArray(sp.reference) ? sp.reference[0] : undefined;
   const statusHint =
     typeof sp.status === "string" ? sp.status : Array.isArray(sp.status) ? sp.status[0] : undefined;
-  const [access, pricing] = await Promise.all([getPartsFinderAccessSnapshot(), getPartsFinderActivationSnapshot()]);
+  const [access, pricing, userRow, legalVersions] = await Promise.all([
+    getPartsFinderAccessSnapshot(),
+    getPartsFinderActivationSnapshot(),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { walletBalance: true },
+    }),
+    getPartsFinderActivationLegalVersions(),
+  ]);
+  const walletBalanceGhs = Number(userRow?.walletBalance ?? 0);
+  const charge = getPartsFinderChargeQuote(access, pricing);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-semibold">Activate Parts Finder</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Membership status is enforced server-side. Activate or renew to run advanced search and view refined results.
-      </p>
-      <div className="mt-6 rounded-xl border border-border bg-card p-4 text-sm">
-        <p>Current state: <span className="font-semibold">{access.state}</span></p>
-        <p>Access window: {pricing.defaultDurationDays} days</p>
-        <p>Currency: {pricing.currency}</p>
-        {statusHint === "pending-payment" || access.state === "PENDING_PAYMENT" ? (
-          <p className="mt-2 text-xs text-amber-500">Payment is still pending provider confirmation.</p>
-        ) : null}
-        {statusHint === "suspended" || access.state === "SUSPENDED" ? (
-          <p className="mt-2 text-xs text-red-500">Membership is suspended. Contact support for reinstatement guidance.</p>
-        ) : null}
-      </div>
-      <PartsFinderActivationClient
-        initialReference={reference}
-        accessState={access.state}
-        currency={pricing.currency}
-        activationPriceMinor={pricing.activationPriceMinor}
-        renewalPriceMinor={pricing.renewalPriceMinor}
-      />
-      <div className="mt-6 flex flex-wrap gap-2">
-        <PartsFinderCtaLink href="/parts-finder/search" size="compact" className="!px-4 text-sm">
-          Find Parts
-        </PartsFinderCtaLink>
-        <Link href="/dashboard/parts-finder" className="rounded-lg border border-border px-4 py-2 text-sm">
-          Open dashboard view
-        </Link>
+      <div
+        className="rounded-2xl border-2 border-orange-400/30 bg-gradient-to-br from-cyan-500/12 via-card to-orange-500/10 p-6 text-card-foreground shadow-md dark:from-cyan-500/15 dark:via-zinc-900/50 dark:to-orange-500/12 dark:shadow-[0_0_40px_-20px_rgba(6,182,212,0.35)] sm:p-8"
+      >
+        <h1 className="text-2xl font-bold text-orange-600 sm:text-3xl dark:text-orange-400">
+          Activate Spark Parts Finder
+        </h1>
+        <p className="mt-3 text-sm font-medium text-cyan-900/90 sm:text-base dark:text-cyan-200/80">
+          Membership &amp; payments are enforced securely on our servers. Activate to run advanced search and view refined
+          results for Parts for your vehicle.
+        </p>
+        <div className="mt-5 rounded-xl border border-border bg-background/60 p-4 text-sm text-foreground dark:border-white/10 dark:bg-zinc-950/40">
+          <p>
+            <span className="text-muted-foreground">Status:</span>{" "}
+            <span className="font-bold text-foreground">{access.state}</span>
+          </p>
+          <p className="mt-1">
+            <span className="text-muted-foreground">Access window:</span> {pricing.defaultDurationDays} days
+          </p>
+          <p className="mt-1">
+            <span className="text-muted-foreground">Currency:</span> {pricing.currency}
+          </p>
+          {statusHint === "pending-payment" || access.state === "PENDING_PAYMENT" ? (
+            <p className="mt-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+              Payment is still pending provider confirmation.
+            </p>
+          ) : null}
+          {statusHint === "suspended" || access.state === "SUSPENDED" ? (
+            <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">
+              Membership is suspended. Contact support for reinstatement guidance.
+            </p>
+          ) : null}
+        </div>
+        <PartsFinderActivationClient
+          accessState={access.state}
+          currency={pricing.currency}
+          activationPriceMinor={pricing.activationPriceMinor}
+          renewalPriceMinor={pricing.renewalPriceMinor}
+          chargePriceMinor={charge.priceMinor}
+          chargeKind={charge.kind}
+          walletBalanceGhs={walletBalanceGhs}
+          platformTermsVersion={legalVersions.platformTermsVersion}
+          partsFinderDisclaimerVersion={legalVersions.partsFinderDisclaimerVersion}
+        />
+        <div className="mt-6 flex flex-wrap gap-2">
+          <PartsFinderCtaLink href="/parts-finder/search" size="compact" className="!px-4 text-sm">
+            Find Parts
+          </PartsFinderCtaLink>
+          <Link
+            href="/dashboard/parts-finder"
+            className="rounded-lg border-2 border-cyan-500/50 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-cyan-500/10 dark:hover:bg-cyan-500/15"
+          >
+            Open dashboard
+          </Link>
+        </div>
       </div>
     </div>
   );

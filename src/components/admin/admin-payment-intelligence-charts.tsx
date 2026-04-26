@@ -22,6 +22,8 @@ export type IntelProfitSplit = {
   partsProfitGhs: number;
   carRevenueGhs: number;
   partsRevenueGhs: number;
+  partsFinderProfitGhs: number;
+  partsFinderRevenueGhs: number;
 };
 
 const STATUS_COLORS = ["#34d399", "#fbbf24", "#60a5fa", "#a78bfa", "#f87171", "#94a3b8", "#fb7185"];
@@ -76,6 +78,11 @@ export function AdminPaymentIntelligenceCharts({
   const profitBar = [
     { name: "Cars inventory", profit: Math.max(0, profitSplit.carProfitGhs), revenue: profitSplit.carRevenueGhs },
     { name: "Parts & accessories", profit: Math.max(0, profitSplit.partsProfitGhs), revenue: profitSplit.partsRevenueGhs },
+    {
+      name: "Parts Finder activation",
+      profit: Math.max(0, profitSplit.partsFinderProfitGhs),
+      revenue: profitSplit.partsFinderRevenueGhs,
+    },
   ];
   const hasProfitSignal = profitBar.some((b) => b.profit > 0 || b.revenue > 0);
   const kindHint =
@@ -94,7 +101,7 @@ export function AdminPaymentIntelligenceCharts({
           </h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500">
             Charts use the same filters as the tables. Settlement bars scale to the largest channel in view; profit split reflects
-            successful Paystack payments linked to orders.
+            successful Paystack payments linked to orders plus Parts Finder membership activations (no COGS).
           </p>
         </div>
         <p className="text-[11px] font-mono text-zinc-600">{paymentRecordCount} payment row(s) in filter</p>
@@ -216,7 +223,8 @@ export function AdminPaymentIntelligenceCharts({
               <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-black/25 px-4 text-center">
                 <p className="text-sm font-medium text-zinc-400">No attributed profit in this window</p>
                 <p className="max-w-xs text-xs text-zinc-600">
-                  Profit requires successful payments with linked orders and supplier costs. Widen filters or switch to “All kinds”.
+                  Profit requires successful Paystack rows in this window — vehicle/parts orders (with costs) or Parts Finder
+                  activations. Widen filters or switch to “All kinds”.
                 </p>
               </div>
             ) : (

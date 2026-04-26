@@ -1,5 +1,24 @@
 import { v2 as cloudinary } from "cloudinary";
 
+const ALLOWED_FOLDER_PREFIXES = [
+  "sda/payments/",
+  "sda/part-sourcing/",
+  "sda/chat/",
+  "sda/profile/",
+  "sda/admin/",
+  "sda/verification/",
+] as const;
+
+function assertSafeFolder(folder: string) {
+  const normalized = folder.trim();
+  if (!/^[a-z0-9/_-]{3,180}$/i.test(normalized)) {
+    throw new Error("Unsafe upload folder.");
+  }
+  if (!ALLOWED_FOLDER_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+    throw new Error("Folder is not allowed for signed upload.");
+  }
+}
+
 export function configureCloudinary() {
   const name = process.env.CLOUDINARY_CLOUD_NAME;
   const key = process.env.CLOUDINARY_API_KEY;
@@ -14,6 +33,7 @@ export async function createUploadSignature(params: {
   publicId?: string;
   timestamp?: number;
 }) {
+  assertSafeFolder(params.folder);
   if (!configureCloudinary()) throw new Error("Cloudinary is not configured");
   const timestamp = params.timestamp ?? Math.round(Date.now() / 1000);
   const signature = cloudinary.utils.api_sign_request(
@@ -39,6 +59,7 @@ export async function createPaymentProofUploadSignature(params: {
   folder: string;
   kind: PaymentProofUploadKind;
 }) {
+  assertSafeFolder(params.folder);
   if (!configureCloudinary()) throw new Error("Cloudinary is not configured");
   const timestamp = Math.round(Date.now() / 1000);
   const folder = params.folder;

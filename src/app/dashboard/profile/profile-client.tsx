@@ -104,17 +104,35 @@ export function ProfileClient({
   }
 
   async function setDefaultAddress(id: string) {
-    await fetch("/api/profile/address", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, isDefault: true }),
-    });
-    router.refresh();
+    try {
+      const res = await fetch("/api/profile/address", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, isDefault: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Could not set default address.");
+      }
+      toast.success("Default address updated.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not set default address.");
+    }
   }
 
   async function deleteAddress(id: string) {
-    await fetch(`/api/profile/address?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    router.refresh();
+    try {
+      const res = await fetch(`/api/profile/address?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Could not remove address.");
+      }
+      toast.success("Address removed.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove address.");
+    }
   }
 
   async function uploadGhanaCard(file: File) {

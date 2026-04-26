@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { SiteFooter } from "@/components/layout/site-footer";
+import { PublicSiteFooter } from "@/components/layout/public-site-footer";
 import { SiteHeader, SiteHeaderFallback } from "@/components/layout/site-header";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -10,7 +10,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         <SiteHeader />
       </Suspense>
       <main className="flex-1 min-w-0 overflow-x-clip">{children}</main>
-      <SiteFooter />
+      <PublicSiteFooter />
     </div>
   );
 }

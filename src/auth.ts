@@ -11,6 +11,7 @@ import {
   AmbiguousPhoneAuthError,
   OAuthOnlyAuthError,
 } from "@/lib/auth-credentials-errors";
+import { getGoogleOAuthCredentials } from "@/lib/auth/provider-flags";
 import { resolveAppleClientSecret } from "@/lib/apple-client-secret";
 import { getRequestIp } from "@/lib/client-ip";
 import { normalizePhone } from "@/lib/phone";
@@ -28,12 +29,21 @@ const credentialsSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
-const googleConfigured =
-  Boolean(process.env.AUTH_GOOGLE_ID?.trim()) && Boolean(process.env.AUTH_GOOGLE_SECRET?.trim());
+const googleOAuth = getGoogleOAuthCredentials();
+const googleConfigured = Boolean(googleOAuth);
+const GOOGLE_OAUTH_LOG_KEY = "__sda_google_oauth_enabled_logged__";
+if (!(globalThis as Record<string, unknown>)[GOOGLE_OAUTH_LOG_KEY]) {
+  console.info(`[auth] Google OAuth enabled: ${googleConfigured}`);
+  (globalThis as Record<string, unknown>)[GOOGLE_OAUTH_LOG_KEY] = true;
+}
 
-const resolvedAppleClientSecret = await resolveAppleClientSecret();
+/** Apple is disabled unless explicitly enabled — see `ENABLE_APPLE_OAUTH` in `.env.example`. */
+const appleOptIn = process.env.ENABLE_APPLE_OAUTH?.trim() === "1";
+const resolvedAppleClientSecret = appleOptIn ? await resolveAppleClientSecret() : undefined;
 const appleConfigured =
-  Boolean(process.env.AUTH_APPLE_ID?.trim()) && Boolean(resolvedAppleClientSecret);
+  appleOptIn &&
+  Boolean(process.env.AUTH_APPLE_ID?.trim()) &&
+  Boolean(resolvedAppleClientSecret);
 
 function isLikelyEmail(v: string): boolean {
   return v.includes("@");
@@ -54,8 +64,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...(googleConfigured
       ? [
           Google({
-            clientId: process.env.AUTH_GOOGLE_ID!,
-            clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+            clientId: googleOAuth!.clientId,
+            clientSecret: googleOAuth!.clientSecret,
             allowDangerousEmailAccountLinking: true,
             authorization: {
               params: {

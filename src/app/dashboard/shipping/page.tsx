@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { ShipmentFlowVisual } from "@/components/shipping/shipment-flow-visual";
+import { GhanaPartsTrackingInfoButton } from "@/components/shipping/ghana-parts-tracking-info-button";
+import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { ShippingPagination, ShippingTypeFilters } from "@/components/shipping/shipping-list-controls";
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
 import { SHIPMENT_KIND_LABEL, SHIPMENT_STAGE_LABEL } from "@/lib/shipping/constants";
+import { ghanaPartsCustomerStageLabel } from "@/lib/shipping/ghana-parts-flow";
 import { listShipmentsForUser } from "@/lib/shipping/shipment-service";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +65,9 @@ export default async function DashboardShippingPage({ searchParams }: { searchPa
         {" — "}
         See delivery milestones for your cars and for parts &amp; accessories. Operations post updates as they move.
       </p>
+      <div className="mt-4">
+        <GhanaPartsTrackingInfoButton variant="customer" />
+      </div>
       <div className="mt-5 flex max-w-3xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <form
           className="flex min-w-0 max-w-xl flex-1 flex-wrap items-center gap-2"
@@ -129,12 +134,14 @@ export default async function DashboardShippingPage({ searchParams }: { searchPa
                     View order →
                   </Link>
                 </div>
-                <span className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-foreground dark:border-white/10 dark:bg-black/40 dark:text-zinc-200">
-                  {SHIPMENT_STAGE_LABEL[s.currentStage]}
+                <span className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] font-semibold tracking-wide text-foreground dark:border-white/10 dark:bg-black/40 dark:text-zinc-200">
+                  {s.kind === "PARTS_GHANA"
+                    ? ghanaPartsCustomerStageLabel(s.currentStage)
+                    : SHIPMENT_STAGE_LABEL[s.currentStage]}
                 </span>
               </div>
               <div className="mt-5">
-                <ShipmentFlowVisual currentStage={s.currentStage} compact />
+                <ShipmentFlowByKind kind={s.kind} currentStage={s.currentStage} compact />
               </div>
               <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs">
                 {s.trackingNumber ? (

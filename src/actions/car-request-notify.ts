@@ -58,7 +58,7 @@ export async function notifyCarRequestCustomer(
       type: NotificationType.INQUIRY,
       title: `Update: ${cr.brand} ${cr.model}`,
       body: body.slice(0, 2000),
-      href: "/dashboard/requests",
+            href: "/dashboard/inquiry-requests#sourcing",
     },
   });
 

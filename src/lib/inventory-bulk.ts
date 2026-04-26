@@ -16,7 +16,7 @@ export const UTF8_BOM = "\uFEFF";
 
 const AVAIL: AvailabilityStatus[] = ["AVAILABLE", "RESERVED", "SOLD", "COMING_SOON", "IN_TRANSIT_STOCK", "ON_REQUEST"];
 const CAR_LISTING: CarListingState[] = ["DRAFT", "PUBLISHED", "HIDDEN", "SOLD"];
-const ENGINE: EngineType[] = ["GASOLINE", "ELECTRIC", "HYBRID", "PLUGIN_HYBRID"];
+const ENGINE: EngineType[] = ["GASOLINE_PETROL", "GASOLINE_DIESEL", "ELECTRIC", "HYBRID", "PLUGIN_HYBRID"];
 const SOURCE: SourceType[] = ["IN_GHANA", "IN_CHINA", "IN_TRANSIT"];
 const PART_LISTING: PartListingState[] = ["DRAFT", "PUBLISHED", "HIDDEN"];
 const PART_STOCK: PartStockStatus[] = ["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK", "ON_REQUEST"];
@@ -161,7 +161,9 @@ export function pickEnum<T extends string>(allowed: readonly T[], raw: string | 
 }
 
 export function pickEngine(raw: string | undefined): EngineType {
-  return pickEnum(ENGINE, raw, "GASOLINE");
+  const u = (raw ?? "").trim().toUpperCase();
+  if (u === "GASOLINE") return "GASOLINE_PETROL";
+  return pickEnum(ENGINE, raw, "GASOLINE_PETROL");
 }
 
 export function pickSource(raw: string | undefined): SourceType {

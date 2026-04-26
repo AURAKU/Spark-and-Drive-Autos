@@ -37,7 +37,7 @@ function buildActivationWindows(paymentDates: Date[]) {
   return cursor;
 }
 
-async function loadMembershipSnapshotForUser(userId: string): Promise<MembershipAccessSnapshot> {
+export async function loadMembershipSnapshotForUser(userId: string): Promise<MembershipAccessSnapshot> {
   const [membership, payments, latestPayment] = await Promise.all([
     prisma.partsFinderMembership.findFirst({
       where: { userId },
@@ -67,7 +67,8 @@ async function loadMembershipSnapshotForUser(userId: string): Promise<Membership
     latestPayment &&
       (latestPayment.status === PaymentStatus.PENDING ||
         latestPayment.status === PaymentStatus.AWAITING_PROOF ||
-        latestPayment.status === PaymentStatus.PROCESSING),
+        latestPayment.status === PaymentStatus.PROCESSING ||
+        latestPayment.status === PaymentStatus.UNDER_REVIEW),
   );
 
   if (status === "SUSPENDED") {

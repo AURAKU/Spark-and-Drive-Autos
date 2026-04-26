@@ -4,11 +4,16 @@ export function applyPartsFinderSafetyRules(rows: SearchPipelineResultRow[]) {
   return rows
     .filter((row) => row.candidatePartName.trim().length > 2)
     .map((row) => {
+      const hasWeakOemEvidence = row.oemCodes.some((code) => /observed once/i.test(code.label ?? ""));
       const suspiciousLanguage =
-        /\bguaranteed fit|100% fit|exact oem guaranteed\b/i.test(`${row.candidatePartName} ${row.summaryExplanation}`) &&
+        /\bguaranteed fit|100% fit|exact oem guaranteed\b/i.test(`${row.candidatePartName} ${row.summaryExplanation ?? ""}`) &&
         row.oemCodes.length === 0;
       const needsStrictDowngrade =
-        suspiciousLanguage || row.oemCodes.length === 0 || row.confidenceScore < 74 || row.safetyFlagManualReview;
+        suspiciousLanguage ||
+        row.oemCodes.length === 0 ||
+        hasWeakOemEvidence ||
+        row.confidenceScore < 74 ||
+        row.safetyFlagManualReview;
       const safeLabel = needsStrictDowngrade ? "NEEDS_VERIFICATION" : row.confidenceLabel;
       const safeScore = needsStrictDowngrade ? Math.min(row.confidenceScore, 73) : row.confidenceScore;
       const safeSummary = needsStrictDowngrade

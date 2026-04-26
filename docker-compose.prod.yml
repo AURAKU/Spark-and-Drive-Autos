@@ -1,0 +1,45 @@
+services:
+  app:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run build && npm run start"
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+
+  worker:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run worker:parts-finder"
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spark
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: sparkdrive
+    volumes:
+      - spark_drive_prod_pgdata:/var/lib/postgresql/data
+
+volumes:
+  spark_drive_prod_pgdata:

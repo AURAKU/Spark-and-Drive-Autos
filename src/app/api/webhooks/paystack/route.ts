@@ -2,20 +2,31 @@ import { NextResponse } from "next/server";
 
 import { transitionPaymentStatus } from "@/lib/payment-lifecycle";
 import { getPaystackSecrets } from "@/lib/payment-provider-registry";
-import { verifyPaystackSignatureWithSecret } from "@/lib/paystack";
+import { paystackVerify, verifyPaystackSignatureWithSecret } from "@/lib/paystack";
+import { monitoringEvent } from "@/lib/monitoring-hooks";
 import { prisma } from "@/lib/prisma";
+import { rateLimitWebhook } from "@/lib/rate-limit";
+import { getRequestIp } from "@/lib/client-ip";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { applyWalletLedgerEntry } from "@/lib/wallet-ledger";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const ip = getRequestIp(req);
+  const rate = await rateLimitWebhook(`paystack:${ip}`);
+  if (!rate.success) {
+    monitoringEvent("webhook.rate_limited", { provider: "paystack", ip });
+    return NextResponse.json({ error: "Too many webhook attempts" }, { status: 429 });
+  }
   const raw = await req.text();
   const sig = req.headers.get("x-paystack-signature");
   const { webhookSecret } = await getPaystackSecrets();
 
   const ok = verifyPaystackSignatureWithSecret(raw, sig, webhookSecret || undefined);
   if (!ok) {
+    monitoringEvent("webhook.signature_invalid", { provider: "paystack", ip, hasSig: Boolean(sig) });
     await recordSecurityObservation({
       severity: "CRITICAL",
       channel: "WEBHOOK",
@@ -48,6 +59,13 @@ export async function POST(req: Request) {
   const reference = payload.data?.reference;
   if (!reference) {
     return NextResponse.json({ ignored: true });
+  }
+  const duplicate = await prisma.paymentWebhookEvent.findFirst({
+    where: { reference, event: payload.event ?? "unknown", processed: true },
+    select: { id: true },
+  });
+  if (duplicate) {
+    return NextResponse.json({ received: true, duplicate: true });
   }
 
   const walletTxn = await prisma.walletTransaction.findUnique({
@@ -114,6 +132,7 @@ export async function POST(req: Request) {
     data: {
       paymentId: payment?.id,
       event: payload.event ?? "unknown",
+      reference,
       signatureOk: true,
       payload: parsedJson as object,
       processed: false,
@@ -131,6 +150,28 @@ export async function POST(req: Request) {
 
   const status = payload.data?.status;
   if (status === "success") {
+    const { secretKey } = await getPaystackSecrets();
+    const verified = await paystackVerify(reference, secretKey || undefined);
+    if (verified.status !== "success") {
+      await prisma.paymentWebhookEvent.update({ where: { id: webhook.id }, data: { processed: true } });
+      await writeAuditLog({
+        action: "PAYMENT_VERIFICATION_FAILED",
+        entityType: "Payment",
+        entityId: payment.id,
+        metadataJson: { source: "PAYSTACK_WEBHOOK", reference, reason: "verify_api_not_success" },
+      });
+      return NextResponse.json({ received: true, ignored: "verify_api_not_success" });
+    }
+    if (verified.currency !== payment.currency || verified.amount !== Math.round(Number(payment.amount) * 100)) {
+      await prisma.paymentWebhookEvent.update({ where: { id: webhook.id }, data: { processed: true } });
+      await writeAuditLog({
+        action: "PAYMENT_VERIFICATION_FAILED",
+        entityType: "Payment",
+        entityId: payment.id,
+        metadataJson: { source: "PAYSTACK_WEBHOOK", reference, reason: "verify_amount_currency_mismatch" },
+      });
+      return NextResponse.json({ received: true, ignored: "verify_mismatch" });
+    }
     const chargedMinor = payload.data?.amount;
     const expectedMinor = Math.round(Number(payment.amount) * 100);
     if (typeof chargedMinor === "number") {
@@ -160,6 +201,39 @@ export async function POST(req: Request) {
       source: "WEBHOOK",
       note: "Paystack charge.success",
       receiptData: { reference, providerStatus: status, amount: chargedMinor },
+    });
+    if (payment.paymentType === "VERIFIED_PART_REQUEST") {
+      const linked = await prisma.verifiedPartRequest.findFirst({
+        where: { paymentId: payment.id },
+        select: { id: true },
+      });
+      if (linked) {
+        const issuedReceipt = await prisma.generatedReceipt.findFirst({
+          where: { paymentId: payment.id },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        await prisma.verifiedPartRequest.update({
+          where: { id: linked.id },
+          data: {
+            status: "PAID",
+            paidAt: new Date(),
+            receiptId: issuedReceipt?.id ?? null,
+          },
+        });
+        await writeAuditLog({
+          action: "VERIFIED_PART_REQUEST_PAID",
+          entityType: "VerifiedPartRequest",
+          entityId: linked.id,
+          metadataJson: { paymentId: payment.id, reference },
+        });
+      }
+    }
+    await writeAuditLog({
+      action: "PAYMENT_VERIFICATION_SUCCESSFUL",
+      entityType: "Payment",
+      entityId: payment.id,
+      metadataJson: { source: "PAYSTACK_WEBHOOK", reference },
     });
   }
 

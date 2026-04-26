@@ -2,12 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { WalletTopupFlow } from "@/components/parts/wallet-topup-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
+import { formatOptionsLine } from "@/lib/part-variant-options";
+import type { PartStockStatus } from "@prisma/client";
+import { Heart } from "lucide-react";
 
 type ChinaQuotes = { air: { feeGhs: number; eta: string }; sea: { feeGhs: number; eta: string } };
 
@@ -17,45 +21,76 @@ type Props = {
     id: string;
     selected: boolean;
     quantity: number;
+    optColor: string | null;
+    optSize: string | null;
+    optType: string | null;
     part: {
       id: string;
       slug: string;
       title: string;
       origin: "GHANA" | "CHINA";
+      stockStatus: PartStockStatus;
       stockQty: number;
       unitPriceGhs: number;
       coverImageUrl: string | null;
     };
+    isFavorite: boolean;
   }>;
   walletBalance: number;
-  addresses: Array<{ id: string; fullName: string; city: string; region: string; streetAddress: string; isDefault: boolean }>;
+  addresses: Array<{
+    id: string;
+    fullName: string;
+    phone: string;
+    city: string;
+    region: string;
+    streetAddress: string;
+    isDefault: boolean;
+  }>;
   agreementVersion: string;
 };
 
 export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, agreementVersion }: Props) {
   const [rows, setRows] = useState(items);
   const [addressId, setAddressId] = useState(addresses.find((a) => a.isDefault)?.id ?? addresses[0]?.id ?? "");
+  const [dispatchPhone, setDispatchPhone] = useState(
+    () => addresses.find((a) => a.isDefault)?.phone ?? addresses[0]?.phone ?? "",
+  );
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkoutRequestKey, setCheckoutRequestKey] = useState<string | null>(null);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [chinaMode, setChinaMode] = useState<"AIR" | "SEA" | null>(chinaQuotes ? "AIR" : null);
 
+  useEffect(() => {
+    const a = addresses.find((x) => x.id === addressId);
+    if (a?.phone) setDispatchPhone(a.phone);
+  }, [addressId, addresses]);
+
   const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
-  const selectedStockIssues = useMemo(
-    () =>
-      selectedRows.filter(
-        (r) => r.part.stockQty < 1 || r.quantity > r.part.stockQty,
-      ),
-    [selectedRows],
-  );
+  const selectedStockIssues = useMemo(() => {
+    const byPart = new Map<string, number>();
+    for (const r of selectedRows) {
+      if (isChinaPreOrderPart(r.part)) continue;
+      byPart.set(r.part.id, (byPart.get(r.part.id) ?? 0) + r.quantity);
+    }
+    return selectedRows.filter((r) => {
+      if (isChinaPreOrderPart(r.part)) return false;
+      if (r.part.stockQty < 1) return true;
+      return (byPart.get(r.part.id) ?? 0) > r.part.stockQty;
+    });
+  }, [selectedRows]);
   const hasChinaSelected = useMemo(
     () => selectedRows.some((r) => r.part.origin === "CHINA"),
     [selectedRows],
   );
+  const hasBillableChinaSelected = useMemo(
+    () => selectedRows.some((r) => r.part.origin === "CHINA" && !isChinaPreOrderPart(r.part)),
+    [selectedRows],
+  );
   const chinaAddon = useMemo(() => {
-    if (!chinaQuotes || !hasChinaSelected || !chinaMode) return 0;
+    if (!chinaQuotes || !hasBillableChinaSelected || !chinaMode) return 0;
     return chinaMode === "AIR" ? chinaQuotes.air.feeGhs : chinaQuotes.sea.feeGhs;
-  }, [chinaQuotes, chinaMode, hasChinaSelected]);
+  }, [chinaQuotes, chinaMode, hasBillableChinaSelected]);
   const selectedTotal = useMemo(
     () => selectedRows.reduce((sum, row) => sum + row.part.unitPriceGhs * row.quantity, 0) + chinaAddon,
     [selectedRows, chinaAddon],
@@ -90,8 +125,23 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
 
   async function onQty(itemId: string, quantity: number) {
     const row = rows.find((r) => r.id === itemId);
-    const maxQ = row ? Math.max(0, row.part.stockQty) : 99;
-    const safeQty = Math.min(Math.max(1, quantity), Math.max(1, maxQ));
+    if (!row) return;
+    let maxQ: number;
+    if (isChinaPreOrderPart(row.part)) {
+      maxQ = 99;
+    } else {
+      const otherSelected = rows
+        .filter(
+          (x) =>
+            x.id !== itemId && x.selected && !isChinaPreOrderPart(x.part) && x.part.id === row.part.id,
+        )
+        .reduce((s, x) => s + x.quantity, 0);
+      maxQ = Math.max(0, row.part.stockQty - otherSelected);
+    }
+    const cap = Math.max(1, maxQ);
+    const safeQty = isChinaPreOrderPart(row.part)
+      ? Math.min(Math.max(1, quantity), 99)
+      : Math.min(Math.max(1, quantity), cap);
     const prev = rows;
     setRows((r) => r.map((i) => (i.id === itemId ? { ...i, quantity: safeQty } : i)));
     try {
@@ -114,6 +164,28 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
     }
   }
 
+  async function onToggleFavorite(itemId: string) {
+    const row = rows.find((r) => r.id === itemId);
+    if (!row) return;
+    const next = !row.isFavorite;
+    setRows((prev) => prev.map((r) => (r.id === itemId ? { ...r, isFavorite: next } : r)));
+    try {
+      const res = await fetch(
+        next ? "/api/parts/favorites" : `/api/parts/favorites?partId=${encodeURIComponent(row.part.id)}`,
+        {
+          method: next ? "POST" : "DELETE",
+          headers: next ? { "content-type": "application/json" } : undefined,
+          body: next ? JSON.stringify({ partId: row.part.id }) : undefined,
+        },
+      );
+      if (!res.ok) throw new Error("Could not update favorite.");
+      toast.success(next ? "Saved to favorites." : "Removed from favorites.");
+    } catch {
+      setRows((prev) => prev.map((r) => (r.id === itemId ? { ...r, isFavorite: !next } : r)));
+      toast.error("Could not update favorite.");
+    }
+  }
+
   async function checkout() {
     if (!addressId) {
       toast.error("Select a delivery address.");
@@ -127,14 +199,18 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
       toast.error("Please accept checkout agreement before payment.");
       return;
     }
+    if (dispatchPhone.trim().length < 8) {
+      toast.error("Enter a valid dispatch phone number for delivery (8+ characters).");
+      return;
+    }
     if (selectedStockIssues.length > 0) {
       toast.error(
         "One or more selected items are out of stock or over available quantity. Adjust quantities or deselect those lines.",
       );
       return;
     }
-    if (hasChinaSelected && chinaQuotes && !chinaMode) {
-      toast.error("Choose Air or Sea shipping for China-origin parts.");
+    if (hasBillableChinaSelected && chinaQuotes && !chinaMode) {
+      toast.error("Choose Air or Sea for China in-stock items.");
       return;
     }
     setLoading(true);
@@ -150,7 +226,9 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
           requestKey,
           agreementAccepted,
           agreementVersion,
-          ...(hasChinaSelected && chinaMode ? { chinaShippingChoice: chinaMode } : {}),
+          dispatchPhone: dispatchPhone.trim(),
+          deliveryInstructions: deliveryInstructions.trim() || undefined,
+          ...(hasBillableChinaSelected && chinaMode ? { chinaShippingChoice: chinaMode } : {}),
         }),
       });
       const data = (await res.json()) as { orderId?: string; error?: string };
@@ -181,14 +259,26 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
         <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-50">
           <p className="font-semibold text-amber-100">Cannot complete purchase yet</p>
           <p className="mt-1 text-amber-50/95">
-            Some selected items are completely out of stock, or the quantity is higher than we have on hand. Reduce each
-            line to the stock shown (or remove it), then try again — or contact customer support for alternatives.
+            Some selected in-stock items are unavailable at the shown quantity. China pre-order lines are ordered on
+            request; reduce other lines to stock shown or deselect them.
           </p>
         </div>
       ) : null}
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-3">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const otherSelectedSamePart = rows
+            .filter(
+              (x) =>
+                x.id !== row.id &&
+                x.selected &&
+                !isChinaPreOrderPart(x.part) &&
+                x.part.id === row.part.id,
+            )
+            .reduce((s, x) => s + x.quantity, 0);
+          const maxInput =
+            isChinaPreOrderPart(row.part) ? 99 : Math.max(1, row.part.stockQty - otherSelectedSamePart);
+          return (
           <div key={row.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
@@ -206,14 +296,29 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
                     {row.part.title}
                   </Link>
                   <p className="mt-1 text-xs text-zinc-500">
-                    GHS {row.part.unitPriceGhs.toLocaleString()} each · {row.part.origin} · In stock:{" "}
-                    <span className="text-zinc-300">{row.part.stockQty}</span>
+                    GHS {row.part.unitPriceGhs.toLocaleString()} each · {row.part.origin}
+                    {isChinaPreOrderPart(row.part) ? (
+                      <span> · Pre-order (China) — intl delivery paid after checkout</span>
+                    ) : (
+                      <>
+                        {" "}
+                        · In stock: <span className="text-zinc-300">{row.part.stockQty}</span>
+                      </>
+                    )}
                   </p>
-                  {row.part.stockQty < 1 ? (
-                    <p className="mt-1 text-xs text-amber-200/90">This SKU is out of stock — remove it or contact support.</p>
-                  ) : row.quantity > row.part.stockQty ? (
+                  {(() => {
+                    const o = formatOptionsLine({
+                      color: row.optColor ?? undefined,
+                      size: row.optSize ?? undefined,
+                      partType: row.optType ?? undefined,
+                    });
+                    return o ? <p className="mt-0.5 text-xs text-zinc-400">{o}</p> : null;
+                  })()}
+                  {selectedStockIssues.some((s) => s.id === row.id) && !isChinaPreOrderPart(row.part) ? (
                     <p className="mt-1 text-xs text-amber-200/90">
-                      Quantity exceeds available stock ({row.part.stockQty}). Lower the quantity to continue.
+                      {row.part.stockQty < 1
+                        ? "This SKU is out of stock — remove it or contact support."
+                        : `With your other selected lines for this product, total quantity is above in-stock units (${row.part.stockQty}). Lower a line or deselect an item.`}
                     </p>
                   ) : null}
                 </div>
@@ -222,11 +327,11 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
                 <Input
                   type="number"
                   min={1}
-                  max={Math.max(1, row.part.stockQty)}
+                  max={maxInput}
                   value={row.quantity}
                   onChange={(e) => void onQty(row.id, Number(e.target.value) || 1)}
                   className="h-9 w-24"
-                  disabled={row.part.stockQty < 1}
+                  disabled={!isChinaPreOrderPart(row.part) && row.part.stockQty < 1}
                 />
                 <button
                   type="button"
@@ -235,10 +340,29 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
                 >
                   Remove
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void onToggleFavorite(row.id)}
+                  aria-label={row.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                    row.isFavorite
+                      ? "border-rose-400/70 bg-rose-400/20 text-rose-300"
+                      : "border-white/20 bg-white/[0.03] text-zinc-300 hover:bg-white/8"
+                  }`}
+                >
+                  <Heart className={`size-4 ${row.isFavorite ? "fill-current" : ""}`} />
+                </button>
+                <Link
+                  href={`/parts/${row.part.slug}`}
+                  className="inline-flex h-9 items-center rounded-lg border border-[var(--brand)]/35 bg-[var(--brand)]/10 px-3 text-xs font-medium text-white transition hover:border-[var(--brand)]/55 hover:bg-[var(--brand)]/20"
+                >
+                  Product page
+                </Link>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <aside className="h-fit rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -252,10 +376,18 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
             <span className="ml-2 text-xs text-zinc-500">(includes China shipping GHS {chinaAddon.toLocaleString()})</span>
           ) : null}
         </p>
-        {chinaQuotes && hasChinaSelected ? (
+        {hasChinaSelected && hasBillableChinaSelected && !chinaQuotes ? (
+          <p className="mt-3 text-[11px] leading-relaxed text-amber-200/90">
+            China in-stock intl add-on: ensure delivery templates are set in admin. Pre-order (China) lines are billed
+            separately after purchase.
+          </p>
+        ) : null}
+        {chinaQuotes && hasBillableChinaSelected ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
-            <p className="text-xs font-semibold text-white">China warehouse → Ghana</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Choose one international method for all China-origin lines in this checkout.</p>
+            <p className="text-xs font-semibold text-white">China in-stock — warehouse to Ghana</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+              Applies to in-stock China SKUs. Pre-order (China) intl is paid later on your order under Shipping.
+            </p>
             <div className="mt-3 grid gap-2">
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
                 <input type="radio" name="chinaShip" checked={chinaMode === "AIR"} onChange={() => setChinaMode("AIR")} />
@@ -304,6 +436,41 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
           ) : null}
         </div>
 
+        {addresses.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            <div>
+              <label htmlFor="dispatch-phone" className="text-xs text-zinc-500">
+                Dispatch / delivery phone
+              </label>
+              <Input
+                id="dispatch-phone"
+                type="tel"
+                autoComplete="tel"
+                value={dispatchPhone}
+                onChange={(e) => setDispatchPhone(e.target.value)}
+                placeholder="Number to call on arrival"
+                className="mt-1 h-10 w-full border-white/10 bg-black/30 text-sm text-white"
+              />
+              <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                Pre-filled from your address; edit if a different number should be used for this shipment.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="delivery-notes" className="text-xs text-zinc-500">
+                Delivery notes (optional)
+              </label>
+              <textarea
+                id="delivery-notes"
+                value={deliveryInstructions}
+                onChange={(e) => setDeliveryInstructions(e.target.value)}
+                placeholder="Gate, landmark, preferred time…"
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none ring-[var(--brand)]/40 focus:ring-1"
+              />
+            </div>
+          </div>
+        ) : null}
+
         {!hasFunds ? (
           <div className="mt-4">
             <WalletTopupFlow
@@ -320,10 +487,19 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
             />
           </div>
         ) : null}
-        <label className="mt-4 flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-zinc-300">
-          <input type="checkbox" checked={agreementAccepted} onChange={(e) => setAgreementAccepted(e.target.checked)} />
-          <span>
-            I agree to checkout terms and payment verification requirements for selected items. Version {agreementVersion}.
+        <label className="mt-4 flex items-start gap-2 rounded-lg border border-border/70 bg-background/80 p-3 text-xs text-foreground dark:border-white/15 dark:bg-white/[0.05] dark:text-zinc-100">
+          <input
+            type="checkbox"
+            checked={agreementAccepted}
+            onChange={(e) => setAgreementAccepted(e.target.checked)}
+            className="accent-[var(--brand)]"
+          />
+          <span className="font-medium">
+            I agree to{" "}
+            <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+              checkout terms and payment verification requirements
+            </span>{" "}
+            for selected items. Version {agreementVersion}.
           </span>
         </label>
 

@@ -7,7 +7,7 @@ export default function FaqPage() {
     {
       q: "Which payment methods are supported?",
       answer: [
-        "We support secure Paystack payments (card and Mobile Money where available), along with selected manual payment options when offered.",
+        "We support secure Payments channel (Mobile Money where available online), along with selected manual payment options when offered.",
         "All payments are only confirmed after verification within our system.",
       ],
     },

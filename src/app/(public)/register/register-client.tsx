@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { AppleSignInButton } from "@/components/auth/apple-sign-in-button";
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { OAuthEnvHint } from "@/components/auth/oauth-env-hint";
 import { PasswordField } from "@/components/auth/password-field";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,9 +49,13 @@ const simpleEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function RegisterClient({
   googleEnabled = false,
   appleEnabled = false,
+  platformTermsRequired = false,
+  platformTermsVersion = null,
 }: {
   googleEnabled?: boolean;
   appleEnabled?: boolean;
+  platformTermsRequired?: boolean;
+  platformTermsVersion?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,6 +67,9 @@ export function RegisterClient({
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [acceptPlatformTerms, setAcceptPlatformTerms] = useState(false);
+  const [runtimeGoogleEnabled, setRuntimeGoogleEnabled] = useState(googleEnabled);
+  const [runtimeAppleEnabled, setRuntimeAppleEnabled] = useState(appleEnabled);
 
   useEffect(() => {
     const id = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
@@ -76,6 +82,21 @@ export function RegisterClient({
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }, [formId]);
+
+  useEffect(() => {
+    let mounted = true;
+    void fetch("/api/auth/providers")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((providers: Record<string, unknown> | null) => {
+        if (!mounted || !providers) return;
+        setRuntimeGoogleEnabled(Boolean(providers.google));
+        setRuntimeAppleEnabled(Boolean(providers.apple));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -93,6 +114,10 @@ export function RegisterClient({
       toast.error("Password must be at least 8 characters.");
       return;
     }
+    if (platformTermsRequired && !acceptPlatformTerms) {
+      toast.error("Accept the platform terms and privacy notice to continue.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -104,6 +129,7 @@ export function RegisterClient({
           email: trimmedEmail,
           password,
           ...(phone.trim() ? { phone: phone.trim() } : {}),
+          ...(platformTermsRequired ? { acceptPlatformTerms: acceptPlatformTerms === true } : {}),
         }),
       });
 
@@ -148,14 +174,22 @@ export function RegisterClient({
   }
 
   const loginHref = `/login?callbackUrl=${encodeURIComponent(afterAuth)}`;
-  const oauthAvailable = googleEnabled || appleEnabled;
+  const oauthAvailable = runtimeGoogleEnabled || runtimeAppleEnabled;
+  const oauthLine =
+    runtimeGoogleEnabled && runtimeAppleEnabled
+      ? "You can create an account with Google, Apple, or email."
+      : runtimeGoogleEnabled
+        ? "You can create an account with Google or email."
+        : runtimeAppleEnabled
+          ? "You can create an account with Apple or email."
+          : "";
   const registerDescription = oauthAvailable
-    ? "Register to track orders, save favorites, message our team, and check out faster. You can create an account with Google, Apple, or email."
+    ? `Register to track orders, save favorites, message our team, and check out faster. ${oauthLine}`
     : "Register to track orders, save favorites, message our team, and check out faster using your email and a password.";
 
   return (
     <AuthPageShell
-      title="Create account"
+      title="Create Account"
       description={registerDescription}
       footer={
         <p className="text-center text-sm text-muted-foreground dark:text-zinc-500">
@@ -186,8 +220,8 @@ export function RegisterClient({
 
       {oauthAvailable ? (
         <div className="mt-8 space-y-4">
-          {appleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
-          {googleEnabled ? <GoogleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
+          {runtimeGoogleEnabled ? <GoogleSignInButton callbackUrl="/dashboard" disabled={loading} /> : null}
+          {runtimeAppleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
           <p className="text-center text-xs text-muted-foreground dark:text-zinc-500">
             OAuth uses your provider email—we match an existing account or create one for you.
           </p>
@@ -202,11 +236,7 @@ export function RegisterClient({
             </div>
           </div>
         </div>
-      ) : (
-        <div className="mt-8">
-          <OAuthEnvHint />
-        </div>
-      )}
+      ) : null}
 
       <form
         id={`${formId}-form`}
@@ -288,13 +318,40 @@ export function RegisterClient({
           </div>
         </div>
 
+        {platformTermsRequired ? (
+          <div className="rounded-xl border border-border bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <label className="flex cursor-pointer gap-3 rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-sm leading-snug text-foreground dark:border-white/15 dark:bg-white/[0.05] dark:text-zinc-100">
+              <input
+                type="checkbox"
+                checked={acceptPlatformTerms}
+                onChange={(e) => setAcceptPlatformTerms(e.target.checked)}
+                disabled={loading}
+                className="mt-1 accent-[var(--brand)]"
+              />
+              <span className="font-medium">
+                I have read and accept the{" "}
+                <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                  active platform terms &amp; privacy notice
+                </span>
+                {platformTermsVersion ? (
+                  <>
+                    {" "}
+                    (v<span className="font-mono text-foreground">{platformTermsVersion}</span>)
+                  </>
+                ) : null}
+                . This records consent for our operational compliance processes.
+              </span>
+            </label>
+          </div>
+        ) : null}
+
         <Button
           type="submit"
           disabled={loading}
           size="lg"
           className="h-11 min-h-11 w-full bg-[var(--brand)] font-semibold text-[#041014] shadow-[0_0_24px_-4px_rgba(20,216,230,0.45)] hover:bg-[var(--brand-deep)] hover:text-white disabled:shadow-none dark:hover:text-white"
         >
-          {loading ? "Creating your account…" : "Create account"}
+          {loading ? "Creating your account…" : "Create Account"}
         </Button>
 
         <p className="text-center text-xs text-muted-foreground dark:text-zinc-500">

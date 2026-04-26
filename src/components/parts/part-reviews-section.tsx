@@ -73,7 +73,7 @@ export async function PartReviewsSection({
               ) : null}
             </div>
             <p className="mt-2 text-sm leading-relaxed text-zinc-300">{r.body}</p>
-            <p className="mt-2 text-xs text-zinc-500">{r.user?.name?.trim() || "Customer"}</p>
+            <p className="mt-2 text-xs text-zinc-500">{r.authorName?.trim() || r.user?.name?.trim() || "Customer"}</p>
           </li>
         ))}
       </ul>
@@ -89,10 +89,6 @@ export async function PartReviewsSection({
           </p>
         ) : mine?.status === "APPROVED" ? (
           <p className="mt-2 text-sm text-zinc-400">You have already published a review for this product. Thank you.</p>
-        ) : mine?.status === "PENDING" ? (
-          <p className="mt-2 text-sm text-zinc-400">
-            Your review has been submitted and will appear once this page refreshes.
-          </p>
         ) : mine?.status === "REJECTED" ? (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-zinc-400">

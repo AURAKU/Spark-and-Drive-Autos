@@ -4,59 +4,64 @@ import { DISPUTE_FLOW_TEXT, LEGAL_COMPANY, LEGAL_EFFECTIVE_DATE } from "@/lib/le
 export default function SourcingPolicyPage() {
   return (
     <LegalPage
-      title="Sourcing Policy"
+      title="Vehicle and Parts Sourcing Agreement"
       intro={
         <p>
-          This policy explains how we handle sourcing requests for vehicles, parts, and accessories from local and
-          international channels. Effective date: {LEGAL_EFFECTIVE_DATE}.
+          The customer authorizes Spark &amp; Drive Gear to source vehicles or parts based on submitted specifications.
+          Effective date: {LEGAL_EFFECTIVE_DATE}.
         </p>
       }
       sections={[
         {
-          title: "1. Best-effort sourcing model",
+          title: "Scope",
           body: (
             <p>
-              Sourcing support is provided on a best-effort basis using available supplier networks. Submitting a request
-              does not guarantee that a product will be located, secured, or delivered within a specific timeline.
+              Sourcing is best-effort and dependent on suppliers and third parties.
             </p>
           ),
         },
         {
-          title: "2. Specification and approval workflow",
+          title: "No Guarantee",
           body: (
             <p>
-              We rely on customer-provided specifications and approvals before making commitments. Customers are expected
-              to review key details, including model, condition expectations, compatibility, and price range, before
-              confirmation.
+              Availability, pricing, condition, and timelines are not guaranteed.
             </p>
           ),
         },
         {
-          title: "3. Price and timeline variability",
+          title: "Payment",
           body: (
-            <p>
-              Sourcing prices and timelines may change due to supplier availability, demand shifts, freight conditions,
-              exchange-rate movements, and regulatory charges. Quotations are time-sensitive unless expressly fixed in
-              writing.
-            </p>
+            <p>Processing begins only after verified payment.</p>
           ),
         },
         {
-          title: "4. Shipping, customs, and third-party risks",
+          title: "Non-Refundable Costs",
           body: (
-            <p>
-              International movement depends on third-party carriers, ports, and customs authorities. Delays, additional
-              charges, inspections, or handling constraints can occur outside our direct control.
-            </p>
+            <p>Deposits and supplier-related costs may be non-refundable.</p>
           ),
         },
         {
-          title: "5. Deposits and financial commitment",
+          title: "Third-Party Dependence",
           body: (
-            <p>
-              Some sourcing assignments require a deposit before supplier commitment. Deposits may be non-refundable once
-              procurement, inspection, or third-party obligations have started.
-            </p>
+            <p>We rely on suppliers, logistics providers, and authorities.</p>
+          ),
+        },
+        {
+          title: "Liability",
+          body: (
+            <p>We are not responsible for supplier errors, delays, or regulatory issues.</p>
+          ),
+        },
+        {
+          title: "Confirmation",
+          body: (
+            <p>Customer must verify specifications before final commitment.</p>
+          ),
+        },
+        {
+          title: "Acceptance",
+          body: (
+            <p>Proceeding confirms agreement to these terms.</p>
           ),
         },
       ]}
@@ -68,6 +73,10 @@ export default function SourcingPolicyPage() {
           <p>{DISPUTE_FLOW_TEXT}</p>
           <p>
             <strong>Sourcing support:</strong> {LEGAL_COMPANY.supportEmail} | {LEGAL_COMPANY.phone}
+          </p>
+          <p>[{LEGAL_COMPANY.officeAddress}]</p>
+          <p>
+            <strong>Business Hours:</strong> {LEGAL_COMPANY.workingHours}
           </p>
         </div>
       }

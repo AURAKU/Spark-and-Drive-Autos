@@ -22,12 +22,14 @@ type Props = {
   inventory: "cars" | "parts";
   rows: BulkInventoryRow[];
   totalCount: number;
+  page: number;
+  totalPages: number;
   q: string;
   sort: "updated" | "title";
   recentImports: Array<{ id: string; entity: string; status: string; summary: string | null }>;
 };
 
-export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentImports }: Props) {
+export function BulkInventoryHub({ inventory, rows, totalCount, page, totalPages, q, sort, recentImports }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -50,7 +52,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentI
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  async function downloadExport(ids: string[] | null) {
+  async function downloadExport(ids: string[] | null, exportScope: "selected" | "current_page" | "all_filtered") {
     start(async () => {
       try {
         const res = await fetch("/api/admin/import-export/export", {
@@ -59,8 +61,11 @@ export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentI
           body: JSON.stringify({
             entity: entityApi,
             ...(ids && ids.length > 0 ? { ids } : {}),
+            exportScope,
             ...(q.trim() ? { q: q.trim() } : {}),
             sort,
+            page,
+            pageSize: 15,
           }),
         });
         if (!res.ok) {
@@ -170,7 +175,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentI
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-white">Selection</h2>
           <p className="text-xs text-zinc-500">
-            {selected.size} selected · {rows.length} on page · {totalCount} total match
+            {selected.size} selected · page {page}/{totalPages} · {rows.length} on page · {totalCount} total match
           </p>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -183,10 +188,27 @@ export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentI
           <Button
             type="button"
             size="sm"
-            onClick={() => void downloadExport(selected.size > 0 ? Array.from(selected) : null)}
+            onClick={() => void downloadExport(Array.from(selected), "selected")}
+            disabled={pending || selected.size === 0}
+          >
+            Export selected
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void downloadExport(null, "current_page")}
             disabled={pending || rows.length === 0}
           >
-            {selected.size > 0 ? `Export ${selected.size} selected` : "Export all (filtered)"}
+            Export current page (15)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void downloadExport(null, "all_filtered")}
+            disabled={pending || totalCount === 0}
+          >
+            Export all inventory (filtered)
           </Button>
         </div>
 
@@ -273,7 +295,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, q, sort, recentI
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h2 className="text-sm font-semibold text-white">Column reference</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Enum values must match Prisma exactly (e.g. engineType: GASOLINE, ELECTRIC, HYBRID, PLUGIN_HYBRID).
+          Enum values must match Prisma exactly (e.g. engineType: GASOLINE_PETROL, GASOLINE_DIESEL, ELECTRIC, HYBRID, PLUGIN_HYBRID). Legacy GASOLINE in CSV is accepted as petrol.
         </p>
         <pre className="mt-3 max-h-48 overflow-auto rounded-lg bg-black/50 p-3 text-[11px] leading-relaxed text-zinc-400">
           {inventory === "cars" ? CAR_BULK_COLUMNS.join(", ") : PART_BULK_COLUMNS.join(", ")}

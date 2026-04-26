@@ -79,6 +79,10 @@ const carSchema = z.object({
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   }, z.number().nonnegative().optional()),
+  supplierDealerName: optionalStr(200),
+  supplierDealerPhone: optionalStr(40),
+  supplierDealerReference: optionalStr(8000),
+  supplierDealerNotes: optionalStr(20000),
   listingState: z.nativeEnum(CarListingState),
   location: optionalStr(120),
   shortDescription: optionalStr(500),
@@ -166,6 +170,10 @@ export async function createCar(_prev: unknown, formData: FormData) {
           d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
             ? new Prisma.Decimal(d.supplierCostRmb)
             : null,
+        supplierDealerName: d.supplierDealerName,
+        supplierDealerPhone: d.supplierDealerPhone,
+        supplierDealerReference: d.supplierDealerReference,
+        supplierDealerNotes: d.supplierDealerNotes,
         price: priceGhs,
         currency: "GHS",
         location: d.location,
@@ -303,6 +311,10 @@ export async function updateCar(_prev: unknown, formData: FormData) {
           d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
             ? new Prisma.Decimal(d.supplierCostRmb)
             : null,
+        supplierDealerName: d.supplierDealerName,
+        supplierDealerPhone: d.supplierDealerPhone,
+        supplierDealerReference: d.supplierDealerReference,
+        supplierDealerNotes: d.supplierDealerNotes,
         price: priceGhs,
         currency: "GHS",
         location: d.location,

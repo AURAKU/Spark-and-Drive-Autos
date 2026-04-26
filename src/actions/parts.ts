@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
+import { linesToList, mergePartMetaWithOptions } from "@/lib/part-variant-options";
 import { detectLikelyPartDuplicates } from "@/lib/duplicate-detection";
 import { getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
 import { auditLog } from "@/lib/leads";
@@ -61,6 +62,11 @@ const partBaseSchema = z.object({
     z.union([z.string().url(), z.undefined()]).optional()
   ),
   coverImagePublicId: optionalStr(200),
+  supplierDistributorRef: optionalStr(5000),
+  supplierDistributorPhone: optionalStr(40),
+  /** One option per line — shown to customers as choices when non-empty. */
+  optionColors: optionalStr(20000),
+  optionSizes: optionalStr(20000),
 });
 
 const updateSlugSchema = z.preprocess(
@@ -97,6 +103,12 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
     const d = parsed.data;
     const slug = slugify(d.title);
     const tags = parseTagsJson(d.tags);
+    const optionLists = {
+      colors: linesToList(d.optionColors),
+      sizes: linesToList(d.optionSizes),
+      types: [],
+    };
+    const nextMeta = mergePartMetaWithOptions(null, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
     const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
     const categoryRef =
@@ -138,6 +150,9 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
         featured: d.featured,
         coverImageUrl: d.coverImageUrl ?? null,
         coverImagePublicId: d.coverImagePublicId ?? null,
+        metaJson: nextMeta,
+        supplierDistributorRef: d.supplierDistributorRef?.trim() || null,
+        supplierDistributorPhone: d.supplierDistributorPhone?.trim() || null,
       },
     });
     await ensureChinaPreOrderDeliveryOptions(part.id);
@@ -207,6 +222,12 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
     }
 
     const tags = parseTagsJson(d.tags);
+    const optionLists = {
+      colors: linesToList(d.optionColors),
+      sizes: linesToList(d.optionSizes),
+      types: [],
+    };
+    const nextMeta = mergePartMetaWithOptions(existing.metaJson, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
     const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
     const categoryRef =
@@ -247,6 +268,9 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
         featured: d.featured,
         coverImageUrl: d.coverImageUrl ?? null,
         coverImagePublicId: d.coverImagePublicId ?? null,
+        metaJson: nextMeta,
+        supplierDistributorRef: d.supplierDistributorRef?.trim() || null,
+        supplierDistributorPhone: d.supplierDistributorPhone?.trim() || null,
       },
     });
     await ensureChinaPreOrderDeliveryOptions(part.id);

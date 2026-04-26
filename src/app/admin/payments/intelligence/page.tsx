@@ -21,11 +21,15 @@ import { appendOpsDateParams } from "@/lib/admin-operations-date-filter";
 import { buildPaymentIntelligenceFilters } from "@/lib/admin-payment-intelligence-filters";
 import { formatDate } from "@/lib/format";
 import { getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { splitInventoryProfitForSuccessPayments, sumInventoryProfitForSuccessPayments } from "@/lib/inventory-profit";
+import {
+  amountToGhs,
+  splitInventoryProfitForSuccessPayments,
+  sumInventoryProfitForSuccessPayments,
+} from "@/lib/inventory-profit";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import {
   decimalLikeToNumber,
-  fetchPaymentIntelligenceAggregateData,
+  fetchPaymentIntelligenceAggregateDataCached,
   normalizeIntelListPage,
 } from "@/lib/ops";
 import { SETTLEMENT_METHOD_ORDER, settlementMethodLabel } from "@/lib/payment-settlement";
@@ -53,6 +57,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
     period,
     ops,
     basePaymentWhere,
+    basePaymentWhereSansOrderKind,
     walletWhere,
   } = buildPaymentIntelligenceFilters(sp);
 
@@ -86,9 +91,11 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
     walletPendingCount,
     partsSalesFromWalletAgg,
     profitPayments,
+    partsFinderActivationPayments,
     listMeta,
-  } = await fetchPaymentIntelligenceAggregateData({
+  } = await fetchPaymentIntelligenceAggregateDataCached({
     basePaymentWhere,
+    basePaymentWhereSansOrderKind,
     walletWhere,
     paymentsPage: paymentsPageReq,
     walletPage: walletPageReq,
@@ -107,6 +114,15 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
 
   const profitIntel = sumInventoryProfitForSuccessPayments(profitPayments, fx);
   const profitSplit = splitInventoryProfitForSuccessPayments(profitPayments, fx);
+  const partsFinderActivationRevenueGhs = partsFinderActivationPayments.reduce(
+    (s, p) => s + amountToGhs(Number(p.amount), p.currency, fx),
+    0,
+  );
+  const partsFinderActivationCount = partsFinderActivationPayments.length;
+  /** No inventory COGS — activation / renewal is treated as pure margin for reporting. */
+  const partsFinderActivationProfitGhs = partsFinderActivationRevenueGhs;
+  const totalProfitEstGhs = profitIntel.profitGhs + partsFinderActivationProfitGhs;
+  const totalRevenueEstGhs = profitIntel.revenueGhs + partsFinderActivationRevenueGhs;
 
   const buildHref = (next: {
     method?: string | null;
@@ -215,6 +231,13 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 >
                   <Wrench className="size-3.5 opacity-80" aria-hidden />
                   Providers
+                </Link>
+                <Link
+                  href="/admin/disputes"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/25 hover:bg-white/[0.08]"
+                >
+                  <CreditCard className="size-3.5 opacity-80" aria-hidden />
+                  Disputes
                 </Link>
                 <Suspense fallback={<span className="text-xs text-zinc-500">Export…</span>}>
                   <AdminPaymentsExportButtons />
@@ -482,15 +505,15 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
                 <TrendingUp className="size-4" aria-hidden />
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Inventory profit (est.)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Gross profit (est.)</p>
             </div>
             <p className="mt-4 text-2xl font-semibold tabular-nums text-emerald-200">
-              {formatIntelMoneyFromGhs(profitIntel.profitGhs, displayCurrency, fx)}
+              {formatIntelMoneyFromGhs(totalProfitEstGhs, displayCurrency, fx)}
             </p>
             <dl className="mt-3 grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
               <div className="rounded-lg bg-black/30 px-2.5 py-2">
                 <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Revenue</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(profitIntel.revenueGhs, displayCurrency, fx)}</dd>
+                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(totalRevenueEstGhs, displayCurrency, fx)}</dd>
               </div>
               <div className="rounded-lg bg-black/30 px-2.5 py-2">
                 <dt className="text-[10px] uppercase tracking-wide text-zinc-600">COGS</dt>
@@ -504,8 +527,27 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Parts profit</dt>
                 <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(profitSplit.parts.profitGhs, displayCurrency, fx)}</dd>
               </div>
+              <div className="rounded-lg bg-black/30 px-2.5 py-2 sm:col-span-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Parts Finder activation</dt>
+                <dd className="mt-0.5 font-medium text-zinc-200">
+                  {formatIntelMoneyFromGhs(partsFinderActivationProfitGhs, displayCurrency, fx)}
+                  <span className="ml-1.5 font-normal text-zinc-500">
+                    ({partsFinderActivationCount} payment{partsFinderActivationCount === 1 ? "" : "s"} · no COGS)
+                  </span>
+                </dd>
+              </div>
             </dl>
-            <p className="mt-3 text-[11px] text-zinc-600">{profitIntel.ordersAttributed} Paystack payment(s) tied to orders in this view.</p>
+            <p className="mt-3 text-[11px] text-zinc-600">
+              {profitIntel.ordersAttributed} Paystack payment(s) tied to orders
+              {partsFinderActivationCount > 0 ? (
+                <>
+                  {" "}
+                  · {partsFinderActivationCount} Parts Finder activation
+                  {partsFinderActivationCount === 1 ? "" : "s"}
+                </>
+              ) : null}{" "}
+              in this view.
+            </p>
             {profitIntel.ordersWithMissingCost > 0 ? (
               <p className="mt-2 text-xs text-amber-200/90">
                 {profitIntel.ordersWithMissingCost} attribution(s) missing supplier cost — margin may be overstated until costs are set.
@@ -525,6 +567,8 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
           partsProfitGhs: profitSplit.parts.profitGhs,
           carRevenueGhs: profitSplit.car.revenueGhs,
           partsRevenueGhs: profitSplit.parts.revenueGhs,
+          partsFinderProfitGhs: partsFinderActivationProfitGhs,
+          partsFinderRevenueGhs: partsFinderActivationRevenueGhs,
         }}
       />
 

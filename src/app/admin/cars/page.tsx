@@ -2,13 +2,20 @@ import Link from "next/link";
 
 import { AddVehicleDialog } from "@/components/admin/add-vehicle-dialog";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import {
   CAR_OPS_STATE_LABELS,
   CAR_OPS_STATE_VALUES,
   carWhereForOpsState,
   parseCarOpsStateFilter,
 } from "@/lib/admin-car-ops-state";
-import { formatConverted, formatVehiclePriceFromRmb, getGlobalCurrencySettings } from "@/lib/currency";
+import {
+  convertGhsToDisplay,
+  formatConverted,
+  formatVehiclePriceFromRmb,
+  getGlobalCurrencySettings,
+} from "@/lib/currency";
+import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
 import type { Prisma } from "@prisma/client";
@@ -25,7 +32,8 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
   const sort = typeof sp.sort === "string" ? sp.sort : "updated";
   const ops = parseCarOpsStateFilter(typeof sp.ops === "string" ? sp.ops : undefined);
   const featuredOnly = sp.featured === "1";
-  const page = Math.max(1, parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
+  const pageReqRaw = parseInt(typeof sp.page === "string" ? sp.page : "1", 10);
+  const pageReq = normalizeIntelListPage(Number.isFinite(pageReqRaw) ? pageReqRaw : undefined);
   const addVehicle = sp.add === "1";
 
   const where: Prisma.CarWhereInput = {
@@ -52,13 +60,17 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
   if (sort === "newest") orderBy = { createdAt: "desc" };
   if (sort === "updated") orderBy = { updatedAt: "desc" };
 
-  const [total, cars, fx] = await Promise.all([
-    prisma.car.count({ where }),
-    prisma.car.findMany({ where, orderBy, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
-    getGlobalCurrencySettings(),
-  ]);
+  const [total, fx] = await Promise.all([prisma.car.count({ where }), getGlobalCurrencySettings()]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+  const page = Math.min(Math.max(1, pageReq), totalPages);
+
+  const cars = await prisma.car.findMany({
+    where,
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
 
   const buildPageHref = (p: number) => {
     const params = new URLSearchParams();
@@ -71,15 +83,23 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
     return qs ? `/admin/cars?${qs}` : "/admin/cars";
   };
 
+  const pageHrefs = totalPages > 1 ? Array.from({ length: totalPages }, (_, i) => buildPageHref(i + 1)) : undefined;
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <PageHeading variant="dashboard">Cars Inventory</PageHeading>
           <p className="mt-1 text-sm text-zinc-500">
-            Search, filter, and edit listings. Base price is CNY; GHS updates from{" "}
+            Search, filter, and edit listings.{" "}
+            <span className="text-zinc-400">
+              <strong className="font-medium text-zinc-300">Ghana source</strong> listings use base price in{" "}
+              <strong className="font-medium text-zinc-300">GHS</strong> (no RMB conversion).{" "}
+              <strong className="font-medium text-zinc-300">China / in-transit</strong> use base in{" "}
+              <strong className="font-medium text-zinc-300">CNY</strong>; GHS and USD reference columns use{" "}
+            </span>
             <Link className="text-[var(--brand)] hover:underline" href="/admin/settings/currency">
-              exchange rates
+              live exchange rates
             </Link>
             .
           </p>
@@ -174,14 +194,12 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
       </p>
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-        <table className="w-full min-w-[1040px] text-left text-sm">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
               <th className="px-4 py-3">Vehicle</th>
-              <th className="px-4 py-3">Listing</th>
               <th className="px-4 py-3">Stock</th>
-              <th className="px-4 py-3">Feat.</th>
-              <th className="px-4 py-3">Base (CNY)</th>
+              <th className="px-4 py-3">Base</th>
               <th className="px-4 py-3">GHS (saved)</th>
               <th className="px-4 py-3">GHS (live)</th>
               <th className="px-4 py-3">USD (live)</th>
@@ -191,28 +209,38 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
           <tbody>
             {cars.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
                   No vehicles match. Adjust filters or add a listing.
                 </td>
               </tr>
             ) : (
               cars.map((c) => {
                 const base = Number(c.basePriceRmb);
+                const ghana = c.sourceType === "IN_GHANA";
+                const baseGhsRounded = Math.round(base);
+                const baseDisplay = ghana
+                  ? formatConverted(baseGhsRounded, "GHS")
+                  : formatConverted(base, "CNY");
+                const ghsLive = ghana
+                  ? formatConverted(baseGhsRounded, "GHS")
+                  : formatVehiclePriceFromRmb(base, "GHS", fx);
+                const usdLive = ghana
+                  ? formatConverted(convertGhsToDisplay(baseGhsRounded, "USD", fx), "USD")
+                  : formatVehiclePriceFromRmb(base, "USD", fx);
                 return (
                   <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{c.title}</p>
                       <p className="text-xs text-zinc-500">
-                        {c.brand} {c.model} · {c.year}
+                        {c.brand} {c.model} · {c.year} ·{" "}
+                        <span className="text-zinc-400">{c.sourceType.replaceAll("_", " ")}</span>
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-zinc-400">{c.listingState.replaceAll("_", " ")}</td>
                     <td className="px-4 py-3 text-zinc-400">{c.availabilityStatus.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-3 text-zinc-400">{c.featured ? "Yes" : "—"}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-300">{base.toLocaleString()}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-200">{baseDisplay}</td>
                     <td className="px-4 py-3 text-zinc-300">{formatConverted(Number(c.price), "GHS")}</td>
-                    <td className="px-4 py-3 text-[var(--brand)]">{formatVehiclePriceFromRmb(base, "GHS", fx)}</td>
-                    <td className="px-4 py-3 text-zinc-300">{formatVehiclePriceFromRmb(base, "USD", fx)}</td>
+                    <td className="px-4 py-3 text-[var(--brand)]">{ghsLive}</td>
+                    <td className="px-4 py-3 text-zinc-300">{usdLive}</td>
                     <td className="px-4 py-3 text-right">
                       <Link className="text-[var(--brand)] hover:underline" href={`/admin/cars/${c.id}/edit`}>
                         Edit
@@ -226,28 +254,18 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
         </table>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          {page > 1 ? (
-            <Link
-              href={buildPageHref(page - 1)}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/5"
-            >
-              Previous
-            </Link>
-          ) : null}
-          <span className="text-sm text-zinc-500">
-            Page {page} / {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Link
-              href={buildPageHref(page + 1)}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/5"
-            >
-              Next
-            </Link>
-          ) : null}
-        </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          className="border-border/50 dark:border-white/5"
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Vehicles"
+          prevHref={page > 1 ? buildPageHref(page - 1) : null}
+          nextHref={page < totalPages ? buildPageHref(page + 1) : null}
+          pageHrefs={pageHrefs}
+        />
       ) : null}
     </div>
   );

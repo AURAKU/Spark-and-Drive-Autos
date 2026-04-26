@@ -6,6 +6,7 @@ import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
 import { createCar } from "@/actions/cars";
+import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { Button } from "@/components/ui/button";
@@ -78,10 +79,10 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Mechanical</p>
       <div>
         <Label htmlFor="engineType">Engine type</Label>
-        <select id="engineType" name="engineType" className={select} required defaultValue={EngineType.GASOLINE}>
-          {Object.values(EngineType).map((v) => (
+        <select id="engineType" name="engineType" className={select} required defaultValue={EngineType.GASOLINE_PETROL}>
+          {ENGINE_TYPE_ORDER.map((v) => (
             <option key={v} value={v}>
-              {v.replaceAll("_", " ")}
+              {engineTypeLabel(v)}
             </option>
           ))}
         </select>
@@ -162,6 +163,25 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
         <Label htmlFor="supplierCostRmb">Supplier / dealership cost (CNY)</Label>
         <p className="mt-0.5 text-xs text-zinc-500">Admin-only — not shown to customers. Leave blank if unknown.</p>
         <Input id="supplierCostRmb" name="supplierCostRmb" type="number" step="0.01" min={0} className="mt-1" />
+      </div>
+      <p className="sm:col-span-2 text-xs text-zinc-500">
+        The fields below are for internal traceability only. They are never shown on the public site.
+      </p>
+      <div>
+        <Label htmlFor="supplierDealerName">Supplier or dealer name</Label>
+        <Input id="supplierDealerName" name="supplierDealerName" className="mt-1" autoComplete="off" />
+      </div>
+      <div>
+        <Label htmlFor="supplierDealerPhone">Supplier / dealer phone (reference)</Label>
+        <Input id="supplierDealerPhone" name="supplierDealerPhone" type="tel" className="mt-1" autoComplete="off" />
+      </div>
+      <div>
+        <Label htmlFor="supplierDealerReference">Dealer or listing reference</Label>
+        <Input id="supplierDealerReference" name="supplierDealerReference" className="mt-1" placeholder="e.g. stock #, ad link" autoComplete="off" />
+      </div>
+      <div className="sm:col-span-2">
+        <Label htmlFor="supplierDealerNotes">Notes to trace the deal</Label>
+        <Textarea id="supplierDealerNotes" name="supplierDealerNotes" className="mt-1" rows={2} autoComplete="off" />
       </div>
       <div className="sm:col-span-2">
         <Label htmlFor="location">Location</Label>

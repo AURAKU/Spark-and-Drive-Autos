@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { transitionPaymentStatus } from "@/lib/payment-lifecycle";
+import { getPaystackSecrets } from "@/lib/payment-provider-registry";
+import { paystackVerify } from "@/lib/paystack";
+import { upsertPartsFinderMembershipForActivation } from "@/lib/parts-finder/activate-membership";
 import { PartsFinderAccessError, requirePartsFinderActivationAccess } from "@/lib/parts-finder/access";
-import { getPartsFinderActivationSnapshot } from "@/lib/parts-finder/pricing";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -19,55 +22,50 @@ export async function POST(request: Request) {
         userId: session.user.id,
         paymentType: "PARTS_FINDER_MEMBERSHIP",
       },
+      select: { id: true, status: true, amount: true, currency: true, createdAt: true, providerReference: true },
+    });
+    if (!payment) {
+      return NextResponse.json({ ok: false, error: "Payment record not found." }, { status: 404 });
+    }
+
+    if (payment.status !== "SUCCESS") {
+      const { secretKey } = await getPaystackSecrets();
+      if (secretKey) {
+        const verify = await paystackVerify(input.providerReference, secretKey);
+        if (
+          verify.status === "success" &&
+          verify.currency === payment.currency &&
+          verify.amount === Math.round(Number(payment.amount) * 100)
+        ) {
+          await transitionPaymentStatus(payment.id, {
+            toStatus: "SUCCESS",
+            source: "CHECKOUT_RETURN",
+            note: "Parts Finder activation verified from return callback.",
+            receiptData: {
+              reference: input.providerReference,
+              providerStatus: verify.status,
+              amount: verify.amount,
+              currency: verify.currency,
+            },
+          });
+        }
+      }
+    }
+    const latest = await prisma.payment.findUnique({
+      where: { id: payment.id },
       select: { id: true, status: true, amount: true, currency: true, createdAt: true },
     });
-    if (payment?.status === "SUCCESS") {
-      const snapshot = await getPartsFinderActivationSnapshot();
-      const now = payment.createdAt;
-      const existing = await prisma.partsFinderMembership.findFirst({
-        where: { userId: session.user.id },
-        orderBy: { endsAt: "desc" },
-      });
-      const base = existing && existing.endsAt > now ? existing.endsAt : now;
-      const nextEndsAt = new Date(base.getTime() + snapshot.defaultDurationDays * 24 * 60 * 60 * 1000);
-      if (existing) {
-        await prisma.partsFinderMembership.update({
-          where: { id: existing.id },
-          data: {
-            status: "ACTIVE",
-            suspendedAt: null,
-            suspendedBy: null,
-            endsAt: nextEndsAt,
-          },
-        });
-      } else {
-        await prisma.partsFinderMembership.create({
-          data: {
-            userId: session.user.id,
-            status: "ACTIVE",
-            startsAt: now,
-            endsAt: nextEndsAt,
-          },
-        });
-      }
-      await prisma.auditLog.create({
-        data: {
-          actorId: session.user.id,
-          action: "parts_finder.membership.auto_activated",
-          entityType: "PartsFinderMembership",
-          entityId: session.user.id,
-          metadataJson: {
-            providerReference: input.providerReference,
-            paymentId: payment.id,
-            durationDaysApplied: snapshot.defaultDurationDays,
-          },
-        },
-      });
+    if (latest?.status === "SUCCESS") {
+      await upsertPartsFinderMembershipForActivation(
+        session.user.id,
+        latest,
+        { source: "verify", providerReference: input.providerReference },
+      );
     }
     return NextResponse.json({
       ok: true,
-      payment,
-      membershipState: payment?.status === "SUCCESS" ? "ACTIVE" : "PENDING_PAYMENT",
+      payment: latest ?? payment,
+      membershipState: latest?.status === "SUCCESS" ? "ACTIVE" : "PENDING_PAYMENT",
     });
   } catch (error) {
     if (error instanceof PartsFinderAccessError) {

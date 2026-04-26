@@ -12,13 +12,24 @@ import {
 import type { OrderKind } from "@prisma/client";
 
 import { parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
+import { buildOrderListSearchWhere, normalizeOrderListSearchQuery } from "@/lib/admin-orders-search";
 
 export const dynamic = "force-dynamic";
 
-function filterDescription(kind: OrdersExportKindFilter, dateLabel: string) {
+function filterDescription(
+  kind: OrdersExportKindFilter,
+  dateLabel: string,
+  pl: "ghana" | "china_preorder" | null,
+  searchQ: string,
+) {
   const k =
     kind === "CAR" ? "Cars Inventory only" : kind === "PARTS" ? "Parts & Accessories only" : "All kinds";
-  return dateLabel !== "All dates" ? `${k} · ${dateLabel}` : k;
+  const plL =
+    pl === "ghana" ? "Ghana stock parts" : pl === "china_preorder" ? "China pre-order parts" : null;
+  const base = [k, plL, dateLabel !== "All dates" ? dateLabel : null, searchQ ? `Search: ${searchQ}` : null]
+    .filter(Boolean)
+    .join(" · ");
+  return base;
 }
 
 export async function GET(req: Request) {
@@ -33,6 +44,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const format = url.searchParams.get("format");
   const kindRaw = url.searchParams.get("kind");
+  const plRaw = url.searchParams.get("partsLineage");
+  const partsLineage =
+    plRaw === "ghana" || plRaw === "china_preorder" ? (plRaw as "ghana" | "china_preorder") : null;
   const kindFilter: OrdersExportKindFilter =
     kindRaw === "CAR" || kindRaw === "PARTS" ? (kindRaw as OrderKind) : null;
 
@@ -42,9 +56,11 @@ export async function GET(req: Request) {
 
   const raw = Object.fromEntries(url.searchParams);
   const ops = parseOpsDateFromSearchParams(raw);
-  const rows = await fetchOrdersForAdminExport(kindFilter, ops.range);
+  const searchQ = normalizeOrderListSearchQuery(url.searchParams.get("q"));
+  const searchWhere = buildOrderListSearchWhere(searchQ);
+  const rows = await fetchOrdersForAdminExport(kindFilter, ops.range, partsLineage, searchWhere);
   const lines = flattenOrdersToExportLines(rows);
-  const label = filterDescription(kindFilter, ops.label);
+  const label = filterDescription(kindFilter, ops.label, partsLineage, searchQ);
   const safeKind = kindFilter ?? "all";
 
   if (format === "pdf") {

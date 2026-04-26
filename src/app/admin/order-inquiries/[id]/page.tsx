@@ -36,7 +36,7 @@ export default async function AdminOrderInquiryDetailPage(props: Props) {
           href={`/admin/duty-estimator?inquiryId=${encodeURIComponent(r.id)}&customerId=${encodeURIComponent(r.userId ?? "")}&clientName=${encodeURIComponent(r.user?.name ?? r.guestName)}&clientContact=${encodeURIComponent(r.user?.email ?? r.guestEmail ?? r.guestPhone)}&vehicleName=${encodeURIComponent(`${r.brand} ${r.model}${r.trim ? ` ${r.trim}` : ""}`)}`}
           className="inline-flex items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--brand)] hover:bg-[var(--brand)]/20"
         >
-          Generate vehicle import estimate
+          Generate duty estimate
         </Link>
       </div>
       <p className="mt-2 font-mono text-xs text-zinc-500">{r.id}</p>

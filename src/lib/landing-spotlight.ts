@@ -6,6 +6,7 @@ import {
   type Car,
   type Part,
 } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 
@@ -329,3 +330,11 @@ export async function getHomeSpotlight(): Promise<{
 
   return { entries, slotStartedAt, nextRotationAt, seed };
 }
+
+/**
+ * Cached spotlight for faster homepage responses under load.
+ * Revalidates every 5 minutes, while slot logic still keeps rotation deterministic.
+ */
+export const getHomeSpotlightCached = unstable_cache(getHomeSpotlight, ["landing-spotlight:v1"], {
+  revalidate: 300,
+});

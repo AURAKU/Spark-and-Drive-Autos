@@ -1,14 +1,22 @@
+import { hasGoogleOAuth } from "@/lib/auth/provider-flags";
+
 /**
  * Server-only OAuth configuration helpers.
  * Keep provider visibility logic on the server; never expose secrets to clients.
+ *
+ * Apple Sign-In is **off by default**. Set `ENABLE_APPLE_OAUTH=1` plus full Apple
+ * credentials to opt in. This keeps production readiness independent of Apple.
  */
+function isAppleOAuthOptInEnabled(): boolean {
+  return process.env.ENABLE_APPLE_OAUTH?.trim() === "1";
+}
+
 export function isGoogleAuthConfigured(): boolean {
-  return Boolean(
-    process.env.AUTH_GOOGLE_ID?.trim().length && process.env.AUTH_GOOGLE_SECRET?.trim().length,
-  );
+  return hasGoogleOAuth();
 }
 
 export function isAppleAuthConfigured(): boolean {
+  if (!isAppleOAuthOptInEnabled()) return false;
   const id = Boolean(process.env.AUTH_APPLE_ID?.trim());
   const legacySecret = Boolean(process.env.AUTH_APPLE_SECRET?.trim());
   const fromP8 = Boolean(

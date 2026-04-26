@@ -2,14 +2,18 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { PageHeading } from "@/components/typography/page-headings";
 import { OrderDutySection } from "@/components/duty/order-duty-section";
-import { ShipmentFlowVisual } from "@/components/shipping/shipment-flow-visual";
+import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
+import { DeferredChinaFreightPanel } from "@/components/parts/deferred-china-freight-panel";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
+import { getDeferredChinaContextForUser } from "@/lib/parts-china-pending-shipping";
 import { SHIPMENT_KIND_LABEL, SHIPMENT_STAGE_LABEL } from "@/lib/shipping/constants";
+import { ghanaPartsCustomerStageLabel } from "@/lib/shipping/ghana-parts-flow";
 import { getShipmentsForOrderDetail } from "@/lib/shipping/shipment-service";
 import { prisma } from "@/lib/prisma";
 
@@ -41,7 +45,18 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
 
   if (!order) notFound();
 
-  const shipments = await getShipmentsForOrderDetail(orderId, userId);
+  const [shipments, pendingChinaPre, walletGhs] = await Promise.all([
+    getShipmentsForOrderDetail(orderId, userId),
+    order.kind === "PARTS" ? getDeferredChinaContextForUser(orderId, userId) : Promise.resolve(null),
+    prisma.user
+      .findUnique({ where: { id: userId }, select: { walletBalance: true } })
+      .then((u) => Number(u?.walletBalance ?? 0)),
+  ]);
+  const generatedReceipts = await prisma.generatedReceipt.findMany({
+    where: { orderId, userId },
+    orderBy: { issuedAt: "desc" },
+    take: 20,
+  });
 
   const receipt = (order.receiptData ?? null) as
     | {
@@ -89,20 +104,66 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
             <dt className="text-zinc-500">Amount</dt>
             <dd className="text-[var(--brand)]">{formatMoney(Number(order.amount), order.currency)}</dd>
           </div>
+          <div>
+            <dt className="text-zinc-500">Placed</dt>
+            <dd className="text-zinc-200">{order.createdAt.toLocaleString()}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Last updated</dt>
+            <dd className="text-zinc-200">{order.updatedAt.toLocaleString()}</dd>
+          </div>
         </dl>
       </div>
 
       {order.kind === "CAR" ? <OrderDutySection orderId={order.id} orderKind={order.kind} /> : null}
 
+      {order.kind === "PARTS" && pendingChinaPre ? (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-white">Shipping &amp; delivery (China pre-order)</h2>
+          <p className="mt-1 text-xs text-zinc-500">Pay the international leg separately. Amounts use active delivery template GHS for your lines.</p>
+          <div className="mt-3">
+            <Suspense
+              fallback={
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-500">
+                  Loading…
+                </div>
+              }
+            >
+              <DeferredChinaFreightPanel orderId={order.id} walletBalanceGhs={walletGhs} />
+            </Suspense>
+          </div>
+        </div>
+      ) : null}
+
       {order.deliveryAddressSnapshot && order.kind === "PARTS" ? (
         <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-sm font-semibold text-white">Delivery address</h2>
-          <p className="mt-3 text-sm text-zinc-400">
-            {(() => {
-              const a = order.deliveryAddressSnapshot as Record<string, string | undefined>;
-              return [a.fullName, a.streetAddress, a.city, a.region, a.phone].filter(Boolean).join(" · ");
-            })()}
-          </p>
+          <h2 className="text-sm font-semibold text-white">Delivery details</h2>
+          {(() => {
+            const a = order.deliveryAddressSnapshot as Record<string, string | undefined>;
+            const dispatch = a.dispatchPhone?.trim() || a.phone;
+            return (
+              <div className="mt-3 space-y-2 text-sm text-zinc-400">
+                <p>
+                  <span className="text-zinc-500">Address: </span>
+                  {[a.fullName, a.streetAddress, a.city, a.region, a.digitalAddress].filter(Boolean).join(" · ")}
+                </p>
+                <p>
+                  <span className="text-zinc-500">Profile phone: </span>
+                  {a.phone ?? "—"}
+                </p>
+                <p>
+                  <span className="text-zinc-500">Dispatch phone (call on arrival): </span>
+                  <span className="font-medium text-zinc-200">{dispatch ?? "—"}</span>
+                </p>
+                {a.deliveryInstructions ? (
+                  <p>
+                    <span className="text-zinc-500">Your notes: </span>
+                    {a.deliveryInstructions}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })()}
         </div>
       ) : null}
 
@@ -120,12 +181,14 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
                     <p className="mt-1 text-xs text-zinc-500">Method: {s.deliveryMode.replaceAll("_", " ")}</p>
                   ) : null}
                 </div>
-                <p className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
-                  {SHIPMENT_STAGE_LABEL[s.currentStage]}
+                <p className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-semibold tracking-wide text-zinc-300">
+                  {s.kind === "PARTS_GHANA"
+                    ? ghanaPartsCustomerStageLabel(s.currentStage)
+                    : SHIPMENT_STAGE_LABEL[s.currentStage]}
                 </p>
               </div>
               <div className="mt-4">
-                <ShipmentFlowVisual currentStage={s.currentStage} />
+                <ShipmentFlowByKind kind={s.kind} currentStage={s.currentStage} />
               </div>
               <dl className="mt-4 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
                 {s.feeAmount != null && Number(s.feeAmount) > 0 ? (
@@ -196,7 +259,7 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
         </div>
       ) : null}
 
-      {receipt ? (
+      {receipt || generatedReceipts.length > 0 ? (
         <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <h2 className="text-lg font-semibold text-white">Digital receipt</h2>
           <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-300">
@@ -214,15 +277,15 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
                   {order.kind === "PARTS" ? "Spark & Drive Gear Auto Parts" : "Spark and Drive Autos"}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  {receipt.companyEmail ?? "support@sparkanddriveautos.com"} · {receipt.companyPhone ?? "+233 54 000 0000"} ·{" "}
-                  {receipt.storeLocation ?? "Accra, Ghana"}
+                  {receipt?.companyEmail ?? "support@sparkanddriveautos.com"} · {receipt?.companyPhone ?? "+233 54 000 0000"} ·{" "}
+                  {receipt?.storeLocation ?? "Accra, Ghana"}
                 </p>
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-500">
               Order: {order.reference} · Receipt: {order.receiptReference ?? "Pending"}
             </p>
-            {Array.isArray(receipt.items) && receipt.items.length > 0 ? (
+            {Array.isArray(receipt?.items) && receipt.items.length > 0 ? (
               <ul className="mt-3 space-y-1 text-xs text-zinc-300">
                 {receipt.items.map((item, idx) => (
                   <li key={`${item.title ?? "item"}-${idx}`}>
@@ -231,7 +294,7 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
                 ))}
               </ul>
             ) : null}
-            <p className="mt-3 text-zinc-300">{receipt.thankYouNote ?? receipt.thankYou ?? "Thank you for shopping with us."}</p>
+            <p className="mt-3 text-zinc-300">{receipt?.thankYouNote ?? receipt?.thankYou ?? "Thank you for shopping with us."}</p>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
             <p className="text-zinc-500">Receipt remains attached to this order and can be reviewed any time.</p>
@@ -249,6 +312,11 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
                 </a>
               </>
             ) : null}
+            {generatedReceipts.map((r) => (
+              <a key={r.id} href={`/api/receipts/${r.id}/download`} className="text-[var(--brand)] hover:underline">
+                Download {r.receiptNumber}
+              </a>
+            ))}
           </div>
         </div>
       ) : null}

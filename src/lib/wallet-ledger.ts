@@ -6,8 +6,10 @@ import type {
   WalletTransactionPurpose,
   WalletTransactionStatus,
 } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit";
+import { invalidateOpsRouteCacheTags } from "@/lib/ops-route-cache-tags";
 import { prisma } from "@/lib/prisma";
 
 type WalletLedgerEntryInput = {
@@ -106,6 +108,13 @@ export async function applyWalletLedgerEntry(input: WalletLedgerEntryInput, tx?:
     },
     db,
   );
+
+  revalidatePath("/dashboard/payments");
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/admin/payments/intelligence");
+  revalidatePath("/admin/orders");
+  revalidatePath("/dashboard/orders");
+  invalidateOpsRouteCacheTags();
 
   return txn;
 }

@@ -23,12 +23,22 @@ function redisOrNull(prefix: string, limit: number, window: `${number} m`) {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
-  const redis = new Redis({ url, token });
-  return new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(limit, window),
-    prefix: `sda:${prefix}`,
-  });
+  // Guard against malformed values (for example a pasted CLI command) and fall back to memory limiter.
+  if (!/^https:\/\//i.test(url)) {
+    console.warn("[rate-limit] UPSTASH_REDIS_REST_URL is invalid; using in-memory rate limiting fallback.");
+    return null;
+  }
+  try {
+    const redis = new Redis({ url, token });
+    return new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(limit, window),
+      prefix: `sda:${prefix}`,
+    });
+  } catch (error) {
+    console.warn("[rate-limit] Failed to initialize Upstash Redis; using in-memory fallback.", error);
+    return null;
+  }
 }
 
 const rlAuth = redisOrNull("auth", 5, "1 m");
@@ -38,6 +48,8 @@ const rlChat = redisOrNull("chat", 60, "1 m");
 /** Edit/delete chat messages — tighter than send. */
 const rlChatMod = redisOrNull("chat_mod", 40, "1 m");
 const rlPay = redisOrNull("pay", 20, "1 m");
+const rlWebhook = redisOrNull("webhook", 120, "1 m");
+const rlDispute = redisOrNull("dispute", 8, "10 m");
 
 async function run(
   redis: Ratelimit | null,
@@ -78,4 +90,14 @@ export async function rateLimitChatModeration(identifier: string): Promise<Limit
 
 export async function rateLimitPayment(identifier: string): Promise<LimitResult> {
   return run(rlPay, "pay", 20, identifier);
+}
+
+/** Webhook flood protection per IP/reference key. */
+export async function rateLimitWebhook(identifier: string): Promise<LimitResult> {
+  return run(rlWebhook, "webhook", 120, identifier);
+}
+
+/** Open-dispute attempts per user/payment key. */
+export async function rateLimitDispute(identifier: string): Promise<LimitResult> {
+  return run(rlDispute, "dispute", 8, identifier, 10 * 60 * 1000);
 }

@@ -1,3 +1,4 @@
+import { normalizePartsFinderImageUrl } from "@/lib/parts-finder/image-url";
 import type { NormalizedPartsQuery } from "@/lib/parts-finder/normalize-query";
 import { buildExternalSearchQueries } from "@/lib/parts-finder/normalize-query";
 
@@ -11,6 +12,16 @@ type SerperOrganic = {
   imageUrl?: string;
   image?: string;
 };
+type SerperImageRow = {
+  title?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
+  source?: string;
+};
+
+function normalizeImageUrl(url: string | null | undefined): string | null {
+  return normalizePartsFinderImageUrl(url);
+}
 
 function extractRefs(text: string): string[] {
   const out = text.match(/\b[A-Z0-9]{6,24}\b/g) ?? [];
@@ -35,14 +46,17 @@ function extractImageHints(text: string): string[] {
  * Calls Serper.dev Google JSON API when `SERPER_API_KEY` is set.
  * Docs: https://serper.dev — enable in production for real web results.
  */
-async function fetchSerperOnce(query: string): Promise<ExternalCandidate[]> {
+async function fetchSerperOnce(query: string, trace?: { jobId?: string }): Promise<ExternalCandidate[]> {
   const key = process.env.SERPER_API_KEY;
   if (!key) return [];
+  if (trace?.jobId) {
+    console.info("[parts-finder] Serper request started", { jobId: trace.jobId, query });
+  }
 
   let res: Response | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5500);
+    const timer = setTimeout(() => controller.abort(), 10_000);
     try {
       res = await fetch("https://google.serper.dev/search", {
         method: "POST",
@@ -77,10 +91,7 @@ async function fetchSerperOnce(query: string): Promise<ExternalCandidate[]> {
       host = "web";
     }
     const thumbnailUrlRaw = row.thumbnailUrl ?? row.imageUrl ?? row.image ?? null;
-    const thumbnailUrl =
-      typeof thumbnailUrlRaw === "string" && /^https?:\/\//i.test(thumbnailUrlRaw)
-        ? thumbnailUrlRaw
-        : null;
+    const thumbnailUrl = normalizeImageUrl(typeof thumbnailUrlRaw === "string" ? thumbnailUrlRaw : null);
     out.push({
       title: row.title.trim(),
       snippet: (row.snippet ?? "").trim(),
@@ -97,6 +108,69 @@ async function fetchSerperOnce(query: string): Promise<ExternalCandidate[]> {
     });
   }
 
+  if (trace?.jobId) {
+    console.info("[parts-finder] Serper response received", { jobId: trace.jobId, hits: out.length });
+  }
+  return out;
+}
+
+async function fetchSerperImagesOnce(query: string, trace?: { jobId?: string }): Promise<ExternalCandidate[]> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return [];
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      res = await fetch("https://google.serper.dev/images", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-KEY": key,
+        },
+        body: JSON.stringify({ q: query, num: 10 }),
+        next: { revalidate: 0 },
+        signal: controller.signal,
+      });
+      if (res.ok) break;
+    } catch {
+      if (attempt === 1) return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (!res || !res.ok) return [];
+  const json = (await res.json()) as { images?: SerperImageRow[] };
+  const images = json.images ?? [];
+  const out: ExternalCandidate[] = [];
+  for (const row of images) {
+    const title = row.title?.trim() || "Parts reference image";
+    const thumbnailUrl = normalizeImageUrl(row.imageUrl ?? row.thumbnailUrl ?? null);
+    if (!thumbnailUrl) continue;
+    let host = "web";
+    try {
+      host = row.source ? new URL(row.source).hostname.replace(/^www\./, "") : "web";
+    } catch {
+      host = "web";
+    }
+    out.push({
+      title,
+      snippet: "Catalog image candidate",
+      sourceHint: host,
+      ingestionSource: "SERPER_WEB",
+      thumbnailUrl,
+      sourceIdentity: host,
+      sourceUrl: null,
+      description: "Image candidate",
+      oemReferences: extractRefs(title),
+      alternateReferences: [],
+      fitmentClues: [],
+      imageHints: extractImageHints(title),
+    });
+  }
+  if (trace?.jobId) {
+    console.info("[parts-finder] Serper image response received", { jobId: trace.jobId, hits: out.length });
+  }
   return out;
 }
 
@@ -145,21 +219,42 @@ function dedupeCandidates(items: ExternalCandidate[]): ExternalCandidate[] {
 /**
  * Aggregates external signals: Serper when configured, otherwise deterministic fallback previews.
  */
-export async function ingestExternalCandidates(n: NormalizedPartsQuery): Promise<ExternalCandidate[]> {
+export async function ingestExternalCandidates(n: NormalizedPartsQuery, trace?: { jobId?: string }): Promise<ExternalCandidate[]> {
   const queries = buildExternalSearchQueries(n);
   const merged: ExternalCandidate[] = [];
 
   if (process.env.SERPER_API_KEY) {
-    for (const q of queries) {
-      const chunk = await fetchSerperOnce(q);
-      merged.push(...chunk);
-      if (merged.length >= 24) break;
+    // Run multiple Serper searches in parallel to reduce end-to-end wait.
+    const maxQueries = 6;
+    const concurrency = 3;
+    const queue = queries.slice(0, maxQueries);
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (idx < queue.length) {
+        const current = queue[idx];
+        idx += 1;
+        if (!current) break;
+        const chunk = await fetchSerperOnce(current, trace);
+        if (chunk.length > 0) merged.push(...chunk);
+      }
+    });
+    await Promise.allSettled(workers);
+    const imageQuery = [n.year ? String(n.year) : "", n.brand ?? "", n.model ?? "", n.partIntent || "auto part", "product image"]
+      .filter(Boolean)
+      .join(" ");
+    const imageCandidates = await fetchSerperImagesOnce(imageQuery, trace);
+    if (imageCandidates.length > 0) merged.push(...imageCandidates);
+    if (merged.length > 24) {
+      merged.splice(24);
     }
   }
 
   const deduped = dedupeCandidates(merged);
 
-  if (deduped.length >= 3) {
+  if (process.env.SERPER_API_KEY) {
+    if (deduped.length === 0) {
+      throw new Error("SERPER_EMPTY");
+    }
     return deduped.slice(0, 20);
   }
 

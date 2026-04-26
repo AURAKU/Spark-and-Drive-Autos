@@ -1,10 +1,29 @@
-import { NotificationType, OrderKind, Prisma, type DeliveryMode, type OrderStatus, type PartOrigin } from "@prisma/client";
+import {
+  NotificationType,
+  OrderKind,
+  Prisma,
+  SourceType,
+  type DeliveryMode,
+  type OrderStatus,
+  type PartOrigin,
+} from "@prisma/client";
 
 import { ensureDutyRecordForCarSeaInTx } from "@/lib/duty/ensure-duty-record";
+import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { prisma } from "@/lib/prisma";
 
 import { computeChinaShippingQuote, type ChinaShippingChoice } from "./parts-china-fees";
 import type { TxClient } from "./parts-china-fees";
+
+export type ChinaShipmentLeg = {
+  deferred: boolean;
+  chinaShippingChoice?: ChinaShippingChoice;
+  chinaFeeGhs?: number;
+  chinaEta?: string;
+  chinaDeliveryMode?: DeliveryMode;
+  /** "Pre-order (China)" when deferred; "China stock" when paid with order */
+  legLabel: string;
+};
 
 /** Do not create vehicle shipment rows for unpaid / cancelled orders (avoids fake tracking). */
 const CAR_SHIPMENT_BACKFILL_BLOCKED = new Set<OrderStatus>(["DRAFT", "PENDING_PAYMENT", "CANCELLED"]);
@@ -33,6 +52,97 @@ function makeShipmentSearchWhere(query: string): Prisma.ShipmentWhereInput {
   };
 }
 
+/** Admin shipping hub: narrow by parts lane (Ghana vs China) or vehicle source (Ghana vs China / in transit). */
+export type AdminShippingSegment = "all" | "parts_ghana" | "parts_china" | "cars_ghana" | "cars_china";
+
+export const ADMIN_SHIPPING_SEGMENTS: AdminShippingSegment[] = [
+  "all",
+  "parts_ghana",
+  "parts_china",
+  "cars_ghana",
+  "cars_china",
+];
+
+function segmentWhereForAdmin(segment: AdminShippingSegment): Prisma.ShipmentWhereInput {
+  switch (segment) {
+    case "parts_ghana":
+      return { kind: "PARTS_GHANA" };
+    case "parts_china":
+      return { kind: "PARTS_CHINA" };
+    case "cars_ghana":
+      return {
+        kind: "CAR_SEA",
+        order: { kind: "CAR", car: { sourceType: SourceType.IN_GHANA } },
+      };
+    case "cars_china":
+      return {
+        kind: "CAR_SEA",
+        order: {
+          kind: "CAR",
+          car: { sourceType: { in: [SourceType.IN_CHINA, SourceType.IN_TRANSIT] } },
+        },
+      };
+    default:
+      return {};
+  }
+}
+
+function buildAdminShipmentWhere(
+  query: string | undefined,
+  segment: AdminShippingSegment,
+  orderCreatedRange: { gte: Date; lt: Date } | null | undefined,
+): Prisma.ShipmentWhereInput {
+  const conditions: Prisma.ShipmentWhereInput[] = [];
+  const q = query?.trim() ?? "";
+  if (q) conditions.push(makeShipmentSearchWhere(q));
+  const seg = segmentWhereForAdmin(segment);
+  if (Object.keys(seg).length > 0) conditions.push(seg);
+  if (orderCreatedRange) {
+    conditions.push({
+      order: { createdAt: { gte: orderCreatedRange.gte, lt: orderCreatedRange.lt } },
+    });
+  }
+  return conditions.length > 0 ? { AND: conditions } : {};
+}
+
+const adminShipmentDashboardInclude = {
+  order: {
+    include: {
+      user: { select: { id: true, email: true, name: true } },
+      car: { select: { id: true, title: true, slug: true, sourceType: true } },
+      partItems: { select: { id: true, titleSnapshot: true, origin: true, quantity: true } },
+      deliveryAddress: {
+        select: {
+          fullName: true,
+          phone: true,
+          city: true,
+          region: true,
+          streetAddress: true,
+        },
+      },
+    },
+  },
+  events: {
+    orderBy: { createdAt: "desc" as const },
+    take: 20,
+    include: { createdBy: { select: { email: true } } },
+  },
+} satisfies Prisma.ShipmentInclude;
+
+export async function countShipmentsForAdminDashboard(
+  query?: string,
+  orderCreatedRange?: { gte: Date; lt: Date } | null,
+): Promise<Record<AdminShippingSegment, number>> {
+  const entries = await Promise.all(
+    ADMIN_SHIPPING_SEGMENTS.map(async (segment) => {
+      const where = buildAdminShipmentWhere(query, segment, orderCreatedRange ?? null);
+      const n = await prisma.shipment.count({ where });
+      return [segment, n] as const;
+    }),
+  );
+  return Object.fromEntries(entries) as Record<AdminShippingSegment, number>;
+}
+
 async function assignMissingTrackingNumbers(ids: string[]) {
   if (ids.length === 0) return;
   const ships = await prisma.shipment.findMany({
@@ -57,22 +167,46 @@ export async function createShipmentsForPaidPartsOrder(
     userId: string;
     orderReference: string;
     items: Array<{ partId: string; origin: PartOrigin }>;
+    /** One or more China intl rows (e.g. paid-in-cart vs pre-order deferred). When set, supersedes legacy `chinaShipping*` single-block fields. */
+    chinaLegs?: ChinaShipmentLeg[] | null;
     chinaShippingChoice?: ChinaShippingChoice;
     chinaFeeGhs?: number;
     chinaEta?: string;
     chinaDeliveryMode?: DeliveryMode;
+    /** China pre-order: intl leg collected later (admin-set per-mode fees; user pays on order). Legacy: use with single China block. */
+    chinaShippingDeferred?: boolean;
   },
 ): Promise<void> {
   const hasGhana = params.items.some((i) => i.origin === "GHANA");
   const hasChina = params.items.some((i) => i.origin === "CHINA");
-  if (hasChina) {
+  const resolvedLegs: ChinaShipmentLeg[] = (() => {
+    if (params.chinaLegs && params.chinaLegs.length > 0) return params.chinaLegs;
+    if (hasChina) {
+      return [
+        {
+          deferred: Boolean(params.chinaShippingDeferred),
+          chinaShippingChoice: params.chinaShippingChoice,
+          chinaFeeGhs: params.chinaFeeGhs,
+          chinaEta: params.chinaEta,
+          chinaDeliveryMode: params.chinaDeliveryMode,
+          legLabel: "China",
+        },
+      ];
+    }
+    return [];
+  })();
+  for (const leg of resolvedLegs) {
+    if (leg.deferred) continue;
     if (
-      params.chinaShippingChoice == null ||
-      params.chinaFeeGhs == null ||
-      params.chinaDeliveryMode == null
+      leg.chinaShippingChoice == null ||
+      leg.chinaFeeGhs == null ||
+      leg.chinaDeliveryMode == null
     ) {
       throw new Error("CHINA_SHIPPING_REQUIRED");
     }
+  }
+  if (hasChina && resolvedLegs.length === 0) {
+    throw new Error("CHINA_SHIPPING_LEGS_REQUIRED");
   }
 
   if (hasGhana) {
@@ -98,29 +232,55 @@ export async function createShipmentsForPaidPartsOrder(
     });
   }
 
-  if (hasChina) {
-    const s = await tx.shipment.create({
-      data: {
-        orderId: params.orderId,
-        kind: "PARTS_CHINA",
-        trackingNumber: buildTrackingNumber("PARTS_CHINA"),
-        deliveryMode: params.chinaDeliveryMode!,
-        feeAmount: params.chinaFeeGhs!,
-        feeCurrency: "GHS",
-        estimatedDuration: params.chinaEta ?? null,
-        currentStage: "PENDING_SHIPPING_SETUP",
-      },
-    });
-    const modeLabel = params.chinaShippingChoice === "SEA" ? "Sea" : "Air";
-    await tx.shipmentStatusEvent.create({
-      data: {
-        shipmentId: s.id,
-        stage: "PENDING_SHIPPING_SETUP",
-        title: "Shipping setup",
-        description: `International parts shipping (${modeLabel}) is being arranged. Fee GHS ${params.chinaFeeGhs!.toFixed(2)}.`,
-        visibleToCustomer: true,
-      },
-    });
+  for (const leg of resolvedLegs) {
+    if (leg.deferred) {
+      const s = await tx.shipment.create({
+        data: {
+          orderId: params.orderId,
+          kind: "PARTS_CHINA",
+          trackingNumber: buildTrackingNumber("PARTS_CHINA"),
+          deliveryMode: null,
+          feeAmount: null,
+          feeCurrency: "GHS",
+          deferredChinaShipping: true,
+          estimatedDuration: "International shipping to be selected and paid separately.",
+          currentStage: "PENDING_SHIPPING_SETUP",
+        },
+      });
+      await tx.shipmentStatusEvent.create({
+        data: {
+          shipmentId: s.id,
+          stage: "PENDING_SHIPPING_SETUP",
+          title: "International shipping — payment pending",
+          description: `(${leg.legLabel}) Pay this leg separately: sea, express air, or standard air—rates from admin. Not included in the parts subtotal.`,
+          visibleToCustomer: true,
+        },
+      });
+    } else {
+      const s = await tx.shipment.create({
+        data: {
+          orderId: params.orderId,
+          kind: "PARTS_CHINA",
+          trackingNumber: buildTrackingNumber("PARTS_CHINA"),
+          deliveryMode: leg.chinaDeliveryMode!,
+          feeAmount: leg.chinaFeeGhs!,
+          feeCurrency: "GHS",
+          deferredChinaShipping: false,
+          estimatedDuration: leg.chinaEta ?? null,
+          currentStage: "PENDING_SHIPPING_SETUP",
+        },
+      });
+      const modeLabel = leg.chinaShippingChoice === "SEA" ? "Sea" : "Air";
+      await tx.shipmentStatusEvent.create({
+        data: {
+          shipmentId: s.id,
+          stage: "PENDING_SHIPPING_SETUP",
+          title: "Shipping setup",
+          description: `(${leg.legLabel}) International parts shipping (${modeLabel}) is being arranged. Fee GHS ${(leg.chinaFeeGhs ?? 0).toFixed(2)}.`,
+          visibleToCustomer: true,
+        },
+      });
+    }
   }
 
   await tx.notification.create({
@@ -266,6 +426,27 @@ export async function backfillPaidPartsShipmentsIfMissing(orderId: string): Prom
     const inferred = Number(order.amount) - partsSubtotal;
     if (fee <= 0 && inferred > 0.009) fee = inferred;
     if (fee <= 0) {
+      const chinaPartIds = [...new Set(items.filter((i) => i.origin === "CHINA").map((i) => i.partId))];
+      const chinaMetas =
+        chinaPartIds.length > 0
+          ? await prisma.part.findMany({
+              where: { id: { in: chinaPartIds } },
+              select: { id: true, origin: true, stockStatus: true },
+            })
+          : [];
+      const hasPreorderChina = chinaMetas.some((p) => isChinaPreOrderPart(p));
+      if (hasPreorderChina) {
+        await prisma.$transaction(async (tx) => {
+          await createShipmentsForPaidPartsOrder(tx, {
+            orderId: order.id,
+            userId: order.userId!,
+            orderReference: order.reference,
+            items,
+            chinaLegs: [{ deferred: true, legLabel: "Pre-order (China)" }],
+          });
+        });
+        return;
+      }
       const ghanaOnly = items.filter((i) => i.origin === "GHANA");
       if (ghanaOnly.length === 0) return;
       await prisma.$transaction(async (tx) => {
@@ -325,35 +506,18 @@ export async function backfillOpenShipmentsForUser(userId: string): Promise<void
   }
 }
 
-export async function listShipmentsForAdminDashboard(take = 80, query?: string) {
-  const where = makeShipmentSearchWhere(query ?? "");
+export async function listShipmentsForAdminDashboard(
+  take = 80,
+  query?: string,
+  segment: AdminShippingSegment = "all",
+  orderCreatedRange?: { gte: Date; lt: Date } | null,
+) {
+  const where = buildAdminShipmentWhere(query, segment, orderCreatedRange ?? null);
   const rows = await prisma.shipment.findMany({
     take,
     where,
     orderBy: { updatedAt: "desc" },
-    include: {
-      order: {
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-          car: { select: { id: true, title: true, slug: true } },
-          partItems: { select: { id: true, titleSnapshot: true, origin: true, quantity: true } },
-          deliveryAddress: {
-            select: {
-              fullName: true,
-              phone: true,
-              city: true,
-              region: true,
-              streetAddress: true,
-            },
-          },
-        },
-      },
-      events: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: { createdBy: { select: { email: true } } },
-      },
-    },
+    include: adminShipmentDashboardInclude,
   });
   const missingIds = rows.filter((r) => !r.trackingNumber).map((r) => r.id);
   await assignMissingTrackingNumbers(missingIds);
@@ -362,29 +526,7 @@ export async function listShipmentsForAdminDashboard(take = 80, query?: string) 
     take,
     where,
     orderBy: { updatedAt: "desc" },
-    include: {
-      order: {
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-          car: { select: { id: true, title: true, slug: true } },
-          partItems: { select: { id: true, titleSnapshot: true, origin: true, quantity: true } },
-          deliveryAddress: {
-            select: {
-              fullName: true,
-              phone: true,
-              city: true,
-              region: true,
-              streetAddress: true,
-            },
-          },
-        },
-      },
-      events: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: { createdBy: { select: { email: true } } },
-      },
-    },
+    include: adminShipmentDashboardInclude,
   });
 }
 

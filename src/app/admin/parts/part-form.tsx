@@ -1,6 +1,7 @@
 "use client";
 
-import { PartListingState, PartOrigin, PartStockStatus, type Part } from "@prisma/client";
+import { PartListingState, PartOrigin, PartStockStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { PartCoverField } from "@/components/admin/part-cover-field";
 import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
 import { partStockStatusLabel } from "@/lib/part-stock";
+import { parsePartOptionsMeta } from "@/lib/part-variant-options";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +25,31 @@ function tagsToString(tags: unknown): string {
 
 type Props = {
   mode: "create" | "edit";
-  part?: Part;
+  part?: {
+    id: string;
+    slug: string;
+    title: string;
+    shortDescription: string | null;
+    description: string | null;
+    category: string;
+    categoryId: string | null;
+    origin: PartOrigin;
+    sku: string | null;
+    basePriceRmb: number;
+    supplierCostRmb: number | null;
+    priceGhs: number;
+    stockQty: number;
+    stockStatus: PartStockStatus;
+    stockStatusLocked: boolean;
+    listingState: PartListingState;
+    tags: unknown;
+    coverImageUrl: string | null;
+    coverImagePublicId: string | null;
+    featured: boolean;
+    metaJson: Prisma.JsonValue | null;
+    supplierDistributorRef: string | null;
+    supplierDistributorPhone: string | null;
+  };
   categories?: Array<{ id: string; name: string }>;
   onCreated?: (id: string) => void;
   cancelHref?: string;
@@ -67,10 +93,12 @@ export function PartForm({
   const select =
     "mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none ring-[var(--brand)]/30 focus:ring-2";
 
-  const baseRmb = part != null ? Number(part.basePriceRmb) : 0;
-  const costRmb = part?.supplierCostRmb != null ? Number(part.supplierCostRmb) : null;
+  const baseRmb = part != null ? part.basePriceRmb : 0;
+  const costRmb = part?.supplierCostRmb ?? null;
   const profitRmb = part != null ? profitAmountRmb(baseRmb, costRmb) : null;
   const marginPct = part != null ? profitMarginPercent(baseRmb, costRmb) : null;
+  const optionDefaults = part ? parsePartOptionsMeta(part.metaJson) : { colors: [], sizes: [], types: [] };
+  const optionLines = (list: string[]) => list.join("\n");
 
   return (
     <form action={formAction} className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
@@ -120,14 +148,12 @@ export function PartForm({
       <div>
         <Label htmlFor="origin">Origin / availability lane</Label>
         <select id="origin" name="origin" className={select} required defaultValue={part?.origin ?? PartOrigin.GHANA}>
-          {Object.values(PartOrigin).map((v) => (
-            <option key={v} value={v}>
-              {v === "GHANA" ? "Ghana-listed" : "China-listed"}
-            </option>
-          ))}
+          <option value={PartOrigin.GHANA}>Available in Ghana</option>
+          <option value={PartOrigin.CHINA}>China (Pre-order)</option>
         </select>
         <p className="mt-1 text-xs text-zinc-500">
-          China + &quot;Pre Order on Request&quot; auto-links air/sea delivery options from your templates.
+          For China, the public badge still reflects in-stock vs pre-order from <span className="text-zinc-400">stock status</span> below
+          (e.g. &quot;Available from China&quot; vs &quot;China (Pre-order)&quot;). Lock status if you use &quot;Pre Order on Request&quot;.
         </p>
       </div>
       <div>
@@ -152,12 +178,66 @@ export function PartForm({
           min={0}
           step="0.01"
           className="mt-1"
-          defaultValue={part?.supplierCostRmb != null ? Number(part.supplierCostRmb) : ""}
+          defaultValue={part?.supplierCostRmb ?? ""}
         />
       </div>
       <p className="sm:col-span-2 text-xs text-zinc-500">
         Checkout and Paystack charge in GHS; the saved reference amount tracks your last submitted conversion.
       </p>
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Storefront options</p>
+      <p className="sm:col-span-2 text-xs text-zinc-500">
+        One value per line. Leave a field empty to hide that choice on the catalog. Customers will see color options on the
+        product page and must pick from your list before adding to cart.
+      </p>
+      <div>
+        <Label htmlFor="optionColors">Color options (optional)</Label>
+        <Textarea
+          id="optionColors"
+          name="optionColors"
+          rows={3}
+          className="mt-1 font-mono text-sm"
+          placeholder={"Red\nBlack\nSilver"}
+          defaultValue={optionLines(optionDefaults.colors)}
+        />
+      </div>
+      <div>
+        <Label htmlFor="optionSizes">Size options (optional)</Label>
+        <Textarea
+          id="optionSizes"
+          name="optionSizes"
+          rows={3}
+          className="mt-1 font-mono text-sm"
+          placeholder={"M\nL\nXL"}
+          defaultValue={optionLines(optionDefaults.sizes)}
+        />
+      </div>
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Internal — supplier / distributor</p>
+      <p className="sm:col-span-2 text-xs text-zinc-500">
+        Admin-only — not shown on the storefront (same as supplier cost above). Use to record where you sourced the
+        product and a contact number for your own follow-up.
+      </p>
+      <div className="sm:col-span-2">
+        <Label htmlFor="supplierDistributorRef">Reference / source note</Label>
+        <Textarea
+          id="supplierDistributorRef"
+          name="supplierDistributorRef"
+          rows={2}
+          className="mt-1"
+          placeholder="e.g. Supplier name, order #, WeChat / platform"
+          defaultValue={part?.supplierDistributorRef ?? ""}
+        />
+      </div>
+      <div>
+        <Label htmlFor="supplierDistributorPhone">Supplier / distributor phone</Label>
+        <Input
+          id="supplierDistributorPhone"
+          name="supplierDistributorPhone"
+          type="tel"
+          className="mt-1"
+          placeholder="+86 …"
+          defaultValue={part?.supplierDistributorPhone ?? ""}
+        />
+      </div>
       {mode === "edit" && part ? (
         <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-emerald-200/80">Admin profit (RMB)</p>

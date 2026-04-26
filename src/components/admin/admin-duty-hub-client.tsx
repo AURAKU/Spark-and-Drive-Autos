@@ -1,6 +1,6 @@
 "use client";
 
-import type { EngineType } from "@prisma/client";
+import { EngineType } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -26,6 +26,7 @@ import type { AdminDutyOrderRow } from "@/lib/duty/admin-duty-types";
 import { formatMoney } from "@/lib/format";
 
 import { computeDutyEstimate, dutyEstimateInputSchema } from "@/lib/duty/calculator";
+import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 
 type Props = { rows: AdminDutyOrderRow[] };
 
@@ -342,7 +343,12 @@ function SaveEstimateInline({
   const [cif, setCif] = useState("");
   const [year, setYear] = useState(carYear != null ? String(carYear) : String(new Date().getFullYear() - 3));
   const [cc, setCc] = useState("");
-  const [powertrain, setPowertrain] = useState<string>(carEngineType ?? "GASOLINE");
+  const [powertrain, setPowertrain] = useState<EngineType>(() => {
+    if (carEngineType && (Object.values(EngineType) as string[]).includes(carEngineType)) {
+      return carEngineType;
+    }
+    return EngineType.GASOLINE_PETROL;
+  });
   const [evWaiver, setEvWaiver] = useState(false);
 
   return (
@@ -386,25 +392,26 @@ function SaveEstimateInline({
           <select
             value={powertrain}
             onChange={(e) => {
-              const v = e.target.value;
+              const v = e.target.value as EngineType;
               setPowertrain(v);
-              if (v !== "ELECTRIC") setEvWaiver(false);
+              if (v !== EngineType.ELECTRIC) setEvWaiver(false);
             }}
             className="h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-sm text-white"
           >
-            <option value="GASOLINE">ICE</option>
-            <option value="HYBRID">Hybrid</option>
-            <option value="PLUGIN_HYBRID">PHEV</option>
-            <option value="ELECTRIC">BEV</option>
+            {ENGINE_TYPE_ORDER.map((v) => (
+              <option key={v} value={v}>
+                {engineTypeLabel(v)}
+              </option>
+            ))}
           </select>
         </div>
-        {powertrain !== "ELECTRIC" ? (
+        {powertrain !== EngineType.ELECTRIC ? (
           <div className="space-y-1">
             <Label className="text-xs text-zinc-500">Cc</Label>
             <Input value={cc} onChange={(e) => setCc(e.target.value)} className="w-24 border-white/15 bg-black/40" />
           </div>
         ) : null}
-        {powertrain === "ELECTRIC" ? (
+        {powertrain === EngineType.ELECTRIC ? (
           <label className="flex max-w-xs items-center gap-2 text-[11px] text-zinc-400">
             <input type="checkbox" checked={evWaiver} onChange={(e) => setEvWaiver(e.target.checked)} className="rounded border-white/20" />
             Model EV duty relief

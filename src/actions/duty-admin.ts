@@ -2,6 +2,7 @@
 
 import {
   DutyWorkflowStage,
+  EngineType,
   NotificationType,
   PaymentType,
   type PaymentSettlementMethod,
@@ -83,10 +84,14 @@ export async function saveDutyEstimateAction(_prev: DutyAdminState | null, formD
     if (!dutyId.success) return { error: "Invalid duty record." };
 
     const ptRaw = formData.get("powertrain");
-    const powertrain =
-      typeof ptRaw === "string" && ["GASOLINE", "ELECTRIC", "HYBRID", "PLUGIN_HYBRID"].includes(ptRaw)
-        ? (ptRaw as "GASOLINE" | "ELECTRIC" | "HYBRID" | "PLUGIN_HYBRID")
-        : "GASOLINE";
+    const validEngine = new Set<string>(Object.values(EngineType));
+    let powertrain: EngineType = EngineType.GASOLINE_PETROL;
+    if (typeof ptRaw === "string") {
+      const norm = ptRaw === "GASOLINE" ? EngineType.GASOLINE_PETROL : ptRaw;
+      if (validEngine.has(norm)) {
+        powertrain = norm as EngineType;
+      }
+    }
     const waiverRaw = formData.get("applyEvDutyWaiver");
     const applyEvDutyWaiver = waiverRaw === "on" || waiverRaw === "true" || waiverRaw === "1";
 

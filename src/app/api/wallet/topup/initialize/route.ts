@@ -8,6 +8,9 @@ import { getRequestIp } from "@/lib/client-ip";
 import { prisma } from "@/lib/prisma";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { safeAuth } from "@/lib/safe-auth";
+import { requireVerification } from "@/lib/identity-verification";
+import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
 
 const schema = z.object({
   amount: z.coerce.number().min(50).max(50000),
@@ -33,6 +36,52 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   }
   const amount = Number(parsed.data.amount.toFixed(2));
+  try {
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE,
+      context: "PAYMENT",
+      ipAddress: getRequestIp(req),
+      userAgent: req.headers.get("user-agent"),
+    });
+  } catch (error) {
+    if (error instanceof PolicyAcceptanceRequiredError) {
+      return NextResponse.json(
+        {
+          error: "You need to review and accept our updated terms before continuing.",
+          code: "REQUIRE_ACCEPTANCE",
+          policyKey: error.policyKey,
+          version: error.version,
+          title: error.title,
+          effectiveDate: error.effectiveDate,
+          context: error.context,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+  try {
+    await requireVerification({
+      userId: session.user.id,
+      context: "HIGH_VALUE_PAYMENT",
+      amountGhs: amount,
+      ipAddress: getRequestIp(req),
+      userAgent: req.headers.get("user-agent"),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_VERIFICATION_REQUIRED") {
+      return NextResponse.json(
+        {
+          error:
+            "Identity verification is required before this wallet funding request can continue. Submit verification in Dashboard → Verification.",
+          code: "IDENTITY_VERIFICATION_REQUIRED",
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
   const activeProvider = await getActivePaymentProviderConfig();
   const selectedProvider = activeProvider?.provider ?? "PAYSTACK";
   if (selectedProvider !== "PAYSTACK") {

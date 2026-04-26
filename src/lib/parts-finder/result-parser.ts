@@ -11,6 +11,12 @@ const NOISE_PATTERNS = [
   /\blimited offer\b/gi,
   /\bbest price\b/gi,
   /\bwholesale\b/gi,
+  /\bamazon\b/gi,
+  /\bwalmart\b/gi,
+  /\bebay\b/gi,
+  /\bautozone\b/gi,
+  /\brockauto\b/gi,
+  /\bali(express|baba)\b/gi,
 ];
 
 function cleanNoise(text: string): string {

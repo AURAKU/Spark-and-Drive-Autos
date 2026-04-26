@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
 import { AlipaySupportHandoffDialog } from "@/components/payments/alipay-support-handoff-dialog";
+import { PaymentDisputePanel } from "@/components/payments/payment-dispute-panel";
 import { PaymentProofUpload } from "@/components/payments/payment-proof-upload";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
@@ -39,6 +40,7 @@ export default async function DashboardPaymentDetailPage({ params, searchParams 
       order: { include: { car: { select: { title: true, slug: true } } } },
       proofs: { orderBy: { createdAt: "desc" } },
       statusHistory: { orderBy: { createdAt: "desc" }, take: 40 },
+      disputes: { orderBy: { flaggedAt: "desc" }, take: 10 },
     },
   });
 
@@ -160,6 +162,28 @@ export default async function DashboardPaymentDetailPage({ params, searchParams 
           settlementMethod={payment.settlementMethod}
         />
       </div>
+
+      <PaymentDisputePanel
+        paymentId={payment.id}
+        disabled={
+          payment.status === "SUCCESS" ||
+          payment.status === "REFUNDED" ||
+          payment.disputes.some((d) => d.status === "OPEN" || d.status === "UNDER_REVIEW")
+        }
+      />
+      {payment.disputes.length > 0 ? (
+        <div className="mt-6 rounded-2xl border border-border bg-card p-4">
+          <p className="text-sm font-semibold">Dispute trail</p>
+          <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+            {payment.disputes.map((d) => (
+              <li key={d.id}>
+                {d.flaggedAt.toISOString().slice(0, 16).replace("T", " ")} · {d.status}
+                {d.reason ? ` · ${d.reason}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {payment.proofs.length > 0 ? (
         <div className="mt-10">

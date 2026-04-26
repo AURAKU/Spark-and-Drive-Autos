@@ -2,7 +2,7 @@
 
 import { hash } from "bcryptjs";
 import { nanoid } from "nanoid";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -54,6 +54,18 @@ const partsFinderMembershipSchema = z.object({
   action: z.enum(["ACTIVATE", "DEACTIVATE"]),
 });
 
+function isSuperAdminSession(role: UserRole | null | undefined) {
+  return role === UserRole.SUPER_ADMIN;
+}
+
+function isSuperAdminImmutableRole(role: UserRole) {
+  return role === UserRole.SUPER_ADMIN;
+}
+
+function isPrivilegedRole(role: UserRole) {
+  return role !== UserRole.CUSTOMER;
+}
+
 export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormData): Promise<UpdateUserRoleState> {
   try {
     const session = await requireAdmin();
@@ -69,8 +81,14 @@ export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormD
       return { error: "You cannot change your own role here." };
     }
 
-    const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-    if (!exists) return { error: "User not found." };
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+    if (!target) return { error: "User not found." };
+    if (isSuperAdminImmutableRole(role)) {
+      return { error: "SUPER_ADMIN role is static and cannot be assigned here." };
+    }
+    if (isSuperAdminImmutableRole(target.role)) {
+      return { error: "SUPER_ADMIN accounts are permanent and cannot be modified here." };
+    }
 
     await prisma.user.update({
       where: { id: userId },
@@ -109,6 +127,9 @@ export async function setUserAccountBlocked(
     if (!target) return { error: "User not found." };
     if (target.role === "SUPER_ADMIN") {
       return { error: "Super admin accounts cannot be suspended from this action." };
+    }
+    if (isPrivilegedRole(target.role) && !isSuperAdminSession(session.user.role)) {
+      return { error: "Only super admins can suspend privileged staff/admin accounts." };
     }
 
     await prisma.user.update({
@@ -156,6 +177,9 @@ export async function setUserPartsFinderMembership(
     if (!target) return { error: "User not found." };
     if (target.role === "SUPER_ADMIN") {
       return { error: "Super admin membership must be managed from Parts Finder admin surface." };
+    }
+    if (isPrivilegedRole(target.role) && !isSuperAdminSession(session.user.role)) {
+      return { error: "Only super admins can change Parts Finder membership for privileged staff/admin users." };
     }
 
     const now = new Date();
@@ -233,6 +257,9 @@ export async function createUserAdmin(_prev: AdminUserActionState, formData: For
       role: formData.get("role"),
     });
     if (!parsed.success) return { error: "Invalid user details." };
+    if (parsed.data.role === UserRole.SUPER_ADMIN) {
+      return { error: "SUPER_ADMIN is static and must not be created from this flow." };
+    }
     const email = parsed.data.email.toLowerCase();
     const exists = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (exists) return { error: "Email already exists." };
@@ -265,7 +292,7 @@ export async function deleteUserAdmin(_prev: AdminUserActionState, formData: For
 
     const target = await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { role: true } });
     if (!target) return { error: "User not found." };
-    if (target.role === "SUPER_ADMIN") return { error: "Cannot delete another super admin from this action." };
+    if (target.role === "SUPER_ADMIN") return { error: "SUPER_ADMIN accounts are permanent and cannot be deleted." };
 
     await prisma.user.delete({ where: { id: parsed.data.userId } });
     await auditLog(session.user.id, "user.delete", "User", parsed.data.userId, {});
@@ -273,6 +300,9 @@ export async function deleteUserAdmin(_prev: AdminUserActionState, formData: For
     return { ok: true };
   } catch (e) {
     if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Super admin only" };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
+      return { error: "Cannot delete this user yet because related records still exist. Deactivate/suspend instead." };
+    }
     return { error: e instanceof Error ? e.message : "Could not delete user." };
   }
 }
@@ -326,6 +356,9 @@ export async function adjustUserWalletAdmin(
     return { ok: true };
   } catch (e) {
     if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Super admin only" };
+    if (e instanceof Error && e.message === "Insufficient wallet balance.") {
+      return { error: "Insufficient wallet balance for this deduction." };
+    }
     return { error: e instanceof Error ? e.message : "Could not adjust wallet." };
   }
 }

@@ -12,6 +12,10 @@ function buildOrdersExportHref(searchParams: URLSearchParams, format: "pdf" | "x
   appendOpsDateParams(p, raw);
   const kind = searchParams.get("kind");
   if (kind === "CAR" || kind === "PARTS") p.set("kind", kind);
+  const pl = searchParams.get("partsLineage");
+  if (pl === "ghana" || pl === "china_preorder") p.set("partsLineage", pl);
+  const q = searchParams.get("q");
+  if (q && q.trim()) p.set("q", q.trim());
   return `/api/admin/orders/export?${p.toString()}`;
 }
 

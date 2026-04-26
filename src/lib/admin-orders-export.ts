@@ -1,8 +1,11 @@
 import type { OrderKind } from "@prisma/client";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
+import type { AdminPartsLineage } from "@/lib/admin-orders-parts-filter";
+import { wherePartsLineageForAdminList } from "@/lib/admin-orders-parts-filter";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 const EXPORT_LIMIT = 1000;
 
@@ -11,12 +14,18 @@ export type OrdersExportKindFilter = OrderKind | null;
 export async function fetchOrdersForAdminExport(
   kindFilter: OrdersExportKindFilter,
   dateRange?: { gte: Date; lt: Date } | null,
+  partsLineage: AdminPartsLineage = null,
+  searchWhere: Prisma.OrderWhereInput | null = null,
 ) {
+  const lineageWhere =
+    !kindFilter || kindFilter === "PARTS" ? wherePartsLineageForAdminList(partsLineage) : undefined;
+  const w: Prisma.OrderWhereInput[] = [];
+  if (kindFilter) w.push({ kind: kindFilter });
+  if (dateRange) w.push({ createdAt: { gte: dateRange.gte, lt: dateRange.lt } });
+  if (lineageWhere) w.push(lineageWhere);
+  if (searchWhere) w.push(searchWhere);
   return prisma.order.findMany({
-    where: {
-      ...(kindFilter ? { kind: kindFilter } : {}),
-      ...(dateRange ? { createdAt: { gte: dateRange.gte, lt: dateRange.lt } } : {}),
-    },
+    where: w.length > 0 ? { AND: w } : {},
     orderBy: { createdAt: "desc" },
     take: EXPORT_LIMIT,
     include: { user: true, car: true, partItems: true, payments: { orderBy: { createdAt: "desc" }, take: 1 } },

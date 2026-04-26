@@ -1,22 +1,22 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
+import { PARTS_FINDER_HERO_LINE } from "@/lib/parts-finder/marketing-copy";
+import { cn } from "@/lib/utils";
+
 import { DealershipSocialIconRow } from "@/components/social/dealership-social-icon-row";
-import { BrowseCarsCtaLink, BuyPartsCtaLink } from "@/components/storefront/storefront-cta-links";
 
 type FooterLinkItem = {
   href: string;
   label: string;
-  ctaStyle?: "parts-finder" | "browse-cars" | "buy-parts";
 };
 
 const exploreLinks: readonly FooterLinkItem[] = [
-  { href: "/inventory", label: "Browse cars", ctaStyle: "browse-cars" },
+  { href: "/inventory", label: "Browse cars" },
   { href: "/request-a-car", label: "Request a car" },
-  { href: "/parts-finder/entry", label: "Spark Parts Finder", ctaStyle: "parts-finder" },
+  { href: "/parts-finder/entry", label: "Spark Parts Finder" },
   { href: "/chat", label: "Live Support Chat" },
-  { href: "/parts", label: "Buy Parts & Accessories", ctaStyle: "buy-parts" },
+  { href: "/parts", label: "Buy Parts & Accessories" },
   { href: "/electric-bikes-motorcycles", label: "Electric bikes & motorcycles" },
 ];
 
@@ -40,7 +40,7 @@ const footerBrandTitle =
   "text-sm font-semibold leading-tight text-[var(--brand)] sm:text-[0.95rem] sm:leading-snug";
 
 const footerLinkColumnTitle =
-  "border-b border-[var(--brand)]/30 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand)] dark:border-white/10";
+  "border-b border-[var(--brand)]/30 pb-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand)] sm:text-base dark:border-white/10";
 
 function FooterColumn({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -56,32 +56,21 @@ function FooterLinkList({ links }: { links: readonly FooterLinkItem[] }) {
     <ul className="space-y-2 text-xs leading-snug text-foreground/90 sm:text-sm dark:text-zinc-300">
       {links.map((item) => (
         <li key={item.href}>
-          {item.ctaStyle === "parts-finder" ? (
-            <PartsFinderCtaLink href={item.href} size="compact" className="w-full text-center sm:inline-flex sm:w-auto">
-              {item.label}
-            </PartsFinderCtaLink>
-          ) : item.ctaStyle === "browse-cars" ? (
-            <BrowseCarsCtaLink href={item.href} size="compact" className="w-full text-center sm:inline-flex sm:w-auto">
-              {item.label}
-            </BrowseCarsCtaLink>
-          ) : item.ctaStyle === "buy-parts" ? (
-            <BuyPartsCtaLink href={item.href} size="compact" className="w-full text-center sm:inline-flex sm:w-auto">
-              {item.label}
-            </BuyPartsCtaLink>
-          ) : (
-            <Link className="transition hover:text-[var(--brand)]" href={item.href}>
-              {item.label}
-            </Link>
-          )}
+          <Link className="transition hover:text-[var(--brand)]" href={item.href}>
+            {item.label}
+          </Link>
         </li>
       ))}
     </ul>
   );
 }
 
-export function SiteFooter() {
+export function SiteFooter({ variant = "full" }: { variant?: "full" | "minimal" }) {
+  const isFull = variant === "full";
+
   return (
     <footer className="border-t border-border bg-card text-card-foreground dark:border-white/10 dark:bg-slate-950 dark:text-zinc-100">
+      {isFull ? (
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Brand line: three pillars in one row on tablet+ */}
         <div className="grid gap-5 border-b border-border pb-6 sm:gap-6 md:grid-cols-3 md:gap-6 md:pb-7 dark:border-white/10">
@@ -101,8 +90,7 @@ export function SiteFooter() {
           <div className="min-w-0">
             <p className={footerBrandTitle}>Spark Parts Finder</p>
             <p className="mt-1.5 text-xs leading-snug text-muted-foreground sm:text-sm sm:leading-snug">
-              Premium, evidence based search that matches exact OEM or high quality equivalent parts using your VIN, chassis,
-              or vehicle details, with honest confidence labels and curated top results.
+              {PARTS_FINDER_HERO_LINE}
             </p>
           </div>
         </div>
@@ -125,8 +113,14 @@ export function SiteFooter() {
           </FooterColumn>
         </div>
       </div>
+      ) : null}
 
-      <div className="border-t border-border py-4 text-center text-xs text-muted-foreground sm:text-sm dark:border-white/5">
+      <div
+        className={cn(
+          "py-4 text-center text-xs text-muted-foreground sm:py-5 sm:text-sm dark:text-zinc-400/90",
+          isFull ? "border-t border-border dark:border-white/5" : "",
+        )}
+      >
         <p>
           © {new Date().getFullYear()} Spark and Drive Autos | Spark and Drive Gear.
         </p>

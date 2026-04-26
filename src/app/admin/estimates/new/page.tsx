@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { VehicleImportEstimateCreateForm } from "@/components/admin/duty-estimator/vehicle-import-estimate-create-form";
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { prisma } from "@/lib/prisma";
+import { fetchVehicleImportEstimateFormLinkOptions } from "@/lib/vehicle-import-estimate/admin-form-options";
 
 export const dynamic = "force-dynamic";
 
@@ -26,50 +26,25 @@ export default async function AdminEstimateNewPage(props: { searchParams: Promis
     carId: typeof sp.carId === "string" ? sp.carId : "",
   };
 
-  const [users, orders, inquiries, cars] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: { id: true, name: true, email: true },
-    }),
-    prisma.order.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: {
-        id: true,
-        reference: true,
-        user: { select: { name: true, email: true } },
-        car: { select: { title: true } },
-      },
-    }),
-    prisma.inquiry.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: {
-        id: true,
-        message: true,
-        createdAt: true,
-        user: { select: { name: true, email: true } },
-      },
-    }),
-    prisma.car.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: { id: true, title: true, year: true, engineType: true },
-    }),
-  ]);
+  const { users, orders, inquiries, cars } = await fetchVehicleImportEstimateFormLinkOptions({
+    userId: defaults.customerId || null,
+    orderId: defaults.orderId || null,
+    inquiryId: defaults.inquiryId || null,
+    carId: defaults.carId || null,
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <PageHeading variant="dashboard">Create Vehicle Import Estimate</PageHeading>
+          <PageHeading variant="dashboard">Create Duty Estimate</PageHeading>
           <p className="mt-2 text-sm text-zinc-400">
-            Build a professional estimate with clear duty uncertainty and an explicit customs disclaimer.
+            Per-vehicle Ghana import duty planning for clients — include ranges, landed cost, and the standard customs
+            disclaimer.
           </p>
         </div>
         <Link href="/admin/estimates" className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/60">
-          Back to estimates
+          Back to Duty Estimates
         </Link>
       </div>
       <VehicleImportEstimateCreateForm users={users} orders={orders} inquiries={inquiries} cars={cars} defaults={defaults} />

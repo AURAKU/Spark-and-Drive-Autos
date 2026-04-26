@@ -12,7 +12,19 @@ import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "
 import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
 import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
-import { requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
+import { createUserLegalAcceptanceGuard } from "@/lib/legal-acceptance-guard";
+import { requirePolicy } from "@/lib/legal/guards";
+import { writeLegalAuditLog } from "@/lib/legal-audit";
+import { ACCEPTANCE_CONTEXT, recordUserContractAcceptance, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
+import {
+  assertVehicleCheckoutLegalVersions,
+  getActiveRiskPolicyRow,
+  getActiveSourcingContractRow,
+  POLICY_KEYS,
+  requiresRiskAcknowledgement,
+  requiresSourcingContract,
+} from "@/lib/legal-enforcement";
+import { getUserRiskTags } from "@/lib/legal-risk-controls";
 import { logRiskEvent } from "@/lib/risk-engine";
 import { safeAuth } from "@/lib/safe-auth";
 import { paystackInitialize } from "@/lib/paystack";
@@ -21,6 +33,8 @@ import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
+import { requireVerification } from "@/lib/identity-verification";
+import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -80,6 +94,71 @@ export async function POST(req: Request) {
   if (!email) {
     return NextResponse.json({ error: "Account email missing" }, { status: 400 });
   }
+  try {
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PLATFORM_TERMS,
+      context: "CHECKOUT",
+      ipAddress: ip,
+      userAgent,
+    });
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PRIVACY_POLICY,
+      context: "CHECKOUT",
+      ipAddress: ip,
+      userAgent,
+    });
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT,
+      context: "CHECKOUT",
+      ipAddress: ip,
+      userAgent,
+    });
+  } catch (error) {
+    if (error instanceof PolicyAcceptanceRequiredError) {
+      return NextResponse.json(
+        {
+          error: "You need to review and accept our updated terms before continuing.",
+          code: "REQUIRE_ACCEPTANCE",
+          policyKey: error.policyKey,
+          version: error.version,
+          title: error.title,
+          effectiveDate: error.effectiveDate,
+          context: error.context,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+  try {
+    await requirePolicy(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT);
+  } catch {
+    return NextResponse.json({ error: "You must accept checkout agreement before payment.", code: "CHECKOUT_AGREEMENT_REQUIRED" }, { status: 409 });
+  }
+  const legalGuard = await createUserLegalAcceptanceGuard(session.user.id);
+  const hasPlatformTerms = await legalGuard.hasAccepted(POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
+  if (!hasPlatformTerms) {
+    return NextResponse.json(
+      { error: "Accept the latest platform terms and privacy policy before checkout.", code: "PLATFORM_TERMS_REQUIRED" },
+      { status: 409 },
+    );
+  }
+  const risk = await getUserRiskTags(session.user.id);
+  if (risk.includes("FRAUD_RISK_REVIEW") || risk.includes("MANUAL_REVIEW_REQUIRED")) {
+    await logRiskEvent({
+      userId: session.user.id,
+      type: "blocked_checkout_manual_review_required",
+      severity: "high",
+      meta: { route: "/api/payments/initialize" },
+    });
+    return NextResponse.json(
+      { error: "Your account is under manual review. Contact support to continue payment.", code: "MANUAL_REVIEW_REQUIRED" },
+      { status: 423 },
+    );
+  }
 
   const car = await prisma.car.findUnique({ where: { id: parsed.data.carId } });
   if (!car) {
@@ -123,7 +202,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Risk acknowledgement is required." }, { status: 400 });
   }
 
+  const legalOk = await assertVehicleCheckoutLegalVersions({
+    agreementVersion: parsed.data.agreementVersion,
+    contractVersion: parsed.data.contractVersion,
+    riskVersion: parsed.data.riskVersion,
+    sourceType: car.sourceType,
+  });
+  if (!legalOk.ok) {
+    return NextResponse.json(
+      {
+        error: "Terms on this page are out of date. Refresh checkout and accept the latest agreements.",
+        code: legalOk.code,
+      },
+      { status: 409 },
+    );
+  }
+
   const settings = await getGlobalCurrencySettings();
+  const previewAmount = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), parsed.data.paymentType, settings);
+  try {
+    await requireVerification({
+      userId: session.user.id,
+      context: "VEHICLE_PURCHASE",
+      amountGhs: previewAmount,
+      ipAddress: ip,
+      userAgent,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_VERIFICATION_REQUIRED") {
+      return NextResponse.json(
+        {
+          error:
+            "Identity verification is required before this payment can continue. Visit Dashboard → Verification to submit your Ghana Card or valid ID.",
+          code: "IDENTITY_VERIFICATION_REQUIRED",
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   const reference = `SDA-${nanoid(12).toUpperCase()}`;
   const selectedProvider = await getDefaultPaymentProvider();
@@ -259,13 +376,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const activeContract = requiresSourcingContract(car.sourceType)
-    ? await prisma.contract.findFirst({
-        where: { type: "CAR_SOURCING", isActive: true },
-        orderBy: { createdAt: "desc" },
-        select: { id: true },
-      })
-    : null;
+  const checkoutPv = await prisma.policyVersion.findFirst({
+    where: { policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT, isActive: true },
+    orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }],
+  });
+  const riskPv =
+    requiresRiskAcknowledgement(car.sourceType) && parsed.data.riskAccepted ? await getActiveRiskPolicyRow() : null;
+  const activeContractRow = requiresSourcingContract(car.sourceType) ? await getActiveSourcingContractRow() : null;
+
+  const checkoutSnap =
+    checkoutPv?.title || checkoutPv?.content
+      ? `${checkoutPv.title ?? ""}\n\nVersion ${checkoutPv.version}\n\n${checkoutPv.content ?? ""}`.trim()
+      : null;
+
   try {
     await prisma.$transaction(async (tx) => {
       await tx.agreementLog.create({
@@ -275,17 +398,41 @@ export async function POST(req: Request) {
           agreementVersion: parsed.data.agreementVersion,
           policyIds: [parsed.data.agreementVersion],
           accepted: true,
+          ipAddress: ip,
+          userAgent,
+          acceptanceTextSnapshot: checkoutSnap,
         },
       });
+      if (checkoutPv) {
+        await recordUserPolicyAcceptance({
+          userId: session.user.id,
+          policyVersionId: checkoutPv.id,
+          context: ACCEPTANCE_CONTEXT.CHECKOUT,
+          ipAddress: ip,
+          userAgent,
+          tx,
+        });
+      }
+      if (riskPv && parsed.data.riskVersion) {
+        await recordUserPolicyAcceptance({
+          userId: session.user.id,
+          policyVersionId: riskPv.id,
+          context: ACCEPTANCE_CONTEXT.CHECKOUT,
+          ipAddress: ip,
+          userAgent,
+          tx,
+        });
+      }
       if (requiresSourcingContract(car.sourceType) && parsed.data.contractAccepted && parsed.data.contractVersion) {
-        await tx.contractAcceptance.create({
-          data: {
-            userId: session.user.id,
-            orderId: order.id,
-            contractId: activeContract?.id ?? null,
-            contractVersion: parsed.data.contractVersion,
-            context: "CAR_SOURCING",
-          },
+        await recordUserContractAcceptance({
+          userId: session.user.id,
+          contractId: activeContractRow?.id ?? null,
+          orderId: order.id,
+          contractVersion: parsed.data.contractVersion,
+          context: "CAR_SOURCING",
+          ipAddress: ip,
+          userAgent,
+          tx,
         });
       }
       if (requiresRiskAcknowledgement(car.sourceType) && parsed.data.riskAccepted && parsed.data.riskVersion) {
@@ -298,6 +445,20 @@ export async function POST(req: Request) {
           },
         });
       }
+    });
+    await writeLegalAuditLog({
+      actorId: session.user.id,
+      targetUserId: session.user.id,
+      action: "USER_ACCEPTED_CHECKOUT_LEGAL",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: {
+        agreementVersion: parsed.data.agreementVersion,
+        contractVersion: parsed.data.contractVersion ?? null,
+        riskVersion: parsed.data.riskVersion ?? null,
+      },
+      ipAddress: ip,
+      userAgent,
     });
   } catch (e) {
     console.error("[payments/initialize] agreement persistence", e);

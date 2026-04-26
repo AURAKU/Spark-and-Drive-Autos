@@ -12,6 +12,8 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { transitionPaymentStatus } from "@/lib/payment-lifecycle";
 import { prisma } from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/audit";
+import { getUserVerificationStatus } from "@/lib/identity-verification";
 
 const patchSchema = z.object({
   status: z.nativeEnum(PaymentStatus).optional(),
@@ -73,6 +75,13 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         adminNote: parsed.data.proofAdminNote ?? undefined,
       },
     });
+    await writeAuditLog({
+      actorId: adminId,
+      action: parsed.data.proofStatus === "APPROVED" ? "MANUAL_PAYMENT_PROOF_APPROVED" : "MANUAL_PAYMENT_PROOF_REJECTED",
+      entityType: "Payment",
+      entityId: paymentId,
+      metadataJson: { proofId: proof.id, proofStatus: parsed.data.proofStatus },
+    });
     if (payment.userId) {
       await prisma.notification.create({
         data: {
@@ -96,6 +105,19 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         latest.provider === PaymentProvider.MANUAL &&
         (latest.status === PaymentStatus.PROCESSING || latest.status === PaymentStatus.AWAITING_PROOF)
       ) {
+        if (latest.userId) {
+          const verification = await getUserVerificationStatus(latest.userId);
+          if (verification.status !== "VERIFIED") {
+            return NextResponse.json(
+              {
+                error:
+                  "Identity verification is required before approving manual payment as SUCCESS. Ask customer to complete Dashboard → Verification.",
+                code: "IDENTITY_VERIFICATION_REQUIRED",
+              },
+              { status: 409 },
+            );
+          }
+        }
         try {
           await transitionPaymentStatus(paymentId, {
             toStatus: PaymentStatus.SUCCESS,
@@ -136,6 +158,26 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
 
   if (parsed.data.status && parsed.data.status !== payment.status) {
+    if (parsed.data.status === PaymentStatus.SUCCESS && payment.userId) {
+      const verification = await getUserVerificationStatus(payment.userId);
+      if (verification.status !== "VERIFIED") {
+        return NextResponse.json(
+          {
+            error:
+              "Identity verification is required before setting this payment to SUCCESS.",
+            code: "IDENTITY_VERIFICATION_REQUIRED",
+          },
+          { status: 409 },
+        );
+      }
+    }
+    await writeAuditLog({
+      actorId: adminId,
+      action: "PAYMENT_STATUS_CHANGE_REQUESTED_BY_ADMIN",
+      entityType: "Payment",
+      entityId: paymentId,
+      metadataJson: { oldStatus: payment.status, newStatus: parsed.data.status },
+    });
     await transitionPaymentStatus(paymentId, {
       toStatus: parsed.data.status,
       source: "ADMIN",

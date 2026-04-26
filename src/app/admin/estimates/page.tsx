@@ -151,7 +151,14 @@ export default async function AdminEstimatesPage(props: { searchParams: Promise<
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1420] to-black/60 p-6">
-        <PageHeading variant="dashboard">Vehicle Import Estimates</PageHeading>
+        <PageHeading variant="dashboard">Duty Estimates</PageHeading>
+        <p className="mt-2 max-w-3xl text-sm text-zinc-400">
+          Create and send per-vehicle Ghana duty planning documents for customers. Pair with{" "}
+          <Link href="/admin/duty" className="text-[var(--brand)] hover:underline">
+            Duty (operations)
+          </Link>{" "}
+          for live clearance stages and duty payments on each vehicle order.
+        </p>
         <form action={createVehicleImportEstimateAction} className="mt-4 grid gap-3 sm:grid-cols-3">
           <input type="hidden" name="customerId" value={prefillCustomerId} />
           <input type="hidden" name="orderId" value={prefillOrderId} />
@@ -195,7 +202,7 @@ export default async function AdminEstimatesPage(props: { searchParams: Promise<
           </thead>
           <tbody>
             {estimates.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-zinc-500">No estimates yet.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-10 text-center text-zinc-500">No duty estimates yet.</td></tr>
             ) : estimates.map((e) => (
               <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                 <td className="px-4 py-3"><p className="font-medium text-white">{e.estimateNumber}</p><p className="text-xs text-zinc-500">{e.status}</p></td>

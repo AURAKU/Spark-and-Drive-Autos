@@ -2,7 +2,12 @@ import { z } from "zod";
 
 export const partsFinderInputSchema = z
   .object({
-    vin: z.string().trim().max(32).optional(),
+    vin: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-HJ-NPR-Z0-9]{17}$/, "VIN must be 17 characters and use valid VIN format.")
+      .optional(),
     chassis: z.string().trim().max(32).optional(),
     brand: z.string().trim().max(80).optional(),
     model: z.string().trim().max(80).optional(),

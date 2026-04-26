@@ -84,6 +84,8 @@ export async function logPartsFinderSearchEvent(params: {
   rankedResults: SearchPipelineResultRow[];
   confidence: ConfidenceBreakdown | null;
   summary: StructuredSummary;
+  ai?: Record<string, unknown>;
+  normalizedQuery?: string;
   membership: MembershipAccessSnapshot;
 }) {
   const sessionId = `PF-${nanoid(12).toUpperCase()}`;
@@ -148,6 +150,8 @@ export async function logPartsFinderSearchEvent(params: {
         membershipSnapshot: params.membership,
         approvalMode,
         requireManualReviewBelow: threshold,
+        ai: params.ai ?? null,
+        normalizedQuery: params.normalizedQuery ?? String((params.normalizedInput.partIntent as string | undefined) ?? ""),
       } as Prisma.InputJsonValue),
       status: initialStatus,
       confidenceLabel,
@@ -180,6 +184,7 @@ export async function logPartsFinderSearchEvent(params: {
         rankedResults: params.rankedResults,
         confidence: params.confidence,
         summary: params.summary,
+        ai: params.ai ?? null,
         metrics: {
           resultCount: params.rankedResults.length,
           averageConfidence:
@@ -318,6 +323,8 @@ export async function getPartsFinderSessionForUser(sessionId: string, userId: st
       })),
       confidence: row.confidenceJson,
       summary: row.summaryJson,
+      ai: (row.safetyFlagsJson as Record<string, unknown> | null)?.ai ?? null,
+      normalizedQuery: (row.safetyFlagsJson as Record<string, unknown> | null)?.normalizedQuery ?? null,
       review: {
         status: row.status,
         reviewedAt: row.reviewedAt?.toISOString() ?? null,

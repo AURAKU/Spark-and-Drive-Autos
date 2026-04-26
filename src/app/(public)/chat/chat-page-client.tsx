@@ -26,7 +26,7 @@ export function ChatPageClient() {
         <PageHeading variant="dashboard">Customer Service Live Support Chat</PageHeading>
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
           Live support chat is available to signed-in customers only, so we can tie your conversation to your account,
-          send updates, and help you securely. Create a free account or sign in to start or continue a chat.
+          send updates, and help you securely. Create Account or sign in to start or continue a chat.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
@@ -36,7 +36,7 @@ export function ChatPageClient() {
               "bg-[var(--brand)] text-center font-semibold text-black hover:opacity-90",
             )}
           >
-            Create an account
+            Create Account
           </Link>
           <Link
             href={loginHref}

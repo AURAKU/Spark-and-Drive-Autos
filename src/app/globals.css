@@ -448,6 +448,18 @@
 }
 
 @layer utilities {
+  .text-\[10px\] {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+  .text-\[11px\] {
+    font-size: 0.84rem;
+    line-height: 1.38;
+  }
+  .text-\[12px\] {
+    font-size: 0.9rem;
+    line-height: 1.42;
+  }
   .text-xs {
     font-size: 0.84rem;
     line-height: 1.35;
@@ -460,24 +472,14 @@
   .pf-slider-shell {
     overflow: hidden;
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in srgb, #f97316 62%, #fb923c 38%);
-    background: linear-gradient(
-      90deg,
-      color-mix(in srgb, #f97316 24%, transparent),
-      color-mix(in srgb, #fdba74 18%, transparent),
-      color-mix(in srgb, #f97316 20%, transparent)
-    );
-    padding: 0.5rem 0;
+    border: none;
+    background: transparent;
+    padding: 0.2rem 0;
   }
 
   .dark .pf-slider-shell {
-    border: 1px solid color-mix(in srgb, #14d8e6 40%, #f97316 60%);
-    background: linear-gradient(
-      90deg,
-      color-mix(in srgb, #14d8e6 22%, transparent),
-      color-mix(in srgb, #f97316 20%, transparent),
-      color-mix(in srgb, #14d8e6 16%, transparent)
-    );
+    border: none;
+    background: transparent;
   }
 
   .pf-slider-track {
@@ -490,13 +492,13 @@
   .pf-slider-item {
     display: inline-block;
     padding-left: 100%;
-    font-size: clamp(0.95rem, 1.2vw, 1.2rem);
-    font-weight: 800;
+    font-size: clamp(0.88rem, 1.08vw, 1.02rem);
+    font-weight: 700;
     color: #f97316;
     text-shadow:
       0 0 14px color-mix(in srgb, #f97316 48%, transparent),
       0 0 12px color-mix(in srgb, #fdba74 40%, transparent);
-    animation: pf-slider-marquee 24s linear infinite;
+    animation: pf-slider-marquee 34s linear infinite;
     will-change: transform;
   }
 

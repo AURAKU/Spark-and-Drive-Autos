@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
+import { OPS_ROUTE_CACHE_TAGS } from "@/lib/ops-route-cache-tags";
 import { prisma } from "@/lib/prisma";
 
 /** Page size for payment records, wallet ledger, and action queue on Payments Intelligence. */
@@ -55,12 +57,13 @@ export type PaymentIntelligenceListMeta = {
  */
 export async function fetchPaymentIntelligenceAggregateData(params: {
   basePaymentWhere: Prisma.PaymentWhereInput;
+  basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
   walletWhere: Prisma.WalletTransactionWhereInput;
   paymentsPage?: number;
   walletPage?: number;
   actionPage?: number;
 }) {
-  const { basePaymentWhere, walletWhere } = params;
+  const { basePaymentWhere, basePaymentWhereSansOrderKind, walletWhere } = params;
   const pageSize = INTEL_LIST_PAGE_SIZE;
   const requestedPay = normalizeIntelListPage(params.paymentsPage);
   const requestedWallet = normalizeIntelListPage(params.walletPage);
@@ -69,15 +72,6 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
   const attentionWhere = attentionPaymentsWhere(basePaymentWhere);
 
   const [
-    totals,
-    successCount,
-    failedCount,
-    pendingCount,
-    disputedCount,
-    awaitingProofCount,
-    successValueAgg,
-    failedValueAgg,
-    refundedValueAgg,
     byStatus,
     byMethod,
     pendingProofReview,
@@ -89,16 +83,8 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
     walletPendingCount,
     partsSalesFromWalletAgg,
     profitPayments,
+    partsFinderActivationPayments,
   ] = await Promise.all([
-    prisma.payment.count({ where: basePaymentWhere }),
-    prisma.payment.count({ where: { ...basePaymentWhere, status: "SUCCESS" } }),
-    prisma.payment.count({ where: { ...basePaymentWhere, status: "FAILED" } }),
-    prisma.payment.count({ where: { ...basePaymentWhere, status: "PENDING" } }),
-    prisma.payment.count({ where: { ...basePaymentWhere, status: "DISPUTED" } }),
-    prisma.payment.count({ where: { ...basePaymentWhere, status: "AWAITING_PROOF" } }),
-    prisma.payment.aggregate({ where: { ...basePaymentWhere, status: "SUCCESS" }, _sum: { amount: true } }),
-    prisma.payment.aggregate({ where: { ...basePaymentWhere, status: "FAILED" }, _sum: { amount: true } }),
-    prisma.payment.aggregate({ where: { ...basePaymentWhere, status: "REFUNDED" }, _sum: { amount: true } }),
     prisma.payment.groupBy({ by: ["status"], where: basePaymentWhere, _count: { _all: true }, _sum: { amount: true } }),
     prisma.payment.groupBy({
       by: ["settlementMethod"],
@@ -151,7 +137,26 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
         },
       },
     }),
+    prisma.payment.findMany({
+      where: {
+        ...basePaymentWhereSansOrderKind,
+        status: "SUCCESS",
+        paymentType: "PARTS_FINDER_MEMBERSHIP",
+      },
+      select: { amount: true, currency: true },
+    }),
   ]);
+
+  const statusMap = new Map(byStatus.map((r) => [r.status, r]));
+  const totals = byStatus.reduce((sum, row) => sum + row._count._all, 0);
+  const successCount = statusMap.get("SUCCESS")?._count._all ?? 0;
+  const failedCount = statusMap.get("FAILED")?._count._all ?? 0;
+  const pendingCount = statusMap.get("PENDING")?._count._all ?? 0;
+  const disputedCount = statusMap.get("DISPUTED")?._count._all ?? 0;
+  const awaitingProofCount = statusMap.get("AWAITING_PROOF")?._count._all ?? 0;
+  const successValueAgg = { _sum: { amount: statusMap.get("SUCCESS")?._sum.amount ?? null } };
+  const failedValueAgg = { _sum: { amount: statusMap.get("FAILED")?._sum.amount ?? null } };
+  const refundedValueAgg = { _sum: { amount: statusMap.get("REFUNDED")?._sum.amount ?? null } };
 
   const paymentsPage = clampPage(requestedPay, totals, pageSize);
   const walletPage = clampPage(requestedWallet, walletRowsTotal, pageSize);
@@ -163,7 +168,19 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
       orderBy: { createdAt: "desc" },
       skip: (paymentsPage - 1) * pageSize,
       take: pageSize,
-      include: { user: true, order: { include: { car: true } }, proofs: true },
+      select: {
+        id: true,
+        amount: true,
+        currency: true,
+        status: true,
+        paymentType: true,
+        settlementMethod: true,
+        providerReference: true,
+        orderId: true,
+        updatedAt: true,
+        user: { select: { email: true } },
+        order: { select: { reference: true } },
+      },
     }),
     prisma.walletTransaction.findMany({
       where: walletWhere,
@@ -220,8 +237,36 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
     walletPendingCount,
     partsSalesFromWalletAgg,
     profitPayments,
+    partsFinderActivationPayments,
     listMeta,
   };
+}
+
+const fetchPaymentIntelligenceAggregateDataCachedInternal = unstable_cache(
+  async (params: {
+    basePaymentWhere: Prisma.PaymentWhereInput;
+    basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
+    walletWhere: Prisma.WalletTransactionWhereInput;
+    paymentsPage?: number;
+    walletPage?: number;
+    actionPage?: number;
+  }) => fetchPaymentIntelligenceAggregateData(params),
+  ["ops-payment-intelligence-aggregate:v1"],
+  {
+    revalidate: 8,
+    tags: [OPS_ROUTE_CACHE_TAGS.adminPaymentsIntelligence, OPS_ROUTE_CACHE_TAGS.adminOrders],
+  },
+);
+
+export async function fetchPaymentIntelligenceAggregateDataCached(params: {
+  basePaymentWhere: Prisma.PaymentWhereInput;
+  basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
+  walletWhere: Prisma.WalletTransactionWhereInput;
+  paymentsPage?: number;
+  walletPage?: number;
+  actionPage?: number;
+}) {
+  return fetchPaymentIntelligenceAggregateDataCachedInternal(params);
 }
 
 export type PaymentIntelligenceAggregatePayload = Awaited<ReturnType<typeof fetchPaymentIntelligenceAggregateData>>;

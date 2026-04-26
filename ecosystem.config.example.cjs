@@ -28,5 +28,16 @@ module.exports = {
         // DATABASE_URL: "postgresql://user:pass@127.0.0.1:5432/sparkdrive?schema=public",
       },
     },
+    {
+      name: "spark-drive-worker",
+      cwd: "/var/www/spark-drive",
+      script: "npm",
+      args: "run worker:parts-finder",
+      instances: 1,
+      exec_mode: "fork",
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
