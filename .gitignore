@@ -50,8 +50,8 @@ ecosystem.config.cjs
 *.tsbuildinfo
 next-env.d.ts
 backups/
-*.sql
 *.dump
+backups/**/*.sql
 
 # local duplicate nested repo safeguard
 Spark-and-Drive-Autos/
