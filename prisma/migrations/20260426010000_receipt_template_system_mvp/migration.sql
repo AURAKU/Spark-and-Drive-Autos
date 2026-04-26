@@ -1,0 +1,2 @@
+-- No-op baseline migration.
+-- This folder existed without a migration.sql and blocked Prisma migrate status/deploy.
