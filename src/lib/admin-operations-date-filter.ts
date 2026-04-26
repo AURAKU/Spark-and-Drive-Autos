@@ -84,4 +84,8 @@ export function appendOpsDateParams(
     if (mode === "month" && typeof raw.opsDateMonth === "string") params.set("opsDateMonth", raw.opsDateMonth);
     if (mode === "year" && typeof raw.opsDateYear === "string") params.set("opsDateYear", raw.opsDateYear);
   }
+  const pl = typeof raw.partsLineage === "string" ? raw.partsLineage : "";
+  if (pl === "ghana" || pl === "china_preorder") {
+    params.set("partsLineage", pl);
+  }
 }

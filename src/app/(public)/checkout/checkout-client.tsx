@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { CheckoutBlockedDialog } from "@/components/checkout/checkout-blocked-dialog";
+import { PaymentReviewNotice } from "@/components/legal/payment-review-notice";
 import { PageHeading } from "@/components/typography/page-headings";
 import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -301,10 +302,13 @@ export function CheckoutClient({
         <span className="font-medium text-zinc-200">Ghana cedis (GHS)</span> using the current forex exchange rates
         maintained by Spark and Drive Autos.
       </p>
+      <div className="mt-4">
+        <PaymentReviewNotice />
+      </div>
 
       {status === "unauthenticated" && (
         <p className="mt-8 rounded-2xl border border-white/[0.1] bg-gradient-to-br from-white/[0.07] to-transparent px-6 py-5 text-base leading-relaxed text-zinc-200">
-          You can explore the site freely. To complete payment, sign in or create an account so we can issue your receipt
+          You can explore the site freely. To complete payment, sign in or Create Account so we can issue your receipt
           and keep your order details in one place.
         </p>
       )}
@@ -401,30 +405,45 @@ export function CheckoutClient({
             ) : null}
             <div className="space-y-4">
               <p className="text-sm font-medium text-zinc-400">Required agreements</p>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm leading-relaxed text-zinc-300 sm:p-5">
+                <p className="font-medium text-zinc-200">Before payment, by proceeding you confirm that:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-zinc-300">
+                  <li>Payment is subject to verification.</li>
+                  <li>Orders are not confirmed until verified.</li>
+                  <li>Certain transactions may be non-refundable.</li>
+                </ul>
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 sm:p-5 dark:border-white/15 dark:bg-white/[0.05]">
                 <input
                   id="checkout-agreement"
                   type="checkbox"
                   checked={agreementAccepted}
                   onChange={(e) => setAgreementAccepted(e.target.checked)}
-                  className="mt-1 size-4 shrink-0 rounded border-white/20"
+                  className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                 />
-                <span className="text-sm leading-relaxed text-zinc-300 sm:text-base">
-                  I agree to the checkout terms, payment verification rules, and applicable policies for this order.
-                  Version {legalRequirements.agreementVersion}.
+                <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
+                  I agree to the{" "}
+                  <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                    Checkout Agreement
+                  </span>
+                  . Version {legalRequirements.agreementVersion}.
                 </span>
               </label>
               {legalRequirements.requiresContract ? (
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 sm:p-5 dark:border-white/15 dark:bg-white/[0.05]">
                   <input
                     id="checkout-contract"
                     type="checkbox"
                     checked={contractAccepted}
                     onChange={(e) => setContractAccepted(e.target.checked)}
-                    className="mt-1 size-4 shrink-0 rounded border-white/20"
+                    className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                   />
-                  <span className="text-sm leading-relaxed text-zinc-300 sm:text-base">
-                    I have read and accept the sourcing contract for this order. Version{" "}
+                  <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
+                    I have read and accept the{" "}
+                    <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                      sourcing contract
+                    </span>{" "}
+                    for this order. Version{" "}
                     {legalRequirements.contractVersion}.{" "}
                     <button
                       type="button"
@@ -441,16 +460,20 @@ export function CheckoutClient({
                 </label>
               ) : null}
               {legalRequirements.requiresRisk ? (
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 sm:p-5 dark:border-white/15 dark:bg-white/[0.05]">
                   <input
                     id="checkout-risk"
                     type="checkbox"
                     checked={riskAccepted}
                     onChange={(e) => setRiskAccepted(e.target.checked)}
-                    className="mt-1 size-4 shrink-0 rounded border-white/20"
+                    className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                   />
-                  <span className="text-sm leading-relaxed text-zinc-300 sm:text-base">
-                    I have read and accept the risk acknowledgement for this order. Version {legalRequirements.riskVersion}.{" "}
+                  <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
+                    I have read and accept the{" "}
+                    <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                      risk acknowledgement
+                    </span>{" "}
+                    for this order. Version {legalRequirements.riskVersion}.{" "}
                     <button
                       type="button"
                       className="font-semibold text-[var(--brand)] underline-offset-2 hover:underline"
@@ -610,7 +633,7 @@ export function CheckoutClient({
                   }),
                 )}
               >
-                Create account
+                Create Account
               </Link>
               <button
                 type="button"

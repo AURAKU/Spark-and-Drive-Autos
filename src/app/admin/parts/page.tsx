@@ -1,14 +1,17 @@
 import Link from "next/link";
 
+import { applyChinaPreOrderIntlFormAction } from "@/actions/parts-admin";
 import { AddPartDialog } from "@/components/admin/add-part-dialog";
 import { PageHeading } from "@/components/typography/page-headings";
 import { PartsCategoriesPanel, PartsDeliveryTemplatesPanel } from "@/components/admin/parts-categories-delivery-panel";
-import { formatConverted, getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { formatConverted, getGlobalCurrencySettings } from "@/lib/currency";
+import { adminFeeAmountForDisplay } from "@/lib/delivery-template-fees";
 import { GHANA_LOW_STOCK_ALERT_MAX, getGhanaLowStockPartsForAdmin } from "@/lib/ghana-low-stock";
+import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
-import { DeliveryMode } from "@prisma/client";
-import { PartListingState } from "@prisma/client";
+import { DeliveryFeeCurrency, DeliveryMode, PartOrigin, PartStockStatus, PartListingState } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +43,8 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     typeof sp.state === "string" && Object.values(PartListingState).includes(sp.state as PartListingState)
       ? (sp.state as PartListingState)
       : "";
-  const page = Math.max(1, parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
+  const pageReqRaw = parseInt(typeof sp.page === "string" ? sp.page : "1", 10);
+  const pageReq = normalizeIntelListPage(Number.isFinite(pageReqRaw) ? pageReqRaw : undefined);
   const openAdd = sp.add === "1";
 
   const where: Prisma.PartWhereInput = {
@@ -59,14 +63,7 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     ],
   };
 
-  const [
-    fx,
-    categoriesForFilter,
-    categoriesAll,
-    deliveryRows,
-    totalParts,
-    parts,
- ] = await Promise.all([
+  const [fx, categoriesForFilter, categoriesAll, deliveryRows, totalParts] = await Promise.all([
     getGlobalCurrencySettings(),
     prisma.part.findMany({
       select: { category: true },
@@ -78,15 +75,20 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     }),
     prisma.deliveryOptionTemplate.findMany({ orderBy: [{ sortOrder: "asc" }, { mode: "asc" }] }),
     prisma.part.count({ where }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalParts) / PAGE_SIZE));
+  const page = Math.min(Math.max(1, pageReq), totalPages);
+
+  const parts =
     tab === "catalog"
-      ? prisma.part.findMany({
+      ? await prisma.part.findMany({
           where,
           orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
           skip: (page - 1) * PAGE_SIZE,
           take: PAGE_SIZE,
         })
-      : Promise.resolve([]),
-  ]);
+      : [];
 
   const ghanaLowStockParts = await getGhanaLowStockPartsForAdmin();
 
@@ -102,6 +104,10 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
       etaLabel: string;
       feeGhs: number;
       feeRmb: number;
+      feeCurrency: DeliveryFeeCurrency;
+      feeAmount: number;
+      weightKg: number | null;
+      volumeCbm: number | null;
     } | null
   > = {};
   for (const mode of deliveryModes) {
@@ -113,6 +119,10 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
           etaLabel: row.etaLabel,
           feeGhs: Number(row.feeGhs),
           feeRmb: Number(row.feeRmb),
+          feeCurrency: row.feeCurrency,
+          feeAmount: adminFeeAmountForDisplay(Number(row.feeGhs), row.feeCurrency, fx),
+          weightKg: row.weightKg != null ? Number(row.weightKg) : null,
+          volumeCbm: row.volumeCbm != null ? Number(row.volumeCbm) : null,
         }
       : null;
   }
@@ -122,8 +132,6 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     slug: c.slug,
     active: c.active,
   }));
-  const totalPages = Math.max(1, Math.ceil(totalParts / PAGE_SIZE));
-
   const tabLink = (t: Tab, extra?: Record<string, string>) => {
     const params = new URLSearchParams();
     params.set("tab", t);
@@ -141,6 +149,11 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     if (openAdd) params.set("add", "1");
     return `/admin/parts?${params.toString()}`;
   };
+
+  const catalogPageHrefs =
+    tab === "catalog" && totalPages > 1
+      ? Array.from({ length: totalPages }, (_, i) => catalogPageHref(i + 1))
+      : undefined;
 
   return (
     <div>
@@ -293,16 +306,15 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
           </p>
 
           <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-            <table className="min-w-[920px] w-full border-collapse text-left text-sm">
+            <table className="min-w-[780px] w-full border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-white/[0.04] text-xs text-zinc-500 uppercase">
                 <tr>
+                  <th className="px-4 py-3 font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">RMB</th>
                   <th className="px-4 py-3 font-medium">GHS (saved)</th>
-                  <th className="px-4 py-3 font-medium">GHS (live)</th>
                   <th className="px-4 py-3 font-medium">Origin</th>
-                  <th className="px-4 py-3 font-medium">State</th>
                   <th className="px-4 py-3 font-medium">Updated</th>
                   <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
@@ -320,9 +332,19 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
                   </tr>
                 ) : (
                   parts.map((p) => {
-                    const ghs = getCarDisplayPrice(Number(p.basePriceRmb), "GHS", fx);
+                    const isChinaListedPreorder =
+                      p.origin === PartOrigin.CHINA && p.stockStatus === PartStockStatus.ON_REQUEST;
                     return (
                       <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-4 py-3 text-zinc-300 tabular-nums">
+                          {isChinaListedPreorder ? (
+                            <span>
+                              {p.stockQty} · <span className="text-amber-200/90">China pre-order</span>
+                            </span>
+                          ) : (
+                            p.stockQty
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-white">{p.title}</div>
                           <div className="font-mono text-xs text-zinc-500">{p.slug}</div>
@@ -332,25 +354,35 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
                           {Number(p.basePriceRmb).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-zinc-300">{formatConverted(Number(p.priceGhs), "GHS")}</td>
-                        <td className="px-4 py-3 text-[var(--brand)]">{formatConverted(ghs, "GHS")}</td>
                         <td className="px-4 py-3 text-zinc-400">{p.origin}</td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-md border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-zinc-300">
-                            {p.listingState.replaceAll("_", " ")}
-                          </span>
-                        </td>
                         <td className="px-4 py-3 text-zinc-500">{p.updatedAt.toISOString().slice(0, 10)}</td>
                         <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/admin/parts/${p.id}/edit`}
-                            className="text-[var(--brand)] hover:underline"
-                          >
-                            Edit
-                          </Link>
-                          {" · "}
-                          <Link href={`/parts/${p.slug}`} className="text-zinc-400 hover:text-white hover:underline">
-                            View
-                          </Link>
+                          <div className="flex flex-col items-end gap-1.5">
+                            {isChinaListedPreorder ? (
+                              <form action={applyChinaPreOrderIntlFormAction}>
+                                <input type="hidden" name="partId" value={p.id} />
+                                <button
+                                  type="submit"
+                                  className="text-xs font-medium text-amber-200/95 hover:underline"
+                                  title="Link sea + both air delivery templates so customers can pay intl after checkout"
+                                >
+                                  Apply intl options
+                                </button>
+                              </form>
+                            ) : null}
+                            <div>
+                              <Link
+                                href={`/admin/parts/${p.id}/edit`}
+                                className="text-[var(--brand)] hover:underline"
+                              >
+                                Edit
+                              </Link>
+                              {" · "}
+                              <Link href={`/parts/${p.slug}`} className="text-zinc-400 hover:text-white hover:underline">
+                                View
+                              </Link>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -360,28 +392,18 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
             </table>
           </div>
 
-          {totalPages > 1 ? (
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-              {page > 1 ? (
-                <Link
-                  href={catalogPageHref(page - 1)}
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  Previous
-                </Link>
-              ) : null}
-              <span className="text-sm text-zinc-500">
-                Page {page} / {totalPages}
-              </span>
-              {page < totalPages ? (
-                <Link
-                  href={catalogPageHref(page + 1)}
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  Next
-                </Link>
-              ) : null}
-            </div>
+          {totalParts > 0 ? (
+            <ListPaginationFooter
+              className="border-border/50 dark:border-white/5"
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalParts}
+              pageSize={PAGE_SIZE}
+              itemLabel="SKUs"
+              prevHref={page > 1 ? catalogPageHref(page - 1) : null}
+              nextHref={page < totalPages ? catalogPageHref(page + 1) : null}
+              pageHrefs={catalogPageHrefs}
+            />
           ) : null}
         </div>
       ) : null}

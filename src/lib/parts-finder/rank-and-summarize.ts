@@ -1,3 +1,4 @@
+import { normalizePartsFinderImageUrl } from "@/lib/parts-finder/image-url";
 import type { NormalizedPartsQuery } from "@/lib/parts-finder/normalize-query";
 import type { ParsedSearchHit, PartMatchConfidenceLabel, SearchPipelineResultRow } from "@/lib/parts-finder/search-types";
 
@@ -136,11 +137,11 @@ function collectRelevantImages(
   const urls: string[] = [];
   const seen = new Set<string>();
   const pushUrl = (url: string | null | undefined) => {
-    if (!url) return;
-    const trimmed = url.trim();
-    if (!trimmed || seen.has(trimmed)) return;
-    seen.add(trimmed);
-    urls.push(trimmed);
+    const normalized = normalizePartsFinderImageUrl(url);
+    if (!normalized) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    urls.push(normalized);
   };
 
   pushUrl(base.thumbnailUrl);
@@ -189,6 +190,11 @@ export function rankAndSummarizeExternal(
     const alternateConsistency = Math.min(10, (c.alternateReferences?.length ?? 0) * WEIGHTS.ALT_REF_WEIGHT);
     const sourceQuality = sourceQualityScore(c.sourceHint);
     const imageRelevance = c.thumbnailUrl || (c.imageHints?.length ?? 0) > 0 ? WEIGHTS.IMAGE_BONUS : 0;
+    const hasVinMatch = Boolean(n.vinTail);
+    const hasExactOemMatch = (c.oemReferences?.length ?? 0) > 0;
+    const hasEngineMatch = Boolean(n.engine && text.toLowerCase().includes(n.engine.toLowerCase()));
+    const hasRepeatedPartNumber = (c.oemReferences?.length ?? 0) >= 2;
+    const missingEngine = !n.engine;
 
     const fitmentContradictionPenalty =
       n.qualifiers.length > 0 && countMatches(text, n.qualifiers.map((q) => q.toLowerCase())) === 0 ? 6 : 0;
@@ -196,6 +202,22 @@ export function rankAndSummarizeExternal(
       n.year != null && !text.includes(String(n.year)) && (c.fitmentClues?.some((x) => /^\d{4}$/.test(x)) ?? false) ? 10 : 0;
     const weakContextPenalty = n.partIntentTokens.length < 2 ? 8 : 0;
     const conflictsPenalty = c.oemReferences && c.oemReferences.length > 2 && countMatches(c.oemReferences.join(" "), n.partIntentTokens) === 0 ? 6 : 0;
+
+    const conflictingData = fitmentContradictionPenalty > 0 || yearMismatchPenalty > 0 || conflictsPenalty > 0;
+    let verificationScore = 0;
+    if (hasVinMatch) verificationScore += 40;
+    if (hasExactOemMatch) verificationScore += 30;
+    if (hasEngineMatch) verificationScore += 20;
+    if (hasRepeatedPartNumber) verificationScore += 10;
+    if (missingEngine) verificationScore -= 20;
+    if (conflictingData) verificationScore -= 20;
+    verificationScore = Math.max(0, Math.min(100, verificationScore));
+
+    const engineMatch = hasEngineMatch ? 10 : 0;
+    const trimMatch = n.trim && text.toLowerCase().includes(n.trim.toLowerCase()) ? 6 : 0;
+    const vinContextBoost = hasVinMatch ? 8 : 0;
+    const repeatedReferenceBoost = hasRepeatedPartNumber ? 6 : 0;
+    const missingEnginePenalty = missingEngine ? 6 : 0;
 
     const candidateSignature = c.evidenceSignature ?? "";
     const exactLearningBoost = learning?.signatureBoostMap.get(candidateSignature) ?? 0;
@@ -211,11 +233,16 @@ export function rankAndSummarizeExternal(
       oemConsistency +
       alternateConsistency +
       sourceQuality +
-      imageRelevance -
+      imageRelevance +
+      engineMatch +
+      trimMatch +
+      vinContextBoost +
+      repeatedReferenceBoost -
       fitmentContradictionPenalty -
       yearMismatchPenalty -
       weakContextPenalty -
-      conflictsPenalty;
+      conflictsPenalty -
+      missingEnginePenalty;
     score += learningBoost;
     if (c.ingestionSource === "FALLBACK_PREVIEW") score -= WEIGHTS.PREVIEW_PENALTY;
     if (c.ingestionSource === "SERPER_WEB") score += WEIGHTS.SERPER_BONUS;
@@ -227,12 +254,9 @@ export function rankAndSummarizeExternal(
       label = "NEEDS_VERIFICATION";
       safety = true;
       score -= 10;
-    } else if (score >= 82 && oemConsistency >= 8 && fitmentContradictionPenalty === 0 && yearMismatchPenalty === 0) {
+    } else if (verificationScore >= 90) {
       label = "VERIFIED_MATCH";
-    } else if (score < 62 || c.ingestionSource === "FALLBACK_PREVIEW") {
-      label = "NEEDS_VERIFICATION";
-      safety = true;
-    } else if (score < 74) {
+    } else if (verificationScore < 70 || c.ingestionSource === "FALLBACK_PREVIEW") {
       label = "NEEDS_VERIFICATION";
       safety = true;
     }
@@ -255,10 +279,32 @@ export function rankAndSummarizeExternal(
     const images = collectRelevantImages(c, candidates, 3);
     const partFunctionSummary = buildPartFunctionSummary(n.partIntentCanonical, c.title.slice(0, 160));
 
+    const verificationLevel: "verified" | "likely" | "unverified" =
+      verificationScore >= 90 ? "verified" : verificationScore >= 70 ? "likely" : "unverified";
+    const verificationSource: "vin_match" | "oem_match" | "cross_reference" | "pattern" = hasVinMatch
+      ? "vin_match"
+      : hasExactOemMatch
+        ? "oem_match"
+        : hasRepeatedPartNumber
+          ? "cross_reference"
+          : "pattern";
+    const isPremiumVerified = verificationLevel === "verified" && hasVinMatch;
+    const verificationWhy: string[] = [];
+    if (hasVinMatch) verificationWhy.push("VIN match signal detected");
+    if (hasExactOemMatch) verificationWhy.push("Exact OEM reference detected");
+    if (hasEngineMatch) verificationWhy.push("Engine alignment detected");
+    if (hasRepeatedPartNumber) verificationWhy.push("Repeated part number across sources");
+    if (missingEngine) verificationWhy.push("Missing engine specification");
+    if (conflictingData) verificationWhy.push("Conflicting fitment signals detected");
+
     return {
       candidatePartName: c.title.slice(0, 200),
       confidenceScore: Math.min(99, Math.max(35, Math.round(score + idx * 0.5))),
       confidenceLabel: label,
+      verificationLevel,
+      verificationSource,
+      verificationScore,
+      isPremiumVerified,
       summaryExplanation,
       partFunctionSummary,
       fitmentNotes:
@@ -286,6 +332,7 @@ export function rankAndSummarizeExternal(
         alternateConsistency,
         sourceQuality,
         imageRelevance,
+        // Engine/trim/vin boosts are included in total score only.
         conflictsPenalty,
         weakContextPenalty,
         yearMismatchPenalty,
@@ -301,6 +348,21 @@ export function rankAndSummarizeExternal(
         evidenceSignature: c.evidenceSignature ?? null,
         fitmentClues: c.fitmentClues ?? [],
         alternateReferences: c.alternateReferences ?? [],
+        verification: {
+          score: verificationScore,
+          level: verificationLevel,
+          source: verificationSource,
+          isPremiumVerified,
+          why: verificationWhy,
+          signals: {
+            vinMatch: hasVinMatch,
+            oemMatch: hasExactOemMatch,
+            engineMatch: hasEngineMatch,
+            repeatedPartNumber: hasRepeatedPartNumber,
+            missingEngine,
+            conflictingData,
+          },
+        },
         learningBoost,
         learningContext: learning
           ? {
@@ -316,6 +378,16 @@ export function rankAndSummarizeExternal(
     };
   });
 
-  scored.sort((a, b) => b.confidenceScore - a.confidenceScore);
+  const levelWeight = (row: SearchPipelineResultRow) =>
+    row.verificationLevel === "verified" ? 3 : row.verificationLevel === "likely" ? 2 : 1;
+  const completeness = (row: SearchPipelineResultRow) =>
+    (row.oemCodes?.length ?? 0) + (row.images?.length ?? 0) + (row.fitments?.length ?? 0);
+  scored.sort((a, b) => {
+    const byLevel = levelWeight(b) - levelWeight(a);
+    if (byLevel !== 0) return byLevel;
+    const byConfidence = b.confidenceScore - a.confidenceScore;
+    if (byConfidence !== 0) return byConfidence;
+    return completeness(b) - completeness(a);
+  });
   return scored.slice(0, MAX_RESULTS);
 }

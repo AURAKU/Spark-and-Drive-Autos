@@ -12,9 +12,18 @@ type Props = {
   stockQty: number;
   isFavorite: boolean;
   canFavorite: boolean;
+  /** When true, skip quick add and send shoppers to the detail page to pick variant options. */
+  requiresOptions?: boolean;
 };
 
-export function PartCardActions({ partId, partSlug, stockQty, isFavorite, canFavorite }: Props) {
+export function PartCardActions({
+  partId,
+  partSlug,
+  stockQty,
+  isFavorite,
+  canFavorite,
+  requiresOptions = false,
+}: Props) {
   const router = useRouter();
   const [fav, setFav] = useState(isFavorite);
   const [loading, setLoading] = useState(false);
@@ -74,22 +83,34 @@ export function PartCardActions({ partId, partSlug, stockQty, isFavorite, canFav
   }
 
   const outOfStock = stockQty < 1;
+  const canQuickAdd = !outOfStock && !requiresOptions;
 
   return (
     <div className="flex flex-col gap-2">
       {outOfStock ? (
         <p className="text-[11px] leading-snug text-amber-200/90">Out of stock — contact support for restock or alternatives.</p>
       ) : null}
+      {requiresOptions && !outOfStock ? (
+        <p className="text-[11px] text-zinc-500">Color, size, or type — open the product to choose options.</p>
+      ) : null}
       <div className="flex items-center gap-2">
+      {canQuickAdd ? (
       <button
         type="button"
         onClick={() => void addToCart()}
-        disabled={loading || outOfStock}
-        title={outOfStock ? "This item is out of stock" : undefined}
+        disabled={loading}
         className="inline-flex h-9 items-center justify-center rounded-lg bg-[var(--brand)] px-3 text-sm font-semibold text-white shadow-[0_10px_20px_-14px_rgba(239,68,68,1)] transition hover:brightness-110 disabled:opacity-70"
       >
         Add to Cart
       </button>
+      ) : !outOfStock && requiresOptions ? (
+        <Link
+          href={`/parts/${partSlug}`}
+          className="inline-flex h-9 items-center justify-center rounded-lg bg-[var(--brand)] px-3 text-sm font-semibold text-white shadow-[0_10px_20px_-14px_rgba(239,68,1)] transition hover:brightness-110"
+        >
+          Choose options
+        </Link>
+      ) : null}
       <button
         type="button"
         aria-label={fav ? "Remove from favorites" : "Add to favorites"}
@@ -107,7 +128,7 @@ export function PartCardActions({ partId, partSlug, stockQty, isFavorite, canFav
         href={`/parts/${partSlug}`}
         className="inline-flex h-9 items-center justify-center rounded-lg border border-white/20 px-3 text-sm text-zinc-200 transition hover:bg-white/8"
       >
-        View
+        {canQuickAdd ? "View" : "Details"}
       </Link>
       </div>
     </div>

@@ -13,6 +13,11 @@ import { rateLimitPayment } from "@/lib/rate-limit";
 import { safeAuth } from "@/lib/safe-auth";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
+import { requirePolicy } from "@/lib/legal/guards";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { writeLegalAuditLog } from "@/lib/legal-audit";
+import { requireVerification } from "@/lib/identity-verification";
+import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -46,6 +51,50 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Sign in required", code: "AUTH_REQUIRED" }, { status: 401 });
   }
+  try {
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PLATFORM_TERMS,
+      context: "PAYMENT",
+      ipAddress: ip,
+      userAgent,
+    });
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PRIVACY_POLICY,
+      context: "PAYMENT",
+      ipAddress: ip,
+      userAgent,
+    });
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE,
+      context: "PAYMENT",
+      ipAddress: ip,
+      userAgent,
+    });
+    await requirePolicy(session.user.id, POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
+    await requirePolicy(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT);
+  } catch (error) {
+    if (error instanceof PolicyAcceptanceRequiredError) {
+      return NextResponse.json(
+        {
+          error: "You need to review and accept our updated terms before continuing.",
+          code: "REQUIRE_ACCEPTANCE",
+          policyKey: error.policyKey,
+          version: error.version,
+          title: error.title,
+          effectiveDate: error.effectiveDate,
+          context: error.context,
+        },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Accept active platform terms and checkout agreement before payment.", code: "LEGAL_ACCEPTANCE_REQUIRED" },
+      { status: 409 },
+    );
+  }
 
   let body: unknown;
   try {
@@ -78,6 +127,28 @@ export async function POST(req: Request) {
   }
 
   const settings = await getGlobalCurrencySettings();
+  const previewAmount = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), parsed.data.paymentType, settings);
+  try {
+    await requireVerification({
+      userId: session.user.id,
+      context: "MANUAL_PAYMENT",
+      amountGhs: previewAmount,
+      ipAddress: ip,
+      userAgent,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_VERIFICATION_REQUIRED") {
+      return NextResponse.json(
+        {
+          error:
+            "Identity verification is required before manual payment flows can continue. Submit verification in Dashboard → Verification.",
+          code: "IDENTITY_VERIFICATION_REQUIRED",
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
   const reference = `SDA-M-${nanoid(12).toUpperCase()}`;
 
   const { settlementMethod } = parsed.data;
@@ -180,6 +251,16 @@ export async function POST(req: Request) {
         "Complete your payment using the bank, Alipay, or cash instructions on file. Then upload a clear screenshot or official receipt on your payment page so our team can verify it. Approval confirms your purchase and generates your official receipt.",
       href: `/dashboard/payments/${payment.id}`,
     },
+  });
+  await writeLegalAuditLog({
+    actorId: session.user.id,
+    targetUserId: session.user.id,
+    action: "MANUAL_PAYMENT_CREATED",
+    entityType: "Payment",
+    entityId: payment.id,
+    ipAddress: ip,
+    userAgent,
+    metadata: { settlementMethod },
   });
 
   const redirectTo =

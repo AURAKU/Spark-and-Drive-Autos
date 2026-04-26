@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { MembershipAccessSnapshot } from "@/lib/parts-finder/search-types";
 
 export async function getPartsFinderActivationSnapshot() {
   const [total, settings] = await Promise.all([
@@ -20,3 +21,18 @@ export async function getPartsFinderActivationSnapshot() {
 }
 
 export type PartsFinderActivationSnapshot = Awaited<ReturnType<typeof getPartsFinderActivationSnapshot>>;
+
+/**
+ * First activation uses activation price + default window; after expiry, renewal price + renewal window.
+ */
+export function getPartsFinderChargeQuote(
+  access: Pick<MembershipAccessSnapshot, "state" | "renewalRequired">,
+  pricing: PartsFinderActivationSnapshot,
+) {
+  const isRenewal = access.renewalRequired || access.state === "EXPIRED";
+  return {
+    priceMinor: isRenewal ? pricing.renewalPriceMinor : pricing.activationPriceMinor,
+    durationDays: isRenewal ? pricing.renewalDurationDays : pricing.defaultDurationDays,
+    kind: isRenewal ? ("renewal" as const) : ("activation" as const),
+  };
+}

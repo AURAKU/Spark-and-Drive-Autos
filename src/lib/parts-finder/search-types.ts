@@ -144,6 +144,10 @@ export type SearchPipelineResultRow = {
   images: Array<{ url: string; kind: string }>;
   ingestionSource: string;
   safetyFlagManualReview: boolean;
+  verificationLevel?: "verified" | "likely" | "unverified";
+  verificationSource?: "vin_match" | "oem_match" | "cross_reference" | "pattern";
+  verificationScore?: number;
+  isPremiumVerified?: boolean;
   metadataJson?: Record<string, unknown>;
   scoreBreakdown?: {
     vehicleFit: number;

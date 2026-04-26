@@ -6,35 +6,59 @@ import { CurrencySwitcher } from "@/components/layout/currency-switcher";
 import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
 import { DashboardSidebarNav } from "@/components/layout/dashboard-sidebar-nav";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
+import { LegalReacceptanceGate } from "@/components/legal/legal-reacceptance-gate";
 import { StaffDashboardBar } from "@/components/layout/staff-dashboard-bar";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { parseDisplayCurrency } from "@/lib/currency";
+import { getMissingRequiredPolicies } from "@/lib/legal-reacceptance";
 import { prisma } from "@/lib/prisma";
 import { parseViewMode, VIEW_MODE_COOKIE } from "@/lib/view-mode";
 import { requireActiveSessionOrRedirect } from "@/lib/auth-helpers";
 
 const links = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/notifications", label: "Notifications" },
   { href: "/dashboard/profile", label: "Profile" },
-  { href: "/dashboard/favorites", label: "Favorites" },
-  { href: "/dashboard/inquiries", label: "Customer Inquiry" },
-  { href: "/dashboard/requests", label: "Requests" },
-  { href: "/dashboard/orders", label: "Orders" },
-  { href: "/dashboard/payments", label: "Payments" },
-  { href: "/dashboard/shipping", label: "Shipping & Delivery" },
-  { href: "/dashboard/estimates", label: "Import Estimates" },
+  { href: "/dashboard/notifications", label: "Notifications" },
+  { href: "/dashboard/favorites", label: "Favorites & Cart" },
+  { href: "/dashboard/orders", label: "All Orders" },
+  { href: "/dashboard/payments", label: "All Payments" },
+  { href: "/dashboard/verification", label: "Identity Verification" },
+  { href: "/dashboard/garage", label: "My Garage" },
+  { href: "/dashboard/shipping", label: "Shipping & Delivery Tracking" },
+  { href: "/dashboard/estimates", label: "Duty Estimates" },
   { href: "/dashboard/parts-finder", label: "Parts Finder", ctaStyle: "parts-finder" as const },
-  { href: "/dashboard/chats", label: "Chats" },
+  { href: "/dashboard/verified-parts", label: "Verified Parts" },
+  { href: "/dashboard/inquiry-requests", label: "Customer Inquiry & Request" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await requireActiveSessionOrRedirect("/dashboard");
+  const role = session.user.role;
+  const isStaff = Boolean(role && (isAdminRole(role) || isSupportStaffRole(role)));
+  if (!isStaff) {
+    const missingPolicies = await getMissingRequiredPolicies(session.user.id);
+    if (missingPolicies.length > 0) {
+      return (
+        <LegalReacceptanceGate
+          policies={missingPolicies.map((policy) => ({
+            id: policy.id,
+            policyKey: policy.policyKey,
+            title: policy.title,
+            version: policy.version,
+            effectiveAt: policy.effectiveAt.toISOString(),
+            content: policy.content,
+          }))}
+          defaultRedirectTo="/dashboard"
+        />
+      );
+    }
+  }
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const viewMode = parseViewMode(cookieStore.get(VIEW_MODE_COOKIE)?.value);
-  const admin = session?.user?.role && isAdminRole(session.user.role);
-  const supportStaff = session?.user?.role && isSupportStaffRole(session.user.role);
+  const admin = Boolean(role && isAdminRole(role));
+  const supportStaff = Boolean(role && isSupportStaffRole(role));
   const staffOpsHref = getStaffOperationsHref(session?.user?.role);
   const unread =
     session?.user?.id != null
@@ -122,18 +146,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
               )}
             </div>
           ) : null}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <DashboardMobileNav
-                links={links}
-                sectionLabel="Your dashboard"
-                unreadByHref={{ "/dashboard/notifications": unread }}
-              />
-              <Link href="/dashboard" className="truncate text-sm font-medium text-[var(--brand)]">
-                Overview
-              </Link>
+          <div className="relative border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <DashboardMobileNav
+                  links={links}
+                  sectionLabel="Your dashboard"
+                  unreadByHref={{ "/dashboard/notifications": unread }}
+                />
+                <Link href="/dashboard" className="truncate text-sm font-medium text-[var(--brand)]">
+                  Overview
+                </Link>
+              </div>
+              <CurrencySwitcher initial={displayCurrency} />
             </div>
-            <CurrencySwitcher initial={displayCurrency} />
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
+              <ThemeToggle className="pointer-events-auto" />
+            </div>
           </div>
           <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>

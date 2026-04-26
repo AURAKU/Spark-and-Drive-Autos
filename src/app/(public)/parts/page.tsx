@@ -7,6 +7,7 @@ import { PartCard } from "@/components/parts/part-card";
 import { SharePageButton } from "@/components/sharing/share-page-button";
 import { getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { publicPartListSelect } from "@/lib/part-public-data";
 import { getPartDisplayPrice } from "@/lib/parts-pricing";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
       ],
     },
     orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
+    select: publicPartListSelect,
   });
   if (sort === "price_asc") {
     parts = [...parts].sort((a, b) => {
@@ -139,6 +141,8 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   if (page > 1) shareParams.set("page", String(page));
   const sharePath = shareParams.toString() ? `/parts?${shareParams.toString()}` : "/parts";
   const shareUrl = `${getPublicAppUrl()}${sharePath}`;
+
+  const pageHrefs = totalPages > 1 ? Array.from({ length: totalPages }, (_, i) => pageHref(i + 1)) : undefined;
 
   const categories = await prisma.partCategory.findMany({
     where: { active: true },
@@ -372,6 +376,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
           itemLabel="Products"
           prevHref={page > 1 ? pageHref(page - 1) : null}
           nextHref={page < totalPages ? pageHref(page + 1) : null}
+          pageHrefs={pageHrefs}
         />
       ) : null}
       </div>

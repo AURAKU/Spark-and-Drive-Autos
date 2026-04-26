@@ -1,37 +1,44 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { isSuperAdminRole } from "@/auth";
 import { AdminMobileNav, type AdminNavLink } from "@/components/layout/admin-mobile-nav";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
 import { safeAuth } from "@/lib/safe-auth";
 
 const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin", label: "Command Center" },
+  { href: "/admin/users", label: "All Users" },
   { href: "/admin/cars", label: "Cars Inventory" },
   { href: "/admin/parts", label: "Parts Management" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/comms", label: "Live Support Chat" },
   { href: "/admin/orders", label: "All Orders" },
-  { href: "/admin/legal", label: "Legal controls" },
-  { href: "/admin/security", label: "Security surveillance" },
   { href: "/admin/payments/intelligence", label: "Payment intelligence" },
-  { href: "/admin/shipping", label: "Shipping" },
+  { href: "/admin/shipping", label: "Shipping & Delivery Tracking" },
   { href: "/admin/duty", label: "Duty" },
-  { href: "/admin/duty-estimator", label: "Vehicle import estimates" },
+  { href: "/admin/duty-estimator", label: "Duty Estimates" },
+  { href: "/admin/security", label: "Security Surveillance" },
+  { href: "/admin/settings/currency", label: "Exchange Rates" },
+  { href: "/admin/legal", label: "Legal Controls" },
+  { href: "/admin/disputes", label: "Disputes & Chargebacks" },
+  { href: "/admin/verifications", label: "Identity Verifications" },
   { href: "/admin/parts-finder", label: "Parts Finder" },
-  { href: "/admin/reviews", label: "Reviews" },
-  { href: "/admin/settings", label: "API providers" },
-  { href: "/admin/settings/receipt-template", label: "Receipt templates" },
-  { href: "/admin/settings/currency", label: "Exchange rates" },
+  { href: "/admin/verified-parts", label: "Verified Parts Requests" },
+  { href: "/admin/comms", label: "Live Support Chat" },
+  { href: "/admin/settings/receipt-template", label: "Receipt Templates" },
+  { href: "/admin/settings", label: "API Providers and Environment" },
+  { href: "/admin/reviews", label: "All Reviews" },
   { href: "/admin/import-export", label: "BULK Imports & Export Inventory" },
-  { href: "/admin/duplicates", label: "Duplicate inventory" },
-  { href: "/admin/audit", label: "Audit log" },
+  { href: "/admin/duplicates", label: "Duplicate Inventory" },
+  { href: "/admin/audit", label: "Audit logs" },
 ];
 
 const assistantLinks: AdminNavLink[] = [
   { href: "/admin/comms", label: "Live Support Chat" },
 ];
+
+const superAdminOnlyLinks = new Set(["/admin/settings"]);
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await safeAuth();
@@ -39,7 +46,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/login?error=account-suspended&callbackUrl=" + encodeURIComponent("/admin"));
   }
   const isAssistant = session?.user?.role === "SERVICE_ASSISTANT";
-  const links = isAssistant ? assistantLinks : fullAdminLinks;
+  const isSuperAdmin = Boolean(session?.user?.role && isSuperAdminRole(session.user.role));
+  const links = (isAssistant ? assistantLinks : fullAdminLinks).filter(
+    (link) => isSuperAdmin || !superAdminOnlyLinks.has(link.href),
+  );
 
   return (
     <div className="flex min-h-screen min-w-0 flex-col">
@@ -70,16 +80,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </nav>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <AdminMobileNav links={links} sectionLabel={isAssistant ? "Support inbox" : "Operations"} />
-              <Link href="/admin" className="truncate text-sm font-medium text-[var(--brand)]">
-                Command Center
-              </Link>
+          <div className="relative border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <AdminMobileNav links={links} sectionLabel={isAssistant ? "Support inbox" : "Operations"} />
+                <Link href="/admin" className="truncate text-sm font-medium text-[var(--brand)]">
+                  Command Center
+                </Link>
+              </div>
+              <ViewModeButton targetMode="user" redirectTo="/dashboard" className="shrink-0 text-[11px]">
+                Back to user view
+              </ViewModeButton>
             </div>
-            <ViewModeButton targetMode="user" redirectTo="/dashboard" className="shrink-0 text-[11px]">
-              Back to user view
-            </ViewModeButton>
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
+              <ThemeToggle className="pointer-events-auto" />
+            </div>
           </div>
           <div className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>

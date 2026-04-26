@@ -67,16 +67,28 @@ export default async function AdminUsersPage(props: { searchParams: SearchParams
                 endsAt: true,
               },
             },
+            chats: {
+              orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+              take: 1,
+              select: { id: true },
+            },
           },
         })
       : [];
 
   const rows = users.map((u) => ({
-    ...u,
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    phone: u.phone,
+    role: u.role,
     walletBalance: Number(u.walletBalance),
     createdAt: u.createdAt.toISOString(),
+    messagingBlocked: u.messagingBlocked,
+    accountBlocked: u.accountBlocked,
     partsFinderMembershipStatus: u.partsFinderMemberships[0]?.status ?? null,
     partsFinderMembershipEndsAt: u.partsFinderMemberships[0]?.endsAt.toISOString() ?? null,
+    supportChatThreadId: u.chats[0]?.id ?? null,
   }));
 
   const canManagePrivileged = isSuperAdminRole(session.user.role);
@@ -90,18 +102,15 @@ export default async function AdminUsersPage(props: { searchParams: SearchParams
   return (
     <div>
       <PageHeading variant="dashboard">Users &amp; roles</PageHeading>
-      <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         {panel === "users" ? (
           <>
-            All accounts in the system. Ops admins can set any user&apos;s role; changes are stored in the database and
-            the table reloads after each save. The user&apos;s own session updates on the next token refresh (usually
-            within a short interval) or when they sign in again. Use{" "}
-            <span className="text-zinc-300">Suspend account</span> to block sign-in and authenticated areas for policy
-            or safety reasons. Live Support &quot;Blocked&quot; only stops chat messages — manage that from{" "}
+            All accounts in the system. Ops admins can set roles; the user&apos;s session updates on the next token refresh or
+            sign-in. Use <span className="text-foreground/90">Suspend</span> to block sign-in. Open{" "}
             <a href="/admin/comms" className="text-[var(--brand)] hover:underline">
-              Live Support Chat
-            </a>
-            .
+              Live Support
+            </a>{" "}
+            from the message icon per row (latest thread when available) to manage chat or messaging blocks.
           </>
         ) : (
           <>

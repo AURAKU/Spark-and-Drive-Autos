@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       "Camry",
       "2022",
       "LE",
-      "GASOLINE",
+      "GASOLINE_PETROL",
       "Automatic",
       "IN_GHANA",
       "AVAILABLE",

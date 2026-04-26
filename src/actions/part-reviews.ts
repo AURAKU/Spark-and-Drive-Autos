@@ -45,6 +45,7 @@ export async function submitPartReviewAction(
     if (!part) return { error: "This product is not open for reviews." };
 
     const verified = await verifiedPartPurchase(session.user.id, part.id);
+    const fallbackAuthorName = session.user.name?.trim() || null;
 
     const existing = await prisma.review.findFirst({
       where: { userId: session.user.id, partId: part.id },
@@ -62,12 +63,14 @@ export async function submitPartReviewAction(
           body: body.data,
           status: "APPROVED",
           verifiedPurchase: verified,
+          authorName: fallbackAuthorName,
         },
       });
     } else {
       await prisma.review.create({
         data: {
           userId: session.user.id,
+          authorName: fallbackAuthorName,
           partId: part.id,
           rating: rating.data,
           body: body.data,

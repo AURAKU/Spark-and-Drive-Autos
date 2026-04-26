@@ -1,4 +1,5 @@
 import type { VehicleQueryPayload } from "@/lib/parts-finder/identifier-crypto";
+import { normalizePartsQuery, summarizePartsResults } from "@/lib/ai/parts-finder-ai";
 import { calculateConfidenceBreakdown } from "@/lib/parts-finder/confidence";
 import { normalizeFitmentDisplay } from "@/lib/parts-finder/conversion";
 import { discoverExternalPartsEvidence } from "@/lib/parts-finder/external-search";
@@ -11,17 +12,46 @@ import { applyPartsFinderSafetyRules } from "@/lib/parts-finder/safety-rules";
 import { summarizePartsFinderResults } from "@/lib/parts-finder/summarizer";
 import { parseVehicleDescriptor } from "@/lib/parts-finder/vehicle-parser";
 import type { MembershipAccessSnapshot } from "@/lib/parts-finder/search-types";
+import { decodeVin } from "@/lib/vin";
 
 export async function orchestratePartsFinderSearch(
   payload: VehicleQueryPayload,
   userId: string,
   membership: MembershipAccessSnapshot,
+  trace?: { jobId?: string },
 ) {
-  const { normalized, cleanedPayload } = normalizePartsFinderInput(payload);
+  let enrichedPayload: VehicleQueryPayload = { ...payload };
+  if (payload.vin?.trim()) {
+    try {
+      const decoded = await decodeVin(payload.vin);
+      enrichedPayload = {
+        ...enrichedPayload,
+        vin: decoded.vin,
+        brand: decoded.make ?? enrichedPayload.brand,
+        model: decoded.model ?? enrichedPayload.model,
+        year: decoded.year ?? enrichedPayload.year,
+        engine: decoded.engine ?? enrichedPayload.engine,
+        trim: decoded.trim ?? enrichedPayload.trim,
+      };
+    } catch {
+      // Keep manual vehicle input path as fallback if VIN provider fails.
+    }
+  }
+  const cleanedDescription = await normalizePartsQuery(payload.partDescription ?? "", trace);
+  const payloadWithAiCleanup: VehicleQueryPayload = {
+    ...enrichedPayload,
+    partDescription: cleanedDescription || enrichedPayload.partDescription,
+  };
+  const { normalized, cleanedPayload } = normalizePartsFinderInput(payloadWithAiCleanup);
   const vehicle = parseVehicleDescriptor(cleanedPayload);
   const queryForms = buildPartsFinderQueries(cleanedPayload, vehicle);
-  const rawEvidence = await discoverExternalPartsEvidence(queryForms.external, normalized);
+  const rawEvidence = await discoverExternalPartsEvidence(queryForms.external, normalized, trace);
   const parsedCandidates = parseExternalCandidates(rawEvidence);
+  console.log("[parts:image] raw image candidates", parsedCandidates.filter((c) => Boolean(c.thumbnailUrl)).length);
+  console.log(
+    "[parts:image] first image candidate",
+    parsedCandidates.find((c) => Boolean(c.thumbnailUrl))?.thumbnailUrl ?? null,
+  );
 
   const learning = await getOutcomeLearningSignals({
     normalizedInput: normalized as unknown as Record<string, unknown>,
@@ -34,6 +64,18 @@ export async function orchestratePartsFinderSearch(
   const refinedCandidates = filteredCandidates.slice(0, 3);
   const confidence = refinedCandidates.length > 0 ? calculateConfidenceBreakdown(refinedCandidates[0]) : null;
   const summary = summarizePartsFinderResults(refinedCandidates, confidence);
+  const ai = await summarizePartsResults({
+    query: payload.partDescription ?? "",
+    normalizedQuery: cleanedDescription || (payload.partDescription ?? ""),
+    serperResults: rawEvidence.map((row) => ({
+      title: row.title,
+      snippet: row.snippet,
+      sourceUrl: row.sourceUrl ?? null,
+      oemReferences: row.oemReferences,
+      alternateReferences: row.alternateReferences,
+      fitmentClues: row.fitmentClues,
+    })),
+  }, trace);
 
   const sessionId = await logPartsFinderSearchEvent({
     userId,
@@ -48,6 +90,8 @@ export async function orchestratePartsFinderSearch(
     rankedResults: filteredCandidates,
     confidence,
     summary,
+    ai,
+    normalizedQuery: cleanedDescription,
     membership,
   });
 
@@ -60,5 +104,6 @@ export async function orchestratePartsFinderSearch(
     rankedResults: refinedCandidates,
     confidence,
     summary,
+    ai,
   };
 }

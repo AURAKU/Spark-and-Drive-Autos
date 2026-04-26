@@ -23,6 +23,8 @@ export function buildPaymentIntelligenceFilters(sp: Record<string, string | stri
   ops: ReturnType<typeof parseOpsDateFromSearchParams>;
   paymentCreatedFilter: { gte: Date; lt: Date } | { gte: Date } | undefined;
   basePaymentWhere: Prisma.PaymentWhereInput;
+  /** Same as `basePaymentWhere` but without `order.kind` — use for revenue that has no order (e.g. Parts Finder activation). */
+  basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
   walletWhere: Prisma.WalletTransactionWhereInput;
 } {
   const methodParam = typeof sp.method === "string" ? sp.method : "";
@@ -61,12 +63,16 @@ export function buildPaymentIntelligenceFilters(sp: Record<string, string | stri
       }
     : {};
 
-  const basePaymentWhere: Prisma.PaymentWhereInput = {
+  const basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput = {
     ...(methodFilter ? { settlementMethod: methodFilter } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
-    ...(orderKindFilter ? { order: { is: { kind: orderKindFilter } } } : {}),
     ...(paymentCreatedFilter ? { createdAt: paymentCreatedFilter } : {}),
     ...searchablePaymentWhere,
+  };
+
+  const basePaymentWhere: Prisma.PaymentWhereInput = {
+    ...basePaymentWhereSansOrderKind,
+    ...(orderKindFilter ? { order: { is: { kind: orderKindFilter } } } : {}),
   };
 
   const walletSearchWhere: Prisma.WalletTransactionWhereInput = q
@@ -102,6 +108,7 @@ export function buildPaymentIntelligenceFilters(sp: Record<string, string | stri
     ops,
     paymentCreatedFilter,
     basePaymentWhere,
+    basePaymentWhereSansOrderKind,
     walletWhere,
   };
 }

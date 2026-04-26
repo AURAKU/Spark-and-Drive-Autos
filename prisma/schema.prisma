@@ -18,7 +18,8 @@ enum UserRole {
 }
 
 enum EngineType {
-  GASOLINE
+  GASOLINE_PETROL
+  GASOLINE_DIESEL
   ELECTRIC
   HYBRID
   PLUGIN_HYBRID
@@ -149,16 +150,102 @@ enum PaymentType {
   BALANCE
   SERVICE
   PARTS_FINDER_MEMBERSHIP
+  VERIFIED_PART_REQUEST
 }
 
 enum PaymentStatus {
   PENDING
   AWAITING_PROOF
   PROCESSING
+  UNDER_REVIEW
   SUCCESS
   FAILED
   REFUNDED
   DISPUTED
+  REVERSED
+}
+
+enum RiskTagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum VerificationStatus {
+  NOT_REQUIRED
+  REQUIRED
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+  UNDER_REVIEW
+}
+
+enum VerificationDocumentType {
+  GHANA_CARD
+  PASSPORT
+  DRIVER_LICENSE
+  BUSINESS_REGISTRATION
+  OTHER
+}
+
+enum PaymentDisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum DisputeCaseType {
+  PAYMENT_DISPUTE
+  CHARGEBACK
+  REFUND_REQUEST
+  FAKE_PAYMENT_CLAIM
+  MANUAL_PAYMENT_REVIEW
+  SOURCING_DISPUTE
+  PARTS_FITMENT_DISPUTE
+  DELIVERY_LOGISTICS_DISPUTE
+  WALLET_DISPUTE
+  PARTS_FINDER_DISPUTE
+  OTHER
+}
+
+enum DisputeCaseStatus {
+  OPEN
+  UNDER_REVIEW
+  AWAITING_CUSTOMER_RESPONSE
+  AWAITING_PROVIDER_RESPONSE
+  EVIDENCE_COLLECTED
+  ESCALATED
+  RESOLVED_APPROVED
+  RESOLVED_REJECTED
+  REFUNDED
+  CLOSED
+}
+
+enum DisputePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DisputeEvidenceType {
+  PAYMENT_VERIFICATION
+  RECEIPT
+  ORDER_RECORD
+  POLICY_ACCEPTANCE
+  CONTRACT_ACCEPTANCE
+  IDENTITY_VERIFICATION
+  CHAT_TRANSCRIPT
+  DELIVERY_RECORD
+  SOURCING_APPROVAL
+  PARTS_FINDER_RESULT
+  ADMIN_NOTE
+  CUSTOMER_UPLOAD
+  PROVIDER_RESPONSE
+  OTHER
 }
 
 enum PaymentProvider {
@@ -169,6 +256,35 @@ enum PaymentProvider {
 enum ReceiptTemplateScope {
   CAR
   PARTS
+}
+
+enum ReceiptType {
+  CAR_PAYMENT
+  PARTS_PAYMENT
+  PARTS_FINDER_ACTIVATION
+  SOURCING_DEPOSIT
+  WALLET_TOPUP
+  MANUAL_PAYMENT
+  VERIFIED_PART_REQUEST
+}
+
+enum VerifiedPartRequestStatus {
+  DRAFT
+  AWAITING_PAYMENT
+  PAID
+  IN_REVIEW
+  VERIFIED
+  NEEDS_MORE_INFO
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum ReceiptStatus {
+  ISSUED
+  VOIDED
+  REGENERATED
+  FAILED
 }
 
 /// How the customer intends to settle (product-facing). Paystack checkouts use PAYSTACK; offline routes use other values.
@@ -292,6 +408,12 @@ enum DeliveryMode {
   AIR_EXPRESS
   AIR_STANDARD
   SEA
+}
+
+/// Admin input currency for China delivery template fees (stored fees are normalized to GHS + RMB for checkout).
+enum DeliveryFeeCurrency {
+  GHS
+  USD
 }
 
 /// Shipment aggregate for an order (Ghana parts, China parts, or car sea).
@@ -462,6 +584,12 @@ model User {
   paymentStatusEvents          PaymentStatusHistory[]           @relation("PaymentStatusActor")
   paymentVerificationsReviewed PaymentVerification[]            @relation("PaymentVerificationReviewer")
   policyVersionsCreated        PolicyVersion[]                  @relation("PolicyVersionCreator")
+  contractVersionsCreated      Contract[]                       @relation("ContractCreator")
+  policyAcceptances            UserPolicyAcceptance[]
+  paymentDisputesFlagged       PaymentDispute[]                 @relation("PaymentDisputeFlagger")
+  paymentDisputesResolved      PaymentDispute[]                 @relation("PaymentDisputeResolver")
+  legalAuditLogsActor          LegalAuditLog[]                  @relation("LegalAuditActor")
+  legalAuditLogsTarget         LegalAuditLog[]                  @relation("LegalAuditTarget")
   currencySettingsUpdated      GlobalCurrencySettings[]         @relation("CurrencyUpdatedBy")
   passwordResetTokens          PasswordResetToken[]
   duplicateChecksReviewed      DuplicateCheckEvent[]
@@ -493,6 +621,25 @@ model User {
   vehicleImportEstimatesForCustomer VehicleImportEstimate[]     @relation("VehicleImportEstimateCustomer")
   vehicleImportEstimatesSent       VehicleImportEstimate[]       @relation("VehicleImportEstimateSentBy")
   vehicleImportEstimateEvents      VehicleImportEstimateEvent[] @relation("VehicleImportEstimateEventActor")
+  receiptTemplatesCreated          ReceiptTemplate[]             @relation("ReceiptTemplateCreator")
+  generatedReceipts                GeneratedReceipt[]            @relation("GeneratedReceiptUser")
+  generatedReceiptsByActor         GeneratedReceipt[]            @relation("GeneratedReceiptActor")
+  receiptAuditLogs                 ReceiptAuditLog[]             @relation("ReceiptAuditActor")
+  paymentProviderConfigsCreated    PaymentProviderConfig[]       @relation("PaymentProviderConfigCreator")
+  paymentProviderConfigsUpdated    PaymentProviderConfig[]       @relation("PaymentProviderConfigUpdater")
+  verifications                    UserVerification[]
+  verificationsReviewed            UserVerification[]            @relation("UserVerificationReviewer")
+  verificationAuditLogsActor       VerificationAuditLog[]        @relation("VerificationAuditActor")
+  verificationAuditLogsUser        VerificationAuditLog[]        @relation("VerificationAuditUser")
+  disputesOpened                   DisputeCase[]                 @relation("DisputeCaseUser")
+  disputesAssigned                 DisputeCase[]                 @relation("DisputeCaseAssignee")
+  disputesCreated                  DisputeCase[]                 @relation("DisputeCaseCreator")
+  disputeEvidenceAdded             DisputeEvidence[]             @relation("DisputeEvidenceActor")
+  disputeTimelineEvents            DisputeTimelineEvent[]        @relation("DisputeTimelineActor")
+  disputeActionLogs                DisputeActionLog[]            @relation("DisputeActionActor")
+  userVehicles                     UserVehicle[]
+  verifiedPartRequests             VerifiedPartRequest[] @relation("VerifiedPartRequestUser")
+  verifiedPartRequestsAssigned     VerifiedPartRequest[] @relation("VerifiedPartRequestAssignee")
 }
 
 /// Audit log row when an admin broadcasts an in-app announcement to all user accounts.
@@ -529,6 +676,30 @@ model UserAddress {
   partOrders Order[] @relation("PartOrderDeliveryAddress")
 
   @@index([userId, isDefault])
+}
+
+model UserVehicle {
+  id        String   @id @default(cuid())
+  userId    String
+  vin       String?
+  make      String
+  model     String
+  year      Int
+  engine    String?
+  trim      String?
+  nickname  String?
+  isDefault Boolean  @default(false)
+  nextServiceReminder DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifiedPartRequests VerifiedPartRequest[]
+
+  @@index([userId, createdAt])
+  @@index([userId, make, model, year])
+  @@index([vin])
+  @@index([userId, vin])
 }
 
 model WalletTransaction {
@@ -584,6 +755,14 @@ model Car {
   basePriceRmb       Decimal            @default(0) @db.Decimal(14, 2)
   /// Admin-only supplier or dealership cost (CNY) — never expose on public surfaces
   supplierCostRmb    Decimal?           @db.Decimal(14, 2)
+  /// Admin-only: supplier or dealer name (never shown on public vehicle pages)
+  supplierDealerName         String?    @db.VarChar(200)
+  /// Admin-only: contact phone for traceability
+  supplierDealerPhone        String?    @db.VarChar(40)
+  /// Admin-only: order / invoice / ref to trace the unit
+  supplierDealerReference    String?    @db.Text
+  /// Admin-only: free-text notes to trace sourcing
+  supplierDealerNotes        String?    @db.Text
   /// Legacy display fields — optional overrides; prefer deriving from basePriceRmb + GlobalCurrencySettings
   price              Decimal            @db.Decimal(14, 2)
   currency           String             @default("GHS")
@@ -715,6 +894,7 @@ model CarRequest {
   lead   Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   quotes Quote[]
   chats  ChatThread[]
+  disputeCases DisputeCase[]
 
   @@index([status])
   @@index([createdAt])
@@ -920,6 +1100,8 @@ model Order {
   riskAcknowledgements RiskAcknowledgement[]
   ContractAcceptance   ContractAcceptance[]
   vehicleImportEstimates VehicleImportEstimate[]
+  generatedReceipts     GeneratedReceipt[]
+  disputeCases          DisputeCase[]
 
   @@index([userId])
   @@index([orderStatus])
@@ -1024,20 +1206,151 @@ model Payment {
   webhookEvents PaymentWebhookEvent[]
   statusHistory PaymentStatusHistory[]
   verification  PaymentVerification?
+  disputes      PaymentDispute[]
+  generatedReceipts GeneratedReceipt[]
+  disputeCases  DisputeCase[]
+  verifiedPartRequests VerifiedPartRequest[]
 
   @@index([status])
   @@index([userId])
   @@index([providerReference])
 }
 
+model VerifiedPartRequestSettings {
+  id                 String   @id @default(cuid())
+  enabled            Boolean  @default(true)
+  feeAmount          Decimal  @default(50) @db.Decimal(14, 2)
+  currency           String   @default("GHS")
+  serviceDescription String?  @db.Text
+  legalNote          String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model VerifiedPartRequest {
+  id                    String                    @id @default(cuid())
+  requestNumber         String                    @unique
+  userId                String
+  userVehicleId         String?
+  partsFinderSearchId   String?
+  selectedMatchId       String?
+  vin                   String?
+  vehicleYear           Int?
+  vehicleMake           String?
+  vehicleModel          String?
+  vehicleEngine         String?
+  partName              String
+  customerNotes         String?                   @db.Text
+  selectedMatchSnapshot Json?
+  status                VerifiedPartRequestStatus @default(AWAITING_PAYMENT)
+  verificationFee       Decimal                   @db.Decimal(14, 2)
+  currency              String                    @default("GHS")
+  paymentId             String?
+  receiptId             String?
+  adminNotes            String?                   @db.Text
+  verifiedPartNumber    String?
+  verifiedOemNumber     String?
+  verifiedBrand         String?
+  verifiedSupplier      String?
+  verifiedPrice         Decimal?                  @db.Decimal(14, 2)
+  verifiedCurrency      String?
+  verifiedAvailability  String?
+  verifiedFitmentNotes  String?                   @db.Text
+  resultJson            Json?
+  assignedAdminId       String?
+  paidAt                DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  user              User                    @relation("VerifiedPartRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedAdmin     User?                   @relation("VerifiedPartRequestAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  userVehicle       UserVehicle?            @relation(fields: [userVehicleId], references: [id], onDelete: SetNull)
+  payment           Payment?                @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  partsFinderSearch PartsFinderSearchSession? @relation(fields: [partsFinderSearchId], references: [id], onDelete: SetNull)
+  receipt           GeneratedReceipt?       @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentId])
+  @@index([requestNumber])
+  @@index([createdAt])
+}
+
+/// Immutable dispute records for payment legal review (do not delete rows).
+model PaymentDispute {
+  id              String               @id @default(cuid())
+  paymentId       String
+  reason          String?              @db.Text
+  evidenceNotes   String?              @db.Text
+  status          PaymentDisputeStatus @default(OPEN)
+  flaggedById     String
+  flaggedAt       DateTime             @default(now())
+  resolutionNotes String?              @db.Text
+  resolvedById    String?
+  resolvedAt      DateTime?
+
+  payment    Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  flaggedBy  User    @relation("PaymentDisputeFlagger", fields: [flaggedById], references: [id], onDelete: Restrict)
+  resolvedBy User?   @relation("PaymentDisputeResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([paymentId, flaggedAt])
+  @@index([status, flaggedAt])
+}
+
+/// Versioned policy acceptance (re-consent when active version changes).
+model UserPolicyAcceptance {
+  id                     String   @id @default(cuid())
+  userId                 String
+  policyVersionId        String
+  acceptedAt             DateTime @default(now())
+  ipAddress              String?
+  userAgent              String?
+  /// CHECKOUT | PARTS_FINDER_ACTIVATION | SOURCING_REQUEST | REGISTRATION | ADMIN
+  context                String
+  acceptanceTextSnapshot String   @db.Text
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policyVersion PolicyVersion @relation(fields: [policyVersionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, context, acceptedAt])
+  @@index([policyVersionId])
+}
+
+/// Dedicated legal/compliance audit trail (admin consent, policy, disputes).
+model LegalAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  targetUserId String?
+  action       String
+  entityType   String
+  entityId     String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  actor      User? @relation("LegalAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetUser User? @relation("LegalAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([targetUserId, createdAt])
+}
+
 model AgreementLog {
-  id               String   @id @default(cuid())
-  userId           String
-  orderId          String
-  agreementVersion String
-  policyIds        String[]
-  accepted         Boolean  @default(true)
-  createdAt        DateTime @default(now())
+  id                      String   @id @default(cuid())
+  userId                  String
+  orderId                 String
+  agreementVersion        String
+  policyIds               String[]
+  accepted                Boolean  @default(true)
+  ipAddress               String?
+  userAgent               String?
+  acceptanceTextSnapshot  String?  @db.Text
+  createdAt               DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1047,13 +1360,16 @@ model AgreementLog {
 }
 
 model ContractAcceptance {
-  id              String   @id @default(cuid())
-  userId          String
-  contractId      String?
-  orderId         String?
-  contractVersion String
-  context         String   @default("CAR_SOURCING")
-  createdAt       DateTime @default(now())
+  id                     String   @id @default(cuid())
+  userId                 String
+  contractId             String?
+  orderId                String?
+  contractVersion        String
+  context                String   @default("CAR_SOURCING")
+  ipAddress              String?
+  userAgent              String?
+  acceptanceTextSnapshot String?  @db.Text
+  createdAt              DateTime @default(now())
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   contract Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
@@ -1098,19 +1414,71 @@ model PaymentVerification {
 }
 
 model UserRiskTag {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   userId      String
   tag         String
   note        String?
-  isActive    Boolean  @default(true)
+  severity    RiskTagSeverity @default(MEDIUM)
+  isActive    Boolean         @default(true)
+  resolvedAt  DateTime?
   createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   user      User  @relation("RiskTagUser", fields: [userId], references: [id], onDelete: Cascade)
   createdBy User? @relation("RiskTagCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([userId, isActive])
+  @@index([severity, createdAt])
+}
+
+model UserVerification {
+  id               String                   @id @default(cuid())
+  userId           String
+  documentType     VerificationDocumentType
+  status           VerificationStatus       @default(PENDING)
+  reason           String?                  @db.Text
+  documentFrontUrl String
+  documentBackUrl  String?
+  selfieUrl        String?
+  submittedAt      DateTime                 @default(now())
+  reviewedAt       DateTime?
+  reviewedById     String?
+  rejectionReason  String?                  @db.Text
+  internalNotes    String?                  @db.Text
+  expiresAt        DateTime?
+  consentAccepted  Boolean                  @default(false)
+  consentText      String?                  @db.Text
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?                  @relation("UserVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  audits     VerificationAuditLog[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([documentType, createdAt])
+}
+
+model VerificationAuditLog {
+  id             String            @id @default(cuid())
+  userId         String
+  verificationId String?
+  actorId        String?
+  action         String
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime          @default(now())
+
+  user         User             @relation("VerificationAuditUser", fields: [userId], references: [id], onDelete: Cascade)
+  verification UserVerification? @relation(fields: [verificationId], references: [id], onDelete: SetNull)
+  actor        User?            @relation("VerificationAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([verificationId, createdAt])
+  @@index([action, createdAt])
 }
 
 model PolicyVersion {
@@ -1124,21 +1492,25 @@ model PolicyVersion {
   createdById String?
   createdAt   DateTime @default(now())
 
-  createdBy User? @relation("PolicyVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy    User?                 @relation("PolicyVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  acceptances  UserPolicyAcceptance[]
 
   @@unique([policyKey, version])
   @@index([policyKey, isActive, effectiveAt])
 }
 
 model Contract {
-  id        String   @id @default(cuid())
-  type      String
-  content   String
-  version   String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  type        String
+  title       String?
+  content     String
+  version     String
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  createdBy   User?                @relation("ContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
   acceptances ContractAcceptance[]
 
   @@index([type, isActive, createdAt])
@@ -1216,6 +1588,7 @@ model PaymentWebhookEvent {
   id          String   @id @default(cuid())
   paymentId   String?
   event       String
+  reference   String?
   signatureOk Boolean
   payload     Json
   processed   Boolean  @default(false)
@@ -1224,6 +1597,8 @@ model PaymentWebhookEvent {
   payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
+  @@index([reference, createdAt])
+  @@index([event, createdAt])
 }
 
 model ShippingUpdate {
@@ -1252,6 +1627,8 @@ model Shipment {
   deliveryMode      DeliveryMode?
   feeAmount         Decimal?               @db.Decimal(14, 2)
   feeCurrency       String                 @default("GHS")
+  /// China pre-order: international leg paid separately after admin sets per-mode fees.
+  deferredChinaShipping Boolean            @default(false)
   estimatedDuration String?
   trackingNumber    String?
   carrier           String?
@@ -1408,6 +1785,8 @@ model PartsFinderSearchSession {
   results         PartsFinderResult[]
   outcomes        PartsFinderVerifiedOutcome[]
   images          PartsFinderSearchImage[]
+  disputeCases    DisputeCase[]
+  verifiedPartRequests VerifiedPartRequest[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -1573,6 +1952,7 @@ model Favorite {
 model Review {
   id               String       @id @default(cuid())
   userId           String?
+  authorName       String?
   /// When set, this review is for a parts catalog product (storefront + moderation).
   partId           String?
   rating           Int
@@ -1602,6 +1982,10 @@ model Part {
   basePriceRmb       Decimal          @default(0) @db.Decimal(14, 2)
   /// Admin-only supplier or distributor cost (CNY) — never expose on public surfaces
   supplierCostRmb    Decimal?         @db.Decimal(14, 2)
+  /// Admin-only: where the part was sourced (distributor name, invoice ref, etc.)
+  supplierDistributorRef  String?     @db.Text
+  /// Admin-only: supplier / distributor phone for internal traceability
+  supplierDistributorPhone String?
   /// Legacy cached GHS (synced from basePriceRmb + FX on save); storefront derives from RMB
   priceGhs           Decimal          @db.Decimal(14, 2)
   category           String
@@ -1657,13 +2041,19 @@ model PartCartItem {
   partId    String
   quantity  Int      @default(1)
   selected  Boolean  @default(true)
+  /// Customer-selected variant — must match admin-configured option lists on the part.
+  optColor  String?
+  optSize   String?
+  optType   String?
+  /// Stable key for uniqueness: derived from opt* (default = no variants).
+  variantKey String  @default("default")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   cart PartCart @relation(fields: [cartId], references: [id], onDelete: Cascade)
   part Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, partId])
+  @@unique([cartId, partId, variantKey])
   @@index([cartId, selected])
 }
 
@@ -1691,6 +2081,8 @@ model PartOrderItem {
   currency      String     @default("GHS")
   coverImageUrl String?
   origin        PartOrigin
+  /// Snapshot: { color?, size?, partType? } for fulfillment
+  optionsJson   Json?
   createdAt     DateTime   @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1734,6 +2126,11 @@ model DeliveryOptionTemplate {
   etaLabel  String
   feeGhs    Decimal      @db.Decimal(14, 2)
   feeRmb    Decimal      @db.Decimal(14, 2)
+  /// Currency the admin used when entering the fee (for edit form pre-fill).
+  feeCurrency DeliveryFeeCurrency @default(GHS)
+  /// Optional charge basis for China lanes (admin reference).
+  weightKg    Decimal?            @db.Decimal(12, 4)
+  volumeCbm   Decimal?            @db.Decimal(12, 6)
   active    Boolean      @default(true)
   sortOrder Int          @default(0)
   createdAt DateTime     @default(now())
@@ -1765,15 +2162,24 @@ model PartDeliveryOption {
 model PaymentProviderConfig {
   id         String          @id @default(cuid())
   provider   PaymentProvider
+  providerType String        @default("PAYSTACK")
   label      String
   enabled    Boolean         @default(true)
   isDefault  Boolean         @default(false)
+  supportedCurrencies String[] @default(["GHS"])
+  supportedPaymentTypes String[] @default([])
   configJson Json?
+  createdById String?
+  updatedById String?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
+  createdBy User? @relation("PaymentProviderConfigCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("PaymentProviderConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
   @@unique([provider, label])
   @@index([enabled, isDefault])
+  @@index([providerType, enabled, isDefault])
 }
 
 model ReceiptTemplateConfig {
@@ -1792,6 +2198,188 @@ model ReceiptTemplateConfig {
   showSignature  Boolean              @default(true)
   updatedAt      DateTime             @updatedAt
   createdAt      DateTime             @default(now())
+}
+
+model ReceiptTemplate {
+  id                String      @id @default(cuid())
+  type              ReceiptType
+  version           Int
+  name              String
+  businessName      String
+  title             String
+  categoryLabel     String
+  accentColor       String      @default("#31b6c7")
+  phone             String
+  email             String
+  address           String
+  signatureLabel    String
+  showSignatureLine Boolean     @default(true)
+  legalNote         String      @db.Text
+  footerNote        String
+  isActive          Boolean     @default(true)
+  createdById       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  createdBy User? @relation("ReceiptTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  receipts  GeneratedReceipt[]
+  audits    ReceiptAuditLog[]
+
+  @@unique([type, version])
+  @@index([type, isActive, createdAt])
+}
+
+model GeneratedReceipt {
+  id               String        @id @default(cuid())
+  receiptNumber    String        @unique
+  type             ReceiptType
+  paymentId        String
+  orderId          String?
+  userId           String
+  amount           Decimal       @db.Decimal(14, 2)
+  currency         String
+  paymentMethod    String
+  paymentReference String?
+  templateId       String?
+  templateSnapshot Json
+  pdfUrl           String
+  status           ReceiptStatus @default(ISSUED)
+  issuedAt         DateTime      @default(now())
+  voidedAt         DateTime?
+  voidReason       String?       @db.Text
+  generatedById    String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  payment     Payment          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  user        User             @relation("GeneratedReceiptUser", fields: [userId], references: [id], onDelete: Restrict)
+  generatedBy User?            @relation("GeneratedReceiptActor", fields: [generatedById], references: [id], onDelete: SetNull)
+  template    ReceiptTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  audits      ReceiptAuditLog[]
+  disputeCases DisputeCase[]
+  verifiedPartRequests VerifiedPartRequest[]
+
+  @@index([paymentId, issuedAt])
+  @@index([orderId, issuedAt])
+  @@index([userId, issuedAt])
+  @@index([type, status, issuedAt])
+  @@index([paymentReference])
+}
+
+model DisputeCase {
+  id                   String            @id @default(cuid())
+  caseNumber           String            @unique
+  type                 DisputeCaseType
+  status               DisputeCaseStatus @default(OPEN)
+  priority             DisputePriority   @default(MEDIUM)
+  userId               String?
+  paymentId            String?
+  orderId              String?
+  receiptId            String?
+  sourcingRequestId    String?
+  partsFinderSessionId String?
+  amount               Decimal?          @db.Decimal(14, 2)
+  currency             String?
+  reason               String            @db.Text
+  customerClaim        String?           @db.Text
+  adminSummary         String?           @db.Text
+  resolution           String?           @db.Text
+  openedAt             DateTime          @default(now())
+  dueAt                DateTime?
+  resolvedAt           DateTime?
+  assignedToId         String?
+  createdById          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  user               User?                     @relation("DisputeCaseUser", fields: [userId], references: [id], onDelete: SetNull)
+  payment            Payment?                  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  order              Order?                    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  receipt            GeneratedReceipt?         @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  sourcingRequest    CarRequest?               @relation(fields: [sourcingRequestId], references: [id], onDelete: SetNull)
+  partsFinderSession PartsFinderSearchSession? @relation(fields: [partsFinderSessionId], references: [id], onDelete: SetNull)
+  assignedTo         User?                     @relation("DisputeCaseAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy          User?                     @relation("DisputeCaseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  evidence           DisputeEvidence[]
+  timeline           DisputeTimelineEvent[]
+  actionLogs         DisputeActionLog[]
+
+  @@index([status, priority, openedAt])
+  @@index([type, status, openedAt])
+  @@index([userId, openedAt])
+  @@index([paymentId, openedAt])
+  @@index([orderId, openedAt])
+}
+
+model DisputeEvidence {
+  id           String              @id @default(cuid())
+  disputeId    String
+  evidenceType DisputeEvidenceType
+  title        String
+  description  String?             @db.Text
+  fileUrl      String?
+  metadata     Json?
+  addedById    String?
+  createdAt    DateTime            @default(now())
+
+  dispute DisputeCase @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  addedBy User?       @relation("DisputeEvidenceActor", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@index([disputeId, createdAt])
+  @@index([evidenceType, createdAt])
+}
+
+model DisputeTimelineEvent {
+  id        String            @id @default(cuid())
+  disputeId String
+  actorId   String?
+  action    String
+  oldStatus DisputeCaseStatus?
+  newStatus DisputeCaseStatus?
+  note      String?           @db.Text
+  metadata  Json?
+  createdAt DateTime          @default(now())
+
+  dispute DisputeCase @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  actor   User?       @relation("DisputeTimelineActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([disputeId, createdAt])
+}
+
+model DisputeActionLog {
+  id        String   @id @default(cuid())
+  disputeId String
+  actorId   String?
+  action    String
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  dispute DisputeCase @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  actor   User?       @relation("DisputeActionActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([disputeId, createdAt])
+  @@index([action, createdAt])
+}
+
+model ReceiptAuditLog {
+  id         String   @id @default(cuid())
+  receiptId  String?
+  templateId String?
+  actorId    String?
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  receipt  GeneratedReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  template ReceiptTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  actor    User?             @relation("ReceiptAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId, createdAt])
+  @@index([templateId, createdAt])
+  @@index([action, createdAt])
 }
 
 model DuplicateCheckEvent {
@@ -1904,6 +2492,21 @@ model AuditLog {
   actor User? @relation("ActorAudit", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Backup execution log for operational readiness and restore audits.
+model SystemBackupLog {
+  id          String   @id @default(cuid())
+  type        String
+  status      String
+  fileName    String?
+  errorMessage String? @db.Text
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([type, createdAt])
+  @@index([status, createdAt])
   @@index([createdAt])
 }
 

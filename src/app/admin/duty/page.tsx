@@ -133,7 +133,7 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
           </Link>
           {" · "}
           <Link href="/admin/duty-estimator" className="text-[var(--brand)] hover:underline">
-            Vehicle import estimates
+            Duty Estimates
           </Link>
         </p>
       </div>

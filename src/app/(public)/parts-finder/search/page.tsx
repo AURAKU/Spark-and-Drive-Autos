@@ -21,7 +21,7 @@ export default async function PublicPartsFinderSearchPage() {
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{PARTS_FINDER_HERO_LINE}</p>
       <PublicPartsFinderSearch />
       <p className="mt-4 text-xs text-muted-foreground">
-        Need full trace review? Admin can inspect internal evidence from the review console.
+        Need a full review? Our support team can inspect and advise based on the search evidence.
       </p>
       <p className="mt-2 text-sm">
         <Link href="/dashboard/parts-finder/searches" className="text-[var(--brand)] hover:underline">

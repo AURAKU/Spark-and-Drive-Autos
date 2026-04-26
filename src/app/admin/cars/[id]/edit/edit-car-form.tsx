@@ -1,6 +1,6 @@
 "use client";
 
-import { AvailabilityStatus, CarListingState, EngineType, SourceType } from "@prisma/client";
+import { AvailabilityStatus, CarListingState, SourceType } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
@@ -11,6 +11,7 @@ import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
 import { tagsToCommaList, specificationsToTextarea } from "@/lib/car-form-helpers";
+import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 import type { CarForClientEdit } from "@/lib/serialize-car";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,9 +111,9 @@ export function EditCarForm({
             required
             defaultValue={car.engineType}
           >
-            {Object.values(EngineType).map((v) => (
+            {ENGINE_TYPE_ORDER.map((v) => (
               <option key={v} value={v}>
-                {v.replaceAll("_", " ")}
+                {engineTypeLabel(v)}
               </option>
             ))}
           </select>
@@ -238,6 +239,52 @@ export function EditCarForm({
             min={0}
             className="mt-1"
             defaultValue={costRmb ?? ""}
+          />
+        </div>
+        <p className="sm:col-span-2 text-xs text-zinc-500">
+          The fields below are for internal traceability only. They are never shown on the public site.
+        </p>
+        <div>
+          <Label htmlFor="supplierDealerName">Supplier or dealer name</Label>
+          <Input
+            id="supplierDealerName"
+            name="supplierDealerName"
+            className="mt-1"
+            defaultValue={car.supplierDealerName ?? ""}
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <Label htmlFor="supplierDealerPhone">Supplier / dealer phone (reference)</Label>
+          <Input
+            id="supplierDealerPhone"
+            name="supplierDealerPhone"
+            type="tel"
+            className="mt-1"
+            defaultValue={car.supplierDealerPhone ?? ""}
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <Label htmlFor="supplierDealerReference">Dealer or listing reference</Label>
+          <Input
+            id="supplierDealerReference"
+            name="supplierDealerReference"
+            className="mt-1"
+            defaultValue={car.supplierDealerReference ?? ""}
+            placeholder="e.g. stock #, ad link"
+            autoComplete="off"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="supplierDealerNotes">Notes to trace the deal</Label>
+          <Textarea
+            id="supplierDealerNotes"
+            name="supplierDealerNotes"
+            className="mt-1"
+            rows={2}
+            defaultValue={car.supplierDealerNotes ?? ""}
+            autoComplete="off"
           />
         </div>
         <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
@@ -375,7 +422,7 @@ export function EditCarForm({
             href={`/admin/duty-estimator?vehicleName=${encodeURIComponent(car.title)}`}
             className="inline-flex h-8 items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand)]/20"
           >
-            Generate import estimate
+            Generate duty estimate
           </Link>
           <Link
             href="/admin/cars"

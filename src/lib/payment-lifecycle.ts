@@ -1,8 +1,11 @@
-import { NotificationType, PaymentProvider, PaymentStatus, PaymentType, type Prisma } from "@prisma/client";
+import { NotificationType, PaymentProvider, PaymentStatus, PaymentType, ReceiptType, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { hasPaymentSuccessEvidence } from "@/lib/legal-payment-evidence";
+import { invalidateOpsRouteCacheTags } from "@/lib/ops-route-cache-tags";
 import { createReceiptReference, generateAndPersistOrderReceiptPdf, makeCarReceiptLines } from "@/lib/receipt-engine";
+import { issueReceiptForSuccessfulPayment } from "@/lib/receipt-service";
 import { writeAuditLog } from "@/lib/audit";
 import { canUploadPaymentProof } from "@/lib/payment-status-utils";
 import { syncDutyWorkflowAfterDutyPaymentSuccessInTx } from "@/lib/duty/sync-from-payment";
@@ -27,6 +30,12 @@ type TransitionOpts = {
  * Idempotent when already at `toStatus` for SUCCESS path (skips duplicate side effects).
  */
 export async function transitionPaymentStatus(paymentId: string, opts: TransitionOpts): Promise<void> {
+  if (opts.toStatus === "SUCCESS" && opts.source !== "WEBHOOK") {
+    const hasEvidence = await hasPaymentSuccessEvidence(paymentId);
+    if (!hasEvidence && !opts.review?.reviewedById) {
+      throw new Error("PAYMENT_SUCCESS_REQUIRES_VERIFIED_EVIDENCE");
+    }
+  }
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
     include: {
@@ -109,6 +118,9 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
       if (payment.paymentType === "DUTY" && payment.orderId && payment.order?.kind === "CAR") {
         await syncDutyWorkflowAfterDutyPaymentSuccessInTx(tx, payment.orderId);
       }
+    }
+    if (opts.toStatus === "SUCCESS") {
+      await issueReceiptForSuccessfulPayment(paymentId, tx);
     }
     await tx.paymentVerification.upsert({
       where: { paymentId },
@@ -238,7 +250,7 @@ async function syncCarOrderReceiptPdf(orderId: string) {
     paymentStatusLabel: outstanding <= 0 ? "Fully Paid" : "Deposit / Part Payment",
   });
   const { receiptPdfUrl, templateData, receiptReference } = await generateAndPersistOrderReceiptPdf({
-    scope: "CAR",
+    scope: ReceiptType.CAR_PAYMENT,
     order,
     customerName: order.user?.name,
     lines,
@@ -270,6 +282,14 @@ function paymentStatusNotificationTitle(status: PaymentStatus): string {
       return "Payment update";
     case "PROCESSING":
       return "Payment under review";
+    case "UNDER_REVIEW":
+      return "Payment under legal review";
+    case "DISPUTED":
+      return "Payment disputed";
+    case "REFUNDED":
+      return "Payment refunded";
+    case "REVERSED":
+      return "Payment reversed";
     case "AWAITING_PROOF":
       return "Action needed: payment proof";
     default:
@@ -288,6 +308,7 @@ function revalidatePaymentPaths(paymentId: string, userId: string | null) {
   if (userId) {
     revalidatePath("/dashboard/notifications");
   }
+  invalidateOpsRouteCacheTags();
 }
 
 /** Call when order id is known (e.g. after loading payment). */
@@ -296,6 +317,7 @@ export async function revalidatePathsForOrder(orderId: string | null) {
   revalidatePath(`/dashboard/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/duty");
+  invalidateOpsRouteCacheTags();
 }
 
 /**
@@ -379,4 +401,5 @@ export async function appendPaymentHistoryOnly(
   revalidatePath("/admin/payments");
   revalidatePath("/admin/payments/intelligence");
   revalidatePath(`/admin/payments/${paymentId}`);
+  invalidateOpsRouteCacheTags();
 }

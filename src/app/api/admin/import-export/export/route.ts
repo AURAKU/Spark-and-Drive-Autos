@@ -59,9 +59,16 @@ function partSelect() {
   } satisfies Prisma.PartSelect;
 }
 
-async function exportCars(opts: { ids?: string[]; q?: string; sort: "updated" | "title" }) {
+async function exportCars(opts: {
+  ids?: string[];
+  q?: string;
+  sort: "updated" | "title";
+  page?: number;
+  pageSize?: number;
+  exportScope: "selected" | "current_page" | "all_filtered";
+}) {
   const where: Prisma.CarWhereInput = {};
-  if (opts.ids?.length) {
+  if (opts.exportScope === "selected" && opts.ids?.length) {
     where.id = { in: opts.ids.slice(0, 2500) };
   } else if (opts.q?.trim()) {
     const q = opts.q.trim();
@@ -73,18 +80,28 @@ async function exportCars(opts: { ids?: string[]; q?: string; sort: "updated" | 
     ];
   }
   const orderBy = opts.sort === "title" ? { title: "asc" as const } : { updatedAt: "desc" as const };
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.max(1, Math.min(2500, opts.pageSize ?? 15));
   const rows = await prisma.car.findMany({
     where,
     orderBy,
-    take: 2500,
+    skip: opts.exportScope === "current_page" ? (page - 1) * pageSize : 0,
+    take: opts.exportScope === "current_page" ? pageSize : 2500,
     select: carSelect(),
   });
   return rows as unknown as CarExportShape[];
 }
 
-async function exportParts(opts: { ids?: string[]; q?: string; sort: "updated" | "title" }) {
+async function exportParts(opts: {
+  ids?: string[];
+  q?: string;
+  sort: "updated" | "title";
+  page?: number;
+  pageSize?: number;
+  exportScope: "selected" | "current_page" | "all_filtered";
+}) {
   const where: Prisma.PartWhereInput = {};
-  if (opts.ids?.length) {
+  if (opts.exportScope === "selected" && opts.ids?.length) {
     where.id = { in: opts.ids.slice(0, 2500) };
   } else if (opts.q?.trim()) {
     const q = opts.q.trim();
@@ -96,10 +113,13 @@ async function exportParts(opts: { ids?: string[]; q?: string; sort: "updated" |
     ];
   }
   const orderBy = opts.sort === "title" ? { title: "asc" as const } : { updatedAt: "desc" as const };
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.max(1, Math.min(2500, opts.pageSize ?? 15));
   const rows = await prisma.part.findMany({
     where,
     orderBy,
-    take: 2500,
+    skip: opts.exportScope === "current_page" ? (page - 1) * pageSize : 0,
+    take: opts.exportScope === "current_page" ? pageSize : 2500,
     select: partSelect(),
   });
   return rows as unknown as PartExportShape[];
@@ -110,6 +130,9 @@ const postBodySchema = z.object({
   ids: z.array(z.string().cuid()).max(2500).optional(),
   q: z.string().max(200).optional(),
   sort: sortEnum.optional().default("updated"),
+  exportScope: z.enum(["selected", "current_page", "all_filtered"]).default("all_filtered"),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(2500).optional(),
 });
 
 export async function POST(req: Request) {
@@ -126,14 +149,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid body", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { entity, ids, q, sort } = parsed.data;
+  const { entity, ids, q, sort, exportScope, page, pageSize } = parsed.data;
   const job = await prisma.exportJob.create({
     data: { entity, status: "RUNNING", createdById: session.user.id },
   });
 
   try {
     if (entity === "CARS") {
-      const cars = await exportCars({ ids, q, sort });
+      const cars = await exportCars({ ids, q, sort, exportScope, page, pageSize });
       const csv = carsToCsv(cars);
       await prisma.exportJob.update({
         where: { id: job.id },
@@ -146,7 +169,7 @@ export async function POST(req: Request) {
         },
       });
     }
-    const parts = await exportParts({ ids, q, sort });
+    const parts = await exportParts({ ids, q, sort, exportScope, page, pageSize });
     const csv = partsToCsv(parts);
     await prisma.exportJob.update({
       where: { id: job.id },
@@ -197,7 +220,7 @@ export async function GET(req: Request) {
 
   try {
     if (entityParsed.data === "CARS") {
-      const cars = await exportCars({ ids, q, sort });
+      const cars = await exportCars({ ids, q, sort, exportScope: "all_filtered" });
       const csv = carsToCsv(cars);
       await prisma.exportJob.update({
         where: { id: job.id },
@@ -210,7 +233,7 @@ export async function GET(req: Request) {
         },
       });
     }
-    const parts = await exportParts({ ids, q, sort });
+    const parts = await exportParts({ ids, q, sort, exportScope: "all_filtered" });
     const csv = partsToCsv(parts);
     await prisma.exportJob.update({
       where: { id: job.id },

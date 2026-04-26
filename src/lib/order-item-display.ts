@@ -2,8 +2,8 @@ import type { Car, OrderKind, PartOrderItem } from "@prisma/client";
 
 type OrderRow = {
   kind: OrderKind;
-  car: Car | null;
-  partItems: PartOrderItem[];
+  car: Pick<Car, "title"> | null;
+  partItems: Array<Pick<PartOrderItem, "titleSnapshot">>;
 };
 
 /** Single-line summary for admin order lists (multi-item orders abbreviated). */

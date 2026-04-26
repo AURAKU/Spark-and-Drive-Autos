@@ -4,6 +4,8 @@ import { isAppleAuthConfigured, isGoogleAuthConfigured } from "@/lib/oauth-confi
 
 import { LoginClient } from "./login-client";
 
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   const googleEnabled = isGoogleAuthConfigured();
   const appleEnabled = isAppleAuthConfigured();

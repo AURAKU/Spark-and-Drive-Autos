@@ -2,7 +2,9 @@ import { PaymentProvider } from "@prisma/client";
 import { deletePaymentProviderConfig, savePaymentProviderConfig } from "@/actions/payment-providers";
 import { PageHeading } from "@/components/typography/page-headings";
 import { getPublicAppUrl } from "@/lib/app-url";
-import { requireAdmin } from "@/lib/auth-helpers";
+import { requireSuperAdmin } from "@/lib/auth-helpers";
+import { isAppleAuthConfigured, isGoogleAuthConfigured } from "@/lib/oauth-config";
+import { isPasswordResetEmailConfigured } from "@/lib/password-reset-email";
 import { getPaystackSecrets } from "@/lib/payment-provider-registry";
 import { prisma } from "@/lib/prisma";
 
@@ -22,7 +24,9 @@ function flag(ok: boolean) {
 type ProviderJson = {
   publicKey?: string;
   secretKey?: string;
+  secretKeyEnc?: string;
   webhookSecret?: string;
+  webhookSecretEnc?: string;
   webhookUrl?: string;
   callbackBaseUrl?: string;
   apiBaseUrl?: string;
@@ -34,21 +38,46 @@ type ProviderJson = {
 };
 
 function secretState(json: ProviderJson | null | undefined, kind: "secretKey" | "webhookSecret" | "publicKey") {
-  const v = json?.[kind]?.trim();
+  const v =
+    kind === "secretKey"
+      ? json?.secretKeyEnc?.trim() || json?.secretKey?.trim()
+      : kind === "webhookSecret"
+        ? json?.webhookSecretEnc?.trim() || json?.webhookSecret?.trim()
+        : json?.publicKey?.trim();
   return v ? "configured" : "—";
 }
 
 export default async function AdminApiProvidersPage() {
-  await requireAdmin();
+  await requireSuperAdmin();
   const rows = await prisma.paymentProviderConfig.findMany({
     orderBy: [{ isDefault: "desc" }, { provider: "asc" }, { updatedAt: "desc" }],
   });
+  const [recentProviderLogs, recentWebhookEvents, latestBackupLog, databaseConnected] = await Promise.all([
+    prisma.auditLog.findMany({
+      where: { entityType: "PaymentProviderConfig" },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+    prisma.paymentWebhookEvent.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      select: { id: true, event: true, reference: true, signatureOk: true, processed: true, createdAt: true },
+    }),
+    prisma.systemBackupLog.findFirst({
+      where: { status: "SUCCESS" },
+      orderBy: { completedAt: "desc" },
+      select: { type: true, fileName: true, completedAt: true, createdAt: true },
+    }),
+    prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
+  ]);
   const webhookEndpoint = `${getPublicAppUrl()}/api/webhooks/paystack`;
+  const webhookOnLocalhost = webhookEndpoint.includes("localhost") || webhookEndpoint.includes("127.0.0.1");
   const paystack = await getPaystackSecrets();
 
   const cloudinary = Boolean(
     process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET,
   );
+  const storageProviderPresent = cloudinary;
   const pusher = Boolean(
     process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET && process.env.PUSHER_CLUSTER,
   );
@@ -59,10 +88,27 @@ export default async function AdminApiProvidersPage() {
   const serper = Boolean(process.env.SERPER_API_KEY);
   const openAi = Boolean(process.env.OPENAI_API_KEY);
   const anthropic = Boolean(process.env.ANTHROPIC_API_KEY);
+  const googleOauth = isGoogleAuthConfigured();
+  const appleOauth = isAppleAuthConfigured();
+  const resendApiKey = Boolean(process.env.RESEND_API_KEY?.trim());
+  const resetFromEmail = Boolean(process.env.RESET_PASSWORD_FROM_EMAIL?.trim());
+  const resetEmailFlow = isPasswordResetEmailConfigured() && appUrl;
   const auth = Boolean(
     (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET) &&
       (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET)!.length >= 32,
   );
+  const paystackWebhookEnv = Boolean(process.env.PAYSTACK_WEBHOOK_SECRET || paystack.webhookSecret);
+  const readinessChecks = [
+    auth,
+    appUrl,
+    dbUrl,
+    Boolean(paystack.secretKey),
+    Boolean(paystack.publicKey),
+    paystackWebhookEnv,
+    cloudinary,
+    redis,
+  ];
+  const readinessScore = Math.round((readinessChecks.filter(Boolean).length / readinessChecks.length) * 100);
 
   return (
     <div className="space-y-12">
@@ -72,6 +118,14 @@ export default async function AdminApiProvidersPage() {
           Configure payment channels (Paystack is the default), verify integration requirements, and review supporting
           service environment variables. Secret values are never shown—only whether they are stored or detected.
         </p>
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+          <p>
+            Payment readiness score: <span className="font-semibold text-white">{readinessScore}%</span>
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Missing critical config is shown in sections below; keep this at 100% for production deployment.
+          </p>
+        </div>
         <p className="mt-2 text-sm">
           <a href="/admin/settings/receipt-template" className="text-[var(--brand)] hover:underline">
             Manage digital receipt templates →
@@ -141,6 +195,11 @@ export default async function AdminApiProvidersPage() {
             <code className="rounded bg-white/5 px-1">NEXTAUTH_URL</code> (see{" "}
             <code className="rounded bg-white/5 px-1">src/lib/app-url.ts</code>). Production must use HTTPS.
           </p>
+          {webhookOnLocalhost ? (
+            <p className="mt-2 text-xs text-amber-300">
+              Warning: webhook URL resolves to localhost. Configure public app URL before production.
+            </p>
+          ) : null}
         </div>
         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
           <div className="flex justify-between gap-4 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
@@ -151,7 +210,28 @@ export default async function AdminApiProvidersPage() {
             <dt className="text-zinc-400">Effective public key</dt>
             <dd>{flag(Boolean(paystack.publicKey))}</dd>
           </div>
+          <div className="flex justify-between gap-4 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+            <dt className="text-zinc-400">Webhook signing secret</dt>
+            <dd>{flag(paystackWebhookEnv)}</dd>
+          </div>
+          <div className="flex justify-between gap-4 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+            <dt className="text-zinc-400">Signature header / hash</dt>
+            <dd className="text-xs text-zinc-300">
+              {(paystack.webhookHeaderName || "x-paystack-signature")} / {(paystack.webhookHashAlgorithm || "HMAC-SHA512")}
+            </dd>
+          </div>
         </dl>
+        <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-zinc-400">
+          <p className="font-semibold text-zinc-300">Callback URL management</p>
+          <ul className="mt-2 list-inside list-disc space-y-1">
+            <li>Base callback origin: {paystack.callbackBaseUrl || "(fallback to AUTH_URL/NEXTAUTH_URL)"}</li>
+            <li>Vehicle checkout: <code>/checkout/return</code></li>
+            <li>Wallet top-up: <code>/dashboard/wallet</code> / <code>/dashboard/profile</code></li>
+            <li>Parts Finder activation: <code>/dashboard/parts-finder</code></li>
+            <li>Sourcing deposit: <code>/dashboard/sourcing</code></li>
+            <li>Orders: <code>/dashboard/orders</code></li>
+          </ul>
+        </div>
       </section>
 
       <section>
@@ -169,6 +249,13 @@ export default async function AdminApiProvidersPage() {
             {Object.values(PaymentProvider).map((p) => (
               <option key={p} value={p}>
                 {p}
+              </option>
+            ))}
+          </select>
+          <select name="providerType" className={field} required defaultValue="PAYSTACK">
+            {["PAYSTACK", "MANUAL_BANK", "MOBILE_MONEY_MANUAL", "OFFICE_CASH", "ALIPAY_MANUAL", "OTHER"].map((t) => (
+              <option key={t} value={t}>
+                {t}
               </option>
             ))}
           </select>
@@ -197,6 +284,16 @@ export default async function AdminApiProvidersPage() {
             name="integrationNotes"
             placeholder="Integration notes / requirements (optional)"
             className="min-h-24 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-zinc-600 sm:col-span-2"
+          />
+          <input
+            name="supportedCurrencies"
+            placeholder="Supported currencies CSV (e.g. GHS,USD,RMB)"
+            className={`${field} sm:col-span-2`}
+          />
+          <input
+            name="supportedPaymentTypes"
+            placeholder="Supported payment types CSV (e.g. FULL,RESERVATION_DEPOSIT)"
+            className={`${field} sm:col-span-2`}
           />
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input type="checkbox" name="enabled" defaultChecked />
@@ -229,7 +326,7 @@ export default async function AdminApiProvidersPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <span className="font-medium text-white">{r.label}</span>
-                        <span className="ml-2 text-sm text-zinc-500">{r.provider}</span>
+                        <span className="ml-2 text-sm text-zinc-500">{r.provider} · {r.providerType}</span>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs">
                         {r.enabled ? (
@@ -258,6 +355,13 @@ export default async function AdminApiProvidersPage() {
                         {Object.values(PaymentProvider).map((p) => (
                           <option key={p} value={p}>
                             {p}
+                          </option>
+                        ))}
+                      </select>
+                      <select name="providerType" className={field} required defaultValue={r.providerType}>
+                        {["PAYSTACK", "MANUAL_BANK", "MOBILE_MONEY_MANUAL", "OFFICE_CASH", "ALIPAY_MANUAL", "OTHER"].map((t) => (
+                          <option key={t} value={t}>
+                            {t}
                           </option>
                         ))}
                       </select>
@@ -325,6 +429,18 @@ export default async function AdminApiProvidersPage() {
                         defaultValue={j.integrationNotes ?? ""}
                         className="min-h-24 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-zinc-600 sm:col-span-2"
                       />
+                      <input
+                        name="supportedCurrencies"
+                        placeholder="Supported currencies CSV"
+                        defaultValue={r.supportedCurrencies.join(",")}
+                        className={`${field} sm:col-span-2`}
+                      />
+                      <input
+                        name="supportedPaymentTypes"
+                        placeholder="Supported payment types CSV"
+                        defaultValue={r.supportedPaymentTypes.join(",")}
+                        className={`${field} sm:col-span-2`}
+                      />
                       <label className="flex items-center gap-2 text-sm text-zinc-300">
                         <input type="checkbox" name="enabled" defaultChecked={r.enabled} />
                         Enabled
@@ -389,11 +505,15 @@ export default async function AdminApiProvidersPage() {
             <dd>{flag(paystackEnv)}</dd>
           </div>
           <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">PAYSTACK_WEBHOOK_SECRET</dt>
+            <dd>{flag(Boolean(process.env.PAYSTACK_WEBHOOK_SECRET))}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
             <dt className="text-zinc-400">SERPER_API_KEY (Parts Finder web discovery)</dt>
             <dd>{flag(serper)}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-400">OPENAI_API_KEY (AI summaries, optional)</dt>
+            <dt className="text-zinc-400">OPENAI_API_KEY (AI summaries)</dt>
             <dd>{flag(openAi)}</dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -405,6 +525,56 @@ export default async function AdminApiProvidersPage() {
           Copy <code className="rounded bg-white/5 px-1">.env.example</code> to <code className="rounded bg-white/5 px-1">.env</code>{" "}
           and fill keys for local or hosted environments.
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Authentication & account recovery</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Login options and password reset readiness. Secret values stay hidden; only presence/config status is shown.
+        </p>
+        <dl className="mt-6 max-w-2xl space-y-4 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">Google OAuth (AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET)</dt>
+            <dd>{flag(googleOauth)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">
+              Apple OAuth (optional — off by default; set <code className="rounded bg-white/5 px-1">ENABLE_APPLE_OAUTH=1</code> + Apple
+              credentials)
+            </dt>
+            <dd>{flag(appleOauth)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">RESEND_API_KEY (password reset email transport)</dt>
+            <dd>{flag(resendApiKey)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">RESET_PASSWORD_FROM_EMAIL</dt>
+            <dd>{flag(resetFromEmail)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">Password reset delivery readiness</dt>
+            <dd>{flag(Boolean(resetEmailFlow))}</dd>
+          </div>
+        </dl>
+        <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-zinc-400">
+          <p>
+            To enable Google sign-in, add <code className="rounded bg-white/5 px-1">AUTH_GOOGLE_ID</code> +{" "}
+            <code className="rounded bg-white/5 px-1">AUTH_GOOGLE_SECRET</code> in{" "}
+            <code className="rounded bg-white/5 px-1">.env</code>. Apple Sign-In is disabled by default; to opt in, set{" "}
+            <code className="rounded bg-white/5 px-1">ENABLE_APPLE_OAUTH=1</code> and configure{" "}
+            <code className="rounded bg-white/5 px-1">AUTH_APPLE_ID</code> with either{" "}
+            <code className="rounded bg-white/5 px-1">AUTH_APPLE_SECRET</code> (JWT) or{" "}
+            <code className="rounded bg-white/5 px-1">APPLE_TEAM_ID</code>, <code className="rounded bg-white/5 px-1">APPLE_KEY_ID</code>,{" "}
+            <code className="rounded bg-white/5 px-1">APPLE_PRIVATE_KEY</code>. OAuth redirect URIs must match{" "}
+            <code className="rounded bg-white/5 px-1">AUTH_URL</code>.
+          </p>
+          <p className="mt-2">
+            Forgot-password emails in production require <code className="rounded bg-white/5 px-1">RESEND_API_KEY</code> and{" "}
+            <code className="rounded bg-white/5 px-1">RESET_PASSWORD_FROM_EMAIL</code>. Reset links use{" "}
+            <code className="rounded bg-white/5 px-1">AUTH_URL</code>/<code className="rounded bg-white/5 px-1">NEXTAUTH_URL</code>.
+          </p>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
@@ -455,6 +625,80 @@ export default async function AdminApiProvidersPage() {
           Webhook URL to register in Paystack:{" "}
           <code className="rounded bg-white/5 px-1 text-emerald-300/90">{webhookEndpoint}</code>
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Admin test & verification tools</h2>
+        <p className="mt-2 text-sm text-zinc-400">Safe tools for config checks (no real charges triggered).</p>
+        <div className="mt-3 space-y-2 text-sm">
+          <a className="text-[var(--brand)] hover:underline" href="/api/admin/providers/paystack/readiness" target="_blank" rel="noreferrer">
+            Paystack readiness JSON →
+          </a>
+          <a className="block text-[var(--brand)] hover:underline" href="/api/admin/health/readiness" target="_blank" rel="noreferrer">
+            Full deployment readiness health JSON →
+          </a>
+          <p className="text-xs text-zinc-500">
+            Verify reference endpoint: <code>/api/admin/providers/paystack/verify-reference</code> (POST with JSON: {"{ reference }"}).
+          </p>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Backup readiness</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Operational checks for backup safety before deployment and rollback operations.
+        </p>
+        <dl className="mt-4 max-w-3xl space-y-3 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">Last successful backup</dt>
+            <dd className="text-zinc-200">
+              {latestBackupLog?.completedAt
+                ? `${latestBackupLog.completedAt.toISOString().slice(0, 16).replace("T", " ")} · ${
+                    latestBackupLog.fileName ?? "file name not recorded"
+                  }`
+                : "No successful backup metadata yet"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">Database connected</dt>
+            <dd>{flag(Boolean(databaseConnected))}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-400">Storage provider present (Cloudinary)</dt>
+            <dd>{flag(storageProviderPresent)}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-zinc-500">
+          Backup metadata source: <code className="rounded bg-white/5 px-1">SystemBackupLog</code>. Record successful
+          backup runs so this panel stays current.
+        </p>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="text-lg font-semibold text-white">Recent provider integration logs</h2>
+          <ul className="mt-3 space-y-2 text-xs text-zinc-400">
+            {recentProviderLogs.map((log) => (
+              <li key={log.id}>
+                {log.createdAt.toISOString().slice(0, 16).replace("T", " ")} · {log.action}
+              </li>
+            ))}
+            {recentProviderLogs.length === 0 ? <li>No provider logs yet.</li> : null}
+          </ul>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="text-lg font-semibold text-white">Recent webhook events</h2>
+          <ul className="mt-3 space-y-2 text-xs text-zinc-400">
+            {recentWebhookEvents.map((event) => (
+              <li key={event.id}>
+                {event.createdAt.toISOString().slice(0, 16).replace("T", " ")} · {event.event} ·{" "}
+                {event.reference ?? "no-ref"} · sig {event.signatureOk ? "ok" : "bad"} ·{" "}
+                {event.processed ? "processed" : "pending"}
+              </li>
+            ))}
+            {recentWebhookEvents.length === 0 ? <li>No webhook events yet.</li> : null}
+          </ul>
+        </div>
       </section>
     </div>
   );

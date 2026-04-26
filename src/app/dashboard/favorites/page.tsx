@@ -91,10 +91,17 @@ export default async function FavoritesPage({ searchParams }: { searchParams: Se
 
   return (
     <div>
-      <PageHeading variant="dashboard">Favorites</PageHeading>
+      <PageHeading variant="dashboard">Favorites &amp; cart</PageHeading>
       <p className="mt-2 text-sm text-zinc-400">
-        Saved vehicles and parts in one place. Remove items here or from each product page.
+        Saved vehicles and parts in one place, plus a quick path to your live parts cart. Remove items here or from each
+        product page.
       </p>
+      <Link
+        href="/parts/cart"
+        className="mt-4 inline-flex items-center justify-center rounded-2xl border border-[var(--brand)]/35 bg-[var(--brand)]/10 px-4 py-3 text-sm font-semibold text-white transition hover:border-[var(--brand)]/50 hover:bg-[var(--brand)]/15"
+      >
+        Open parts cart →
+      </Link>
       <div className="mt-6 flex flex-wrap gap-2">
         <CarFavoritesClientActions hasCarItems={totalCars > 0} />
         <FavoritesClientActions hasItems={totalParts > 0} />
@@ -131,7 +138,15 @@ export default async function FavoritesPage({ searchParams }: { searchParams: Se
                 </div>
               </div>
               <div className="mt-3">
-                <CarFavoritesClientActions carId={fav.car.id} />
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/cars/${fav.car.slug}`}
+                    className="inline-flex h-9 items-center rounded-lg border border-[var(--brand)]/35 bg-[var(--brand)]/10 px-3 text-xs font-medium text-white transition hover:border-[var(--brand)]/55 hover:bg-[var(--brand)]/20"
+                  >
+                    Open vehicle page
+                  </Link>
+                  <CarFavoritesClientActions carId={fav.car.id} />
+                </div>
               </div>
             </article>
           ))
@@ -182,7 +197,15 @@ export default async function FavoritesPage({ searchParams }: { searchParams: Se
                 </div>
               </div>
               <div className="mt-3">
-                <FavoritesClientActions partId={fav.part.id} />
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/parts/${fav.part.slug}`}
+                    className="inline-flex h-9 items-center rounded-lg border border-[var(--brand)]/35 bg-[var(--brand)]/10 px-3 text-xs font-medium text-white transition hover:border-[var(--brand)]/55 hover:bg-[var(--brand)]/20"
+                  >
+                    Open part page (checkout)
+                  </Link>
+                  <FavoritesClientActions partId={fav.part.id} />
+                </div>
               </div>
             </article>
           ))

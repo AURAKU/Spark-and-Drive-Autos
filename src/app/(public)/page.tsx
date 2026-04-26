@@ -9,7 +9,8 @@ import { SourcingFlags } from "@/components/landing/sourcing-flags";
 import { BrowseCarsCtaLink, BuyPartsCtaLink } from "@/components/storefront/storefront-cta-links";
 import { SectionHeading } from "@/components/typography/page-headings";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { getHomeSpotlight } from "@/lib/landing-spotlight";
+import { getHomeSpotlightCached } from "@/lib/landing-spotlight";
+import type { SpotlightEntry } from "@/lib/landing-spotlight";
 import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
 import { PARTS_FINDER_HERO_LINE } from "@/lib/parts-finder/marketing-copy";
 import { prisma } from "@/lib/prisma";
@@ -34,7 +35,7 @@ const PILLARS: Array<{ k: string; v: string; highlight?: boolean }> = [
   {
     k: "Payment",
     highlight: true,
-    v: "Pay securely using Paystack, Mobile Money (GHS), Bank transfer, Office Cash Payment (GHS or USD), or Alipay (RMB). Every payment is clear, verified, and transparent so you always know exactly what you're paying for.",
+    v: "Pay securely using Payment Channel Partner, Mobile Money (GHS), Bank transfer, Office Cash Payment (GHS or USD), or Alipay (RMB). Every payment is clear, verified, and transparent so you always know exactly what you're paying for.",
   },
   {
     k: "Logistics",
@@ -53,10 +54,10 @@ export default async function HomePage() {
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
 
-  let spotlight = await getHomeSpotlight().catch((e) => {
+  let spotlight = await getHomeSpotlightCached().catch((e) => {
     console.error("[HomePage] spotlight", e);
     return {
-      entries: [] as Awaited<ReturnType<typeof getHomeSpotlight>>["entries"],
+      entries: [] as SpotlightEntry[],
       slotStartedAt: new Date(),
       nextRotationAt: new Date(),
       seed: 0,
@@ -136,18 +137,20 @@ export default async function HomePage() {
               process smooth, transparent, and stress free.
             </p>
           </div>
-          <div className="mx-auto mt-12 flex max-w-4xl flex-col gap-3 sm:mt-14 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4">
-            <BrowseCarsCtaLink href="/inventory" size="default" />
-            <Link
-              href="/electric-bikes-motorcycles"
-              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-white px-5 text-center text-sm font-semibold leading-snug tracking-wide text-zinc-950 shadow-[0_8px_30px_-8px_rgba(255,255,255,0.35)] transition hover:bg-zinc-100 sm:min-w-[11.5rem] sm:flex-none sm:px-6"
-            >
-              Browse Electric Bikes &amp; Motorcycles
-            </Link>
-            <BuyPartsCtaLink href="/parts" size="default" />
-            <div className="flex flex-1 flex-col gap-2 sm:min-w-[16rem] sm:flex-none">
-              <PartsFinderCtaLink href="/parts-finder/entry" />
-              <div className="pf-slider-shell">
+          <div className="mx-auto mt-12 w-full max-w-5xl sm:mt-14">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+              <BrowseCarsCtaLink href="/inventory" size="default" className="h-12 min-h-12 w-full px-4 text-sm sm:min-w-0 sm:flex-1" />
+              <Link
+                href="/electric-bikes-motorcycles"
+                className="inline-flex h-12 min-h-12 w-full items-center justify-center rounded-xl bg-white px-4 text-center text-sm font-semibold leading-snug tracking-wide text-zinc-950 shadow-[0_8px_30px_-8px_rgba(255,255,255,0.35)] transition hover:bg-zinc-100"
+              >
+                Browse Electric Bikes &amp; Motorcycles
+              </Link>
+              <BuyPartsCtaLink href="/parts" size="default" className="h-12 min-h-12 w-full px-4 text-sm sm:min-w-0 sm:flex-1" />
+            </div>
+            <div className="mx-auto mt-3 max-w-xl">
+              <PartsFinderCtaLink href="/parts-finder/entry" className="h-10 min-h-10 w-full rounded-xl text-sm" />
+              <div className="pf-slider-shell mt-2">
                 <div className="pf-slider-track" aria-label="Parts Finder message slider">
                   <span className="pf-slider-item">{PARTS_FINDER_HERO_LINE}</span>
                 </div>

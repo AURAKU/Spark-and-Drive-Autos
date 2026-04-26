@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { AppleSignInButton } from "@/components/auth/apple-sign-in-button";
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { OAuthEnvHint } from "@/components/auth/oauth-env-hint";
 import { PasswordField } from "@/components/auth/password-field";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +22,7 @@ function credentialsMessage(error: string | undefined, detailCode?: string | nul
     return "This account has been suspended. Contact support if you believe this is a mistake.";
   }
   if (code === "oauth_only") {
-    return "This account does not have a password on file (often created with Google or Apple). Use those sign-in options when available, or contact support for help.";
+    return "This account does not have a password on file (often created with a social sign-in). Use the same sign-in method you used before, or contact support for help.";
   }
   if (code === "ambiguous_phone") {
     return "This phone number is linked to more than one account. Sign in with your email instead, or contact support.";
@@ -94,6 +93,8 @@ export function LoginClient({
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [runtimeGoogleEnabled, setRuntimeGoogleEnabled] = useState(googleEnabled);
+  const [runtimeAppleEnabled, setRuntimeAppleEnabled] = useState(appleEnabled);
 
   useEffect(() => {
     if (showedUrlMessage.current) return;
@@ -117,6 +118,21 @@ export function LoginClient({
       document.getElementById(`${formId}-login-email`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }, [formId]);
+
+  useEffect(() => {
+    let mounted = true;
+    void fetch("/api/auth/providers")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((providers: Record<string, unknown> | null) => {
+        if (!mounted || !providers) return;
+        setRuntimeGoogleEnabled(Boolean(providers.google));
+        setRuntimeAppleEnabled(Boolean(providers.apple));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -170,9 +186,13 @@ export function LoginClient({
   }
 
   const registerHref = `/register?callbackUrl=${encodeURIComponent(afterAuth)}`;
-  const oauthAvailable = googleEnabled || appleEnabled;
+  const oauthAvailable = runtimeGoogleEnabled || runtimeAppleEnabled;
   const loginDescription = oauthAvailable
-    ? "Sign in to manage your profile, orders, payments, and saved items. Use Google, Apple, or your registered email and password."
+    ? runtimeGoogleEnabled && runtimeAppleEnabled
+      ? "Sign in to manage your profile, orders, payments, and saved items. Use Google, Apple, or your registered email and password."
+      : runtimeGoogleEnabled
+        ? "Sign in to manage your profile, orders, payments, and saved items. Use Google or your registered email and password."
+        : "Sign in to manage your profile, orders, payments, and saved items. Use Apple or your registered email and password."
     : "Sign in to manage your profile, orders, payments, and saved items using your registered email and password.";
 
   return (
@@ -204,15 +224,11 @@ export function LoginClient({
     >
       {oauthAvailable ? (
         <div className="space-y-3">
-          {appleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
-          {googleEnabled ? <GoogleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
+          {runtimeGoogleEnabled ? <GoogleSignInButton callbackUrl="/dashboard" disabled={loading} /> : null}
+          {runtimeAppleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
           <OAuthDivider label="Or sign in with email" />
         </div>
-      ) : (
-        <div className="mb-2">
-          <OAuthEnvHint />
-        </div>
-      )}
+      ) : null}
 
       <form
         id={`${formId}-form`}
@@ -274,7 +290,7 @@ export function LoginClient({
             loading && "pointer-events-none opacity-60",
           )}
         >
-          Create an account
+          Create Account
         </Link>
       </div>
     </AuthPageShell>

@@ -23,6 +23,7 @@ import { getPublicAppUrl } from "@/lib/app-url";
 import { buildCarGalleryImages } from "@/lib/car-gallery";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
@@ -152,7 +153,7 @@ export default async function CarDetailPage(props: Props) {
           <div className="mt-8 grid gap-3 rounded-2xl border border-border bg-card/90 p-5 text-sm text-card-foreground shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-200 dark:ring-transparent">
             <div className="flex justify-between gap-4">
               <span className="font-semibold text-[var(--brand)]">Engine</span>
-              <span>{car.engineType.replaceAll("_", " ")}</span>
+              <span>{engineTypeLabel(car.engineType)}</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="font-semibold text-[var(--brand)]">Transmission</span>

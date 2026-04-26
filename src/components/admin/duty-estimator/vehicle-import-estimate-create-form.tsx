@@ -1,7 +1,15 @@
 "use client";
 
-import type { EngineType } from "@prisma/client";
+import { EngineType } from "@prisma/client";
 import { createVehicleImportEstimateAction } from "@/actions/vehicle-import-estimate-admin";
+import {
+  buildCarLinkItems,
+  buildInquiryLinkItems,
+  buildOrderLinkItems,
+  buildUserLinkItems,
+  EstimateLinkCombobox,
+} from "@/components/admin/duty-estimator/estimate-link-combobox";
+import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 import { useEffect, useMemo, useState } from "react";
 
 type OptionUser = { id: string; name: string | null; email: string | null };
@@ -42,7 +50,7 @@ export function VehicleImportEstimateCreateForm({ users, orders, inquiries, cars
   const [insurance, setInsurance] = useState("");
   const [cif, setCif] = useState("");
   const [carId, setCarId] = useState(defaults?.carId ?? "");
-  const [engineType, setEngineType] = useState<EngineType>("GASOLINE");
+  const [engineType, setEngineType] = useState<EngineType>(EngineType.GASOLINE_PETROL);
 
   const autoCif = useMemo(() => {
     const fv = Number(fob);
@@ -56,6 +64,11 @@ export function VehicleImportEstimateCreateForm({ users, orders, inquiries, cars
     const c = cars.find((x) => x.id === carId);
     if (c) setEngineType(c.engineType);
   }, [carId, cars]);
+
+  const userItems = useMemo(() => buildUserLinkItems(users), [users]);
+  const orderItems = useMemo(() => buildOrderLinkItems(orders), [orders]);
+  const inquiryItems = useMemo(() => buildInquiryLinkItems(inquiries), [inquiries]);
+  const carItems = useMemo(() => buildCarLinkItems(cars), [cars]);
 
   return (
     <form action={createVehicleImportEstimateAction} className="space-y-6 rounded-2xl border border-border bg-card p-5 dark:border-white/10 dark:bg-white/[0.02]">
@@ -92,10 +105,11 @@ export function VehicleImportEstimateCreateForm({ users, orders, inquiries, cars
               onChange={(e) => setEngineType(e.target.value as EngineType)}
               className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm dark:border-white/15 dark:bg-black/30"
             >
-              <option value="GASOLINE">Gasoline / diesel (ICE)</option>
-              <option value="HYBRID">Hybrid (HEV)</option>
-              <option value="PLUGIN_HYBRID">Plug-in hybrid (PHEV)</option>
-              <option value="ELECTRIC">Battery electric (BEV)</option>
+              {ENGINE_TYPE_ORDER.map((v) => (
+                <option key={v} value={v}>
+                  {engineTypeLabel(v)}
+                </option>
+              ))}
             </select>
           </div>
           <div className="md:col-span-2">
@@ -154,43 +168,51 @@ export function VehicleImportEstimateCreateForm({ users, orders, inquiries, cars
 
       <section className="rounded-xl border border-border/70 p-4 dark:border-white/10">
         <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">Linking and Integration Hooks</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+          Type to search by reference, title, email, message text, or id. Vehicle orders list only{" "}
+          <span className="text-zinc-400">car (vehicle)</span> orders.
+        </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Link customer account</label>
-            <select name="customerId" defaultValue={defaults?.customerId ?? ""} className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm dark:border-white/15 dark:bg-black/30">
-              <option value="">None</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{(u.name ?? "Unnamed")} - {u.email}</option>)}
-            </select>
+            <EstimateLinkCombobox
+              name="customerId"
+              items={userItems}
+              initialValue={defaults?.customerId ?? ""}
+              placeholder="Search name, email, or user id…"
+              className="mt-1"
+            />
           </div>
           <div>
             <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Link vehicle order</label>
-            <select name="orderId" defaultValue={defaults?.orderId ?? ""} className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm dark:border-white/15 dark:bg-black/30">
-              <option value="">None</option>
-              {orders.map((o) => <option key={o.id} value={o.id}>{o.reference} - {o.car?.title ?? "No vehicle"} - {o.user?.email ?? "No customer"}</option>)}
-            </select>
+            <EstimateLinkCombobox
+              name="orderId"
+              items={orderItems}
+              initialValue={defaults?.orderId ?? ""}
+              placeholder="Search order ref, vehicle, customer…"
+              className="mt-1"
+            />
           </div>
           <div className="md:col-span-2">
             <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Link inquiry</label>
-            <select name="inquiryId" defaultValue={defaults?.inquiryId ?? ""} className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm dark:border-white/15 dark:bg-black/30">
-              <option value="">None</option>
-              {inquiries.map((i) => <option key={i.id} value={i.id}>{i.user?.email ?? "Guest"} - {i.message.slice(0, 64)}</option>)}
-            </select>
+            <EstimateLinkCombobox
+              name="inquiryId"
+              items={inquiryItems}
+              initialValue={defaults?.inquiryId ?? ""}
+              placeholder="Search inquiry message, email, or id…"
+              className="mt-1"
+            />
           </div>
           <div className="md:col-span-2">
             <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Link admin vehicle</label>
-            <select
+            <EstimateLinkCombobox
               name="carId"
-              value={carId}
-              onChange={(e) => setCarId(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm dark:border-white/15 dark:bg-black/30"
-            >
-              <option value="">None</option>
-              {cars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} · {c.year}
-                </option>
-              ))}
-            </select>
+              items={carItems}
+              initialValue={defaults?.carId ?? ""}
+              placeholder="Search inventory title, year, or id…"
+              className="mt-1"
+              onValueChange={(id) => setCarId(id)}
+            />
           </div>
         </div>
       </section>

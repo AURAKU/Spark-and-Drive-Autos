@@ -1,4 +1,5 @@
 import type { GlobalCurrencySettings } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -55,6 +56,11 @@ const DEFAULT_SETTINGS = {
 
 /** Load singleton FX settings; creates defaults if missing. */
 export async function getGlobalCurrencySettings(): Promise<GlobalCurrencySettings> {
+  return getGlobalCurrencySettingsCached();
+}
+
+const getGlobalCurrencySettingsCached = unstable_cache(
+  async (): Promise<GlobalCurrencySettings> => {
   const row = await prisma.globalCurrencySettings.findUnique({ where: { id: "default" } });
   if (row) return row;
   return prisma.globalCurrencySettings.create({
@@ -65,7 +71,10 @@ export async function getGlobalCurrencySettings(): Promise<GlobalCurrencySetting
       usdToGhs: DEFAULT_SETTINGS.usdToGhs,
     },
   });
-}
+  },
+  ["global-currency-settings:v1"],
+  { revalidate: 60 },
+);
 
 /** FX inputs from DB (`Decimal`) or client preview (`number`). */
 export type FxRatesInput = {

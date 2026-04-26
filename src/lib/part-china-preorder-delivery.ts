@@ -1,10 +1,14 @@
-import { DeliveryMode, PartOrigin, PartStockStatus } from "@prisma/client";
+import { DeliveryMode, type Part, PartOrigin, PartStockStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
 const PREORDER_MODES: DeliveryMode[] = [DeliveryMode.AIR_EXPRESS, DeliveryMode.AIR_STANDARD, DeliveryMode.SEA];
 
-/** Ensure China + pre-order parts have air/sea templates linked from admin-managed records. */
+export function isChinaPreOrderPart(p: Pick<Part, "origin" | "stockStatus">): boolean {
+  return p.origin === PartOrigin.CHINA && p.stockStatus === PartStockStatus.ON_REQUEST;
+}
+
+/** Ensure China + pre-order parts have all three intl template links (sea + both air) from admin templates. */
 export async function ensureChinaPreOrderDeliveryOptions(partId: string): Promise<void> {
   const part = await prisma.part.findUnique({
     where: { id: partId },

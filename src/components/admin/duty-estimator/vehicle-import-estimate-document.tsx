@@ -1,3 +1,4 @@
+import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { formatEstimateMoney, type VehicleImportEstimateRecord } from "@/lib/vehicle-import-estimate/data";
 import { deriveDutyEstimate } from "@/lib/vehicle-import-estimate";
 
@@ -32,7 +33,7 @@ export function VehicleImportEstimateDocument({ estimate }: EstimateDocumentProp
     <article className="rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.02]">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4 dark:border-white/10">
         <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">Vehicle Import Offer and Estimate</p>
+          <p className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">Duty estimate (Ghana import)</p>
           <h2 className="mt-1 text-xl font-semibold">Spark and Drive Autos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Estimate No: {estimate.estimateNumber}</p>
         </div>
@@ -52,7 +53,7 @@ export function VehicleImportEstimateDocument({ estimate }: EstimateDocumentProp
           <p className="mt-2 text-sm"><span className="text-muted-foreground">Vehicle name:</span> {estimate.vehicleName}</p>
           <p className="mt-1 text-sm">
             <span className="text-muted-foreground">Powertrain:</span>{" "}
-            {estimate.engineType ? estimate.engineType.replaceAll("_", " ") : "Not specified (ICE planning default)"}
+            {estimate.engineType ? engineTypeLabel(estimate.engineType) : "Not specified (default planning: petrol)"}
           </p>
           <p className="mt-1 text-sm"><span className="text-muted-foreground">Model year:</span> {estimate.modelYear ?? "-"}</p>
           <p className="mt-1 text-sm"><span className="text-muted-foreground">VIN:</span> {estimate.vin ?? "-"}</p>

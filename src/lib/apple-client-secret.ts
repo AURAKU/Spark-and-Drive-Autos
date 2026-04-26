@@ -2,6 +2,8 @@ import { SignJWT, importPKCS8 } from "jose";
 
 /**
  * Apple Sign in requires a short-lived ES256 JWT as `clientSecret`.
+ * The app only registers the Apple provider when `ENABLE_APPLE_OAUTH=1` (see `src/auth.ts`).
+ *
  * Either set `AUTH_APPLE_SECRET` to a pre-generated JWT (e.g. from `npx auth add apple`),
  * or set `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and `APPLE_PRIVATE_KEY` (contents of the .p8 file)
  * alongside `AUTH_APPLE_ID` (Services ID) so we can mint the JWT at runtime.

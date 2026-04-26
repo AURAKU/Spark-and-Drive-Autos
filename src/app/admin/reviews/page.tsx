@@ -31,7 +31,7 @@ export default async function AdminReviewsPage(props: { searchParams: SearchPara
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        user: { select: { email: true, name: true } },
+        user: { select: { name: true } },
         part: { select: { id: true, title: true, slug: true } },
       },
     }),
@@ -48,6 +48,7 @@ export default async function AdminReviewsPage(props: { searchParams: SearchPara
     status: r.status,
     rating: r.rating,
     body: r.body,
+    authorName: r.authorName,
     verifiedPurchase: r.verifiedPurchase,
     createdAt: r.createdAt.toISOString(),
     part: r.part,

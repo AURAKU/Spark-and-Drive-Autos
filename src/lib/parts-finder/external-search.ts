@@ -5,13 +5,13 @@ import type { NormalizedPartsQuery } from "@/lib/parts-finder/normalize-query";
 type ExternalDiscoveryAdapter = {
   name: string;
   isAvailable: () => boolean;
-  discover: (queries: string[], normalized: NormalizedPartsQuery) => Promise<ExternalCandidate[]>;
+  discover: (queries: string[], normalized: NormalizedPartsQuery, trace?: { jobId?: string }) => Promise<ExternalCandidate[]>;
 };
 
 const serperAdapter: ExternalDiscoveryAdapter = {
   name: "serper",
   isAvailable: () => Boolean(process.env.SERPER_API_KEY),
-  discover: async (_queries, normalized) => ingestExternalCandidates(normalized),
+  discover: async (_queries, normalized, trace) => ingestExternalCandidates(normalized, trace),
 };
 
 const previewAdapter: ExternalDiscoveryAdapter = {
@@ -56,6 +56,7 @@ function externalCacheKey(queries: string[], normalized: NormalizedPartsQuery) {
 export async function discoverExternalPartsEvidence(
   queries: string[],
   normalized: NormalizedPartsQuery,
+  trace?: { jobId?: string },
 ): Promise<ExternalCandidate[]> {
   const key = externalCacheKey(queries, normalized);
   const now = Date.now();
@@ -67,7 +68,7 @@ export async function discoverExternalPartsEvidence(
   const task = (async () => {
   for (const adapter of ADAPTERS) {
     if (!adapter.isAvailable()) continue;
-    const hits = await adapter.discover(queries, normalized);
+    const hits = await adapter.discover(queries, normalized, trace);
       if (hits.length > 0) {
         externalCache.set(key, { expiresAt: Date.now() + EXTERNAL_CACHE_TTL_MS, hits });
         return hits;

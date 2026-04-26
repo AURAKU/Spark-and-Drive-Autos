@@ -5,6 +5,24 @@ import { PartsFinderAccessError, requirePartsFinderMembership } from "@/lib/part
 import { checkPartsFinderRateLimit } from "@/lib/parts-finder/rate-limit";
 import { getPartsFinderSearchJobForUser } from "@/lib/parts-finder/route-orchestration";
 
+function mapPublicStatus(state: string): "PROCESSING" | "COMPLETE" | "FAILED" | "TIMEOUT" {
+  if (state === "COMPLETED") return "COMPLETE";
+  if (state === "RUNNING" || state === "QUEUED") return "PROCESSING";
+  if (state === "TIMEOUT") return "TIMEOUT";
+  if (state === "FAILED") return "FAILED";
+  return "PROCESSING";
+}
+
+function toSafeMessage(state: "COMPLETE" | "FAILED" | "TIMEOUT", rawError: string | undefined) {
+  if (state === "TIMEOUT" || rawError === "SEARCH_TIMEOUT") {
+    return "This search took too long. Please try again.";
+  }
+  if (state === "FAILED") {
+    return "We could not complete this search. Please try again.";
+  }
+  return undefined;
+}
+
 export async function GET(_request: Request, context: { params: Promise<{ jobId: string }> }) {
   try {
     const { session } = await requirePartsFinderMembership("SEARCH");
@@ -26,15 +44,32 @@ export async function GET(_request: Request, context: { params: Promise<{ jobId:
         },
       );
     }
-    const row = getPartsFinderSearchJobForUser(jobId, session.user.id);
+    const row = await getPartsFinderSearchJobForUser(jobId, session.user.id);
     if (!row) return NextResponse.json({ ok: true, status: "NOT_FOUND" });
+    const publicStatus = mapPublicStatus(row.state);
+    const completedAt =
+      publicStatus === "COMPLETE" || publicStatus === "FAILED" || publicStatus === "TIMEOUT"
+        ? new Date(row.updatedAt).toISOString()
+        : null;
+    const errorMessage =
+      publicStatus === "FAILED" || publicStatus === "TIMEOUT"
+        ? (toSafeMessage(publicStatus, row.error) ?? null)
+        : null;
     return NextResponse.json({
       ok: true,
-      status: row.state,
+      id: row.id,
+      status: publicStatus,
+      result:
+        publicStatus === "COMPLETE" && row.sessionId
+          ? { sessionId: row.sessionId }
+          : null,
+      errorMessage,
+      createdAt: new Date(row.createdAt).toISOString(),
+      completedAt,
       job: {
         jobId: row.id,
         sessionId: row.sessionId ?? null,
-        error: row.error ?? null,
+        error: errorMessage,
       },
     });
   } catch (error) {
@@ -44,6 +79,7 @@ export async function GET(_request: Request, context: { params: Promise<{ jobId:
         { status: error.status },
       );
     }
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Job lookup failed." }, { status: 400 });
+    console.error("[parts-finder][jobs] status lookup failed", error);
+    return NextResponse.json({ ok: false, error: "Job lookup failed." }, { status: 400 });
   }
 }

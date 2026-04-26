@@ -24,7 +24,7 @@ export const SHIPMENT_STAGE_LABEL: Record<ShipmentLogisticsStage, string> = {
 };
 
 export const SHIPMENT_KIND_LABEL: Record<string, string> = {
-  PARTS_GHANA: "Parts · Ghana",
+  PARTS_GHANA: "Parts & accessories · Ghana stock",
   PARTS_CHINA: "Parts · China",
   CAR_SEA: "Vehicle · Sea freight",
 };

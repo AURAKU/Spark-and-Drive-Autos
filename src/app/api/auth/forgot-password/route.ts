@@ -4,13 +4,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getRequestIp } from "@/lib/client-ip";
-import { normalizePhone } from "@/lib/phone";
+import { sendPasswordResetEmail } from "@/lib/password-reset-email";
 import { prisma } from "@/lib/prisma";
 import { rateLimitForm } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
 
 const schema = z.object({
-  identifier: z.string().min(3).max(160),
+  identifier: z.string().trim().toLowerCase().email("Enter a valid email address."),
 });
 
 function tokenHash(raw: string): string {
@@ -42,27 +42,23 @@ export async function POST(req: Request) {
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    const issue = parsed.error.issues[0];
+    const message = issue?.code === "too_small" ? "Enter your email address." : "Enter a valid email address.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const identifier = parsed.data.identifier.trim();
-  const user = identifier.includes("@")
-    ? await prisma.user.findUnique({
-        where: { email: identifier.toLowerCase() },
-        select: { id: true, email: true, passwordHash: true },
-      })
-    : await prisma.user.findFirst({
-        where: { phone: normalizePhone(identifier) },
-        select: { id: true, email: true, passwordHash: true },
-      });
+  const user = await prisma.user.findUnique({
+    where: { email: parsed.data.identifier },
+    select: { id: true, email: true, passwordHash: true },
+  });
 
   // Always return success to avoid account enumeration.
   const generic = {
     ok: true,
-    message: "If an account exists, reset instructions have been prepared.",
+    message: "If an account exists, reset instructions have been sent.",
   } as const;
 
-  if (!user?.passwordHash) {
+  if (!user?.passwordHash || !user.email) {
     return NextResponse.json(generic);
   }
 
@@ -81,10 +77,35 @@ export async function POST(req: Request) {
     }),
   ]);
 
-  if (process.env.NODE_ENV !== "production") {
+  const includeDevLink = process.env.NODE_ENV !== "production" && process.env.RESET_PASSWORD_SHOW_DEV_LINK === "1";
+  if (includeDevLink) {
     return NextResponse.json({
       ...generic,
       devResetUrl: `/reset-password?token=${raw}`,
+    });
+  }
+
+  try {
+    await sendPasswordResetEmail({ toEmail: user.email, token: raw });
+  } catch (error) {
+    console.error("[auth][forgot-password] Failed to send reset email", {
+      userId: user.id,
+      email: user.email,
+      path: "/api/auth/forgot-password",
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+    await recordSecurityObservation({
+      severity: "HIGH",
+      channel: "AUTH",
+      title: "Password reset email delivery failed",
+      userId: user.id,
+      email: user.email,
+      ipAddress: ip,
+      userAgent,
+      path: "/api/auth/forgot-password",
+      metadataJson: {
+        error: error instanceof Error ? error.message : "unknown_error",
+      },
     });
   }
 

@@ -4,6 +4,7 @@ import { PartsCartClient } from "@/components/parts/parts-cart-client";
 import { PageHeading } from "@/components/typography/page-headings";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
+import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
 import { getPartDisplayPrice } from "@/lib/parts-pricing";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +40,7 @@ export default async function PartsCartPage() {
     );
   }
 
-  const [cart, user, fx, legal] = await Promise.all([
+  const [cart, user, fx, legal, favoriteRows] = await Promise.all([
     prisma.partCart.findUnique({
       where: { userId: session.user.id },
       include: {
@@ -53,6 +54,7 @@ export default async function PartsCartPage() {
                 title: true,
                 origin: true,
                 stockQty: true,
+                stockStatus: true,
                 priceGhs: true,
                 basePriceRmb: true,
                 coverImageUrl: true,
@@ -68,19 +70,28 @@ export default async function PartsCartPage() {
         walletBalance: true,
         addresses: {
           orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
-          select: { id: true, fullName: true, city: true, region: true, streetAddress: true, isDefault: true },
+          select: { id: true, fullName: true, phone: true, city: true, region: true, streetAddress: true, isDefault: true },
         },
       },
     }),
     getGlobalCurrencySettings(),
     getCheckoutLegalVersions(),
+    prisma.partFavorite.findMany({
+      where: { userId: session.user.id },
+      select: { partId: true },
+    }),
   ]);
+  const favoritePartIds = new Set(favoriteRows.map((r) => r.partId));
 
-  const chinaPartIdsInCart = [
-    ...new Set((cart?.items ?? []).filter((i) => i.part.origin === "CHINA").map((i) => i.part.id)),
+  const billableChinaPartIds = [
+    ...new Set(
+      (cart?.items ?? [])
+        .filter((i) => i.part.origin === "CHINA" && !isChinaPreOrderPart(i.part))
+        .map((i) => i.part.id),
+    ),
   ];
   const chinaQuotes =
-    chinaPartIdsInCart.length > 0 ? await computeChinaQuotesForPartIds(chinaPartIdsInCart) : null;
+    billableChinaPartIds.length > 0 ? await computeChinaQuotesForPartIds(billableChinaPartIds, true) : null;
 
   return (
     <div className="parts-theme relative [--brand:#ef4444]">
@@ -105,11 +116,15 @@ export default async function PartsCartPage() {
               id: i.id,
               selected: i.selected,
               quantity: i.quantity,
+              optColor: i.optColor,
+              optSize: i.optSize,
+              optType: i.optType,
               part: {
                 id: i.part.id,
                 slug: i.part.slug,
                 title: i.part.title,
                 origin: i.part.origin,
+                stockStatus: i.part.stockStatus,
                 stockQty: i.part.stockQty,
                 unitPriceGhs: getPartDisplayPrice(
                   {
@@ -122,6 +137,7 @@ export default async function PartsCartPage() {
                 ).amount,
                 coverImageUrl: i.part.coverImageUrl,
               },
+              isFavorite: favoritePartIds.has(i.part.id),
             }))}
             walletBalance={Number(user?.walletBalance ?? 0)}
             addresses={user?.addresses ?? []}

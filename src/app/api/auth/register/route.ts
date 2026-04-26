@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getRequestIp } from "@/lib/client-ip";
+import { ACCEPTANCE_CONTEXT, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
+import { writeLegalAuditLog } from "@/lib/legal-audit";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
 import { rateLimitRegister } from "@/lib/rate-limit";
@@ -15,6 +18,7 @@ const schema = z.object({
   password: z.string().min(8).max(128),
   phone: z.string().max(40).optional(),
   country: z.string().max(80).optional(),
+  acceptPlatformTerms: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -45,7 +49,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Validation failed", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, email, password, phone, country } = parsed.data;
+  const { name, email, password, phone, country, acceptPlatformTerms } = parsed.data;
+
+  const activePlatformTerms = await prisma.policyVersion.findFirst({
+    where: { policyKey: POLICY_KEYS.PLATFORM_TERMS_PRIVACY, isActive: true },
+    orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, version: true },
+  });
+  if (activePlatformTerms && acceptPlatformTerms !== true) {
+    return NextResponse.json(
+      { error: "Accept the active platform terms and privacy notice to create an account.", code: "TERMS_REQUIRED" },
+      { status: 400 },
+    );
+  }
+
   const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (exists) {
     await recordSecurityObservation({
@@ -81,7 +98,7 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await hash(password, 12);
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: sanitizePlainText(name, 120),
       email: email.toLowerCase(),
@@ -89,7 +106,28 @@ export async function POST(req: Request) {
       phone: phoneNormalized ? sanitizePlainText(phoneNormalized, 40) : null,
       country: country ? sanitizePlainText(country, 80) : null,
     },
+    select: { id: true },
   });
+
+  if (activePlatformTerms && acceptPlatformTerms === true) {
+    await recordUserPolicyAcceptance({
+      userId: user.id,
+      policyVersionId: activePlatformTerms.id,
+      context: ACCEPTANCE_CONTEXT.REGISTRATION,
+      ipAddress: ip,
+      userAgent,
+    });
+    await writeLegalAuditLog({
+      actorId: user.id,
+      targetUserId: user.id,
+      action: "USER_ACCEPTED_POLICY",
+      entityType: "PolicyVersion",
+      entityId: activePlatformTerms.id,
+      metadata: { context: ACCEPTANCE_CONTEXT.REGISTRATION, version: activePlatformTerms.version },
+      ipAddress: ip,
+      userAgent,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

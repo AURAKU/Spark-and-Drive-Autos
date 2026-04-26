@@ -10,6 +10,8 @@ const STYLES: Record<PaymentStatus, string> = {
     "border-amber-800/35 bg-amber-50 text-amber-950 shadow-sm dark:border-amber-400/45 dark:bg-amber-400/12 dark:text-amber-50 dark:shadow-none",
   PROCESSING:
     "border-sky-700/40 bg-sky-100 text-sky-950 shadow-sm dark:border-sky-500/35 dark:bg-sky-500/12 dark:text-sky-100 dark:shadow-none",
+  UNDER_REVIEW:
+    "border-violet-700/40 bg-violet-100 text-violet-950 shadow-sm dark:border-violet-500/35 dark:bg-violet-500/12 dark:text-violet-100 dark:shadow-none",
   SUCCESS:
     "border-emerald-700/40 bg-emerald-100 text-emerald-950 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/12 dark:text-emerald-100 dark:shadow-none",
   FAILED:
@@ -18,6 +20,8 @@ const STYLES: Record<PaymentStatus, string> = {
     "border-zinc-500/50 bg-zinc-200 text-zinc-900 shadow-sm dark:border-zinc-500/35 dark:bg-zinc-500/15 dark:text-zinc-200 dark:shadow-none",
   DISPUTED:
     "border-orange-700/40 bg-orange-100 text-orange-950 shadow-sm dark:border-orange-500/40 dark:bg-orange-500/12 dark:text-orange-100 dark:shadow-none",
+  REVERSED:
+    "border-zinc-600/40 bg-zinc-300 text-zinc-950 shadow-sm dark:border-zinc-500/40 dark:bg-zinc-600/25 dark:text-zinc-100 dark:shadow-none",
 };
 
 function label(s: PaymentStatus): string {

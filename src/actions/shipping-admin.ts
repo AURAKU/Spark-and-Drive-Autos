@@ -54,7 +54,7 @@ export async function appendShipmentStatusEvent(
       });
     });
 
-    if (ship.order.userId) {
+    if (vis && ship.order.userId) {
       await prisma.notification.create({
         data: {
           userId: ship.order.userId,

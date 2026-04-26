@@ -26,6 +26,31 @@ export default async function AdminEditPartPage(props: Props) {
     select: { id: true, name: true },
   });
   if (!part) notFound();
+  const partForForm = {
+    id: part.id,
+    slug: part.slug,
+    title: part.title,
+    shortDescription: part.shortDescription,
+    description: part.description,
+    category: part.category,
+    categoryId: part.categoryId,
+    origin: part.origin,
+    sku: part.sku,
+    basePriceRmb: Number(part.basePriceRmb),
+    supplierCostRmb: part.supplierCostRmb != null ? Number(part.supplierCostRmb) : null,
+    priceGhs: Number(part.priceGhs),
+    stockQty: part.stockQty,
+    stockStatus: part.stockStatus,
+    stockStatusLocked: part.stockStatusLocked,
+    listingState: part.listingState,
+    tags: part.tags,
+    coverImageUrl: part.coverImageUrl,
+    coverImagePublicId: part.coverImagePublicId,
+    featured: part.featured,
+    metaJson: part.metaJson,
+    supplierDistributorRef: part.supplierDistributorRef,
+    supplierDistributorPhone: part.supplierDistributorPhone,
+  };
 
   return (
     <div>
@@ -50,7 +75,7 @@ export default async function AdminEditPartPage(props: Props) {
         </form>
       </div>
 
-      <PartForm mode="edit" part={part} categories={categories} />
+      <PartForm mode="edit" part={partForForm} categories={categories} />
 
       <div className="mt-12 max-w-3xl border-t border-white/10 pt-10">
         <PartGalleryPanel partId={part.id} images={part.images} />

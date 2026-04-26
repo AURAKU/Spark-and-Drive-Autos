@@ -27,3 +27,10 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Unit tests (parts-finder)
+        run: npm run test:parts-finder
+
+      - name: Production build
+        # Clean .next so a prior partial run cannot cause ENOENT during static handling (Next 15+).
+        run: npm run build:clean

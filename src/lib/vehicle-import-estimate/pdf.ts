@@ -2,6 +2,7 @@ import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from "pdf-lib";
 
 import type { VehicleImportEstimateRecord } from "./data";
 import { formatEstimateMoney } from "./data";
+import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { deriveDutyEstimate } from "@/lib/vehicle-import-estimate";
 
 function drawLabelValue(page: PDFPage, x: number, y: number, label: string, value: string, bold: PDFFont, normal: PDFFont) {
@@ -32,7 +33,7 @@ export async function buildVehicleImportEstimatePdf(estimate: VehicleImportEstim
   let y = 780;
   page.drawText("SPARK AND DRIVE AUTOS", { x: 42, y, size: 16, font: bold, color: rgb(0.08, 0.55, 0.62) });
   y -= 20;
-  page.drawText("Vehicle Import Offer and Estimate", { x: 42, y, size: 13, font: bold, color: rgb(0.12, 0.12, 0.12) });
+  page.drawText("Duty estimate (Ghana import)", { x: 42, y, size: 13, font: bold, color: rgb(0.12, 0.12, 0.12) });
   y -= 16;
   page.drawText(`Estimate No: ${estimate.estimateNumber}  |  Status: ${estimate.status}`, {
     x: 42,
@@ -59,7 +60,7 @@ export async function buildVehicleImportEstimatePdf(estimate: VehicleImportEstim
     42,
     y,
     "Powertrain",
-    estimate.engineType ? estimate.engineType.replaceAll("_", " ") : "Not specified",
+    estimate.engineType ? engineTypeLabel(estimate.engineType) : "Not specified",
     bold,
     normal,
   );

@@ -1,9 +1,15 @@
 import { Suspense } from "react";
 
 import { ShippingHubClient, type AdminShipmentRow } from "@/components/admin/shipping-hub-client";
+import { GhanaPartsTrackingInfoButton } from "@/components/shipping/ghana-parts-tracking-info-button";
 import { PageHeading } from "@/components/typography/page-headings";
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
-import { listShipmentsForAdminDashboard } from "@/lib/shipping/shipment-service";
+import {
+  ADMIN_SHIPPING_SEGMENTS,
+  type AdminShippingSegment,
+  countShipmentsForAdminDashboard,
+  listShipmentsForAdminDashboard,
+} from "@/lib/shipping/shipment-service";
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +20,26 @@ function getSearchValue(sp: Record<string, string | string[] | undefined>, key: 
   const v = sp[key];
   const raw = typeof v === "string" ? v : Array.isArray(v) ? v[0] : "";
   return raw?.trim() ?? "";
+}
+
+const SEGMENT_LABELS: Record<AdminShippingSegment, string> = {
+  all: "All",
+  parts_ghana: "Parts · Ghana stock",
+  parts_china: "Parts · China stock",
+  cars_ghana: "Cars · Ghana",
+  cars_china: "Cars · China / in transit",
+};
+
+function parseAdminShippingSegment(raw: string | undefined): AdminShippingSegment {
+  if (
+    raw === "parts_ghana" ||
+    raw === "parts_china" ||
+    raw === "cars_ghana" ||
+    raw === "cars_china"
+  ) {
+    return raw;
+  }
+  return "all";
 }
 
 function mapRow(s: Awaited<ReturnType<typeof listShipmentsForAdminDashboard>>[number]): AdminShipmentRow {
@@ -53,17 +79,33 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
   const sp = await props.searchParams;
   const ops = parseOpsDateFromSearchParams(sp);
   const query = getSearchValue(sp, "q");
+  const segment = parseAdminShippingSegment(getSearchValue(sp, "segment"));
+  const orderCreatedRange = ops.range;
 
-  const shipments = await listShipmentsForAdminDashboard(100, query);
-  const filtered = ops.range
-    ? shipments.filter((s) => {
-        const t = s.order.createdAt.getTime();
-        const r = ops.range;
-        return r ? t >= r.gte.getTime() && t < r.lt.getTime() : true;
-      })
-    : shipments;
+  const [shipments, segmentCounts] = await Promise.all([
+    listShipmentsForAdminDashboard(100, query, segment, orderCreatedRange),
+    countShipmentsForAdminDashboard(query, orderCreatedRange),
+  ]);
 
-  const rows = filtered.map(mapRow);
+  const rows = shipments.map(mapRow);
+
+  const buildShippingHref = (nextSegment: AdminShippingSegment, opts?: { clearQuery?: boolean }) => {
+    const params = new URLSearchParams();
+    appendOpsDateParams(params, sp);
+    const q = opts?.clearQuery ? "" : query;
+    if (q) params.set("q", q);
+    if (nextSegment !== "all") params.set("segment", nextSegment);
+    const qs = params.toString();
+    return qs ? `/admin/shipping?${qs}` : "/admin/shipping";
+  };
+
+  const segmentNav = ADMIN_SHIPPING_SEGMENTS.map((s) => ({
+    segment: s,
+    label: SEGMENT_LABELS[s],
+    count: segmentCounts[s],
+    href: buildShippingHref(s),
+    active: segment === s,
+  }));
 
   const intelParams = new URLSearchParams();
   appendOpsDateParams(intelParams, sp);
@@ -84,10 +126,11 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
             Shipping &amp; fulfilment
           </PageHeading>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-            Flow-based tracking for parts (Ghana &amp; China) and vehicle sea freight. Calendar filter uses{" "}
-            <span className="text-zinc-200">order created</span> time — match it with payment intelligence for one timeline.
+            Flow-based tracking for parts &amp; accessories (Ghana stock vs China stock) and cars (Ghana vs China / in
+            transit). The calendar uses <span className="text-zinc-200">order created</span> time — match it with payment
+            intelligence for one timeline.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
               href={paymentsIntelHref}
               className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10"
@@ -95,12 +138,14 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
               Payment intelligence
               <span aria-hidden>→</span>
             </a>
+            <GhanaPartsTrackingInfoButton variant="admin" className="!max-w-none border-white/12 bg-white/[0.04] text-zinc-200 hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10" />
           </div>
           <form className="mt-4 flex max-w-xl flex-wrap items-center gap-2" method="get">
             {typeof sp.opsDateMode === "string" ? <input type="hidden" name="opsDateMode" value={sp.opsDateMode} /> : null}
             {typeof sp.opsDateDay === "string" ? <input type="hidden" name="opsDateDay" value={sp.opsDateDay} /> : null}
             {typeof sp.opsDateMonth === "string" ? <input type="hidden" name="opsDateMonth" value={sp.opsDateMonth} /> : null}
             {typeof sp.opsDateYear === "string" ? <input type="hidden" name="opsDateYear" value={sp.opsDateYear} /> : null}
+            {segment !== "all" ? <input type="hidden" name="segment" value={segment} /> : null}
             <input
               type="search"
               name="q"
@@ -126,7 +171,7 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
         </div>
       </div>
 
-      <ShippingHubClient rows={rows} paymentsIntelHref={paymentsIntelHref} />
+      <ShippingHubClient rows={rows} paymentsIntelHref={paymentsIntelHref} segmentNav={segmentNav} />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import type { OrderKind, ShipmentLogisticsStage } from "@prisma/client";
+import type { OrderKind, ShipmentKind, ShipmentLogisticsStage } from "@prisma/client";
 import { ChevronDown, CreditCard, Link2, Package, Ship, Truck } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
+
+import type { AdminShippingSegment } from "@/lib/shipping/shipment-service";
 
 import {
   appendShipmentStatusEvent,
@@ -11,11 +13,12 @@ import {
   updateShipmentDetailsAction,
   type ShippingAdminState,
 } from "@/actions/shipping-admin";
-import { ShipmentFlowVisual } from "@/components/shipping/shipment-flow-visual";
+import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SHIPMENT_KIND_LABEL, SHIPMENT_STAGE_LABEL } from "@/lib/shipping/constants";
+import { ghanaPartsCustomerStageLabel } from "@/lib/shipping/ghana-parts-flow";
 import { cn } from "@/lib/utils";
 
 export type AdminShipmentRow = {
@@ -23,7 +26,7 @@ export type AdminShipmentRow = {
   orderId: string;
   reference: string;
   orderKind: OrderKind;
-  kind: string;
+  kind: ShipmentKind;
   currentStage: ShipmentLogisticsStage;
   deliveryMode: string | null;
   feeAmount: number | null;
@@ -52,33 +55,29 @@ function kindIcon(kind: string) {
   return Truck;
 }
 
+export type ShippingSegmentNavItem = {
+  segment: AdminShippingSegment;
+  label: string;
+  count: number;
+  href: string;
+  active: boolean;
+};
+
 export function ShippingHubClient({
-  rows: initialRows,
+  rows,
   paymentsIntelHref,
+  segmentNav,
 }: {
   rows: AdminShipmentRow[];
   paymentsIntelHref: string;
+  segmentNav: ShippingSegmentNavItem[];
 }) {
-  const [tab, setTab] = useState<"ALL" | "CAR" | "PARTS">("ALL");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [eventState, eventAction] = useActionState(appendShipmentStatusEvent, null as ShippingAdminState);
   const [detailState, detailAction] = useActionState(updateShipmentDetailsAction, null as ShippingAdminState);
   const [bulkState, bulkAction] = useActionState(bulkTransitionShipmentStage, null as ShippingAdminState);
 
-  const rows = useMemo(() => {
-    if (tab === "ALL") return initialRows;
-    return initialRows.filter((r) => r.orderKind === tab);
-  }, [initialRows, tab]);
-
   const selectedIds = useMemo(() => Object.entries(selected).filter(([, v]) => v).map(([k]) => k), [selected]);
-
-  const tabCounts = useMemo(() => {
-    return {
-      ALL: initialRows.length,
-      CAR: initialRows.filter((r) => r.orderKind === "CAR").length,
-      PARTS: initialRows.filter((r) => r.orderKind === "PARTS").length,
-    };
-  }, [initialRows]);
 
   const actionMessage = useMemo(() => {
     if (eventState?.error) return { tone: "err" as const, text: eventState.error };
@@ -98,8 +97,8 @@ export function ShippingHubClient({
             <p className="text-xs font-semibold tracking-[0.25em] text-[var(--brand)] uppercase">Live pipeline</p>
             <h2 className="mt-1 text-xl font-semibold text-white sm:text-2xl">Shipment control center</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
-              Expand a row for the fulfilment flow, milestones, and fee/ETA edits. Customer-visible updates sync to dashboards
-              instantly.
+              Use the filters above to focus on parts (Ghana vs China stock) or cars (Ghana vs China / in transit). Expand a
+              row for milestones and fee/ETA edits — customer-visible updates sync to dashboards instantly.
             </p>
             <a
               href={paymentsIntelHref}
@@ -110,27 +109,26 @@ export function ShippingHubClient({
             </a>
           </div>
           <div className="flex flex-col gap-3 sm:items-end">
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Shipment category">
-              {(["ALL", "CAR", "PARTS"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t}
-                  onClick={() => setTab(t)}
+            <nav className="flex max-w-2xl flex-wrap justify-end gap-2" aria-label="Shipment source filters">
+              {segmentNav.map((item) => (
+                <Link
+                  key={item.segment}
+                  href={item.href}
+                  scroll={false}
                   className={cn(
-                    "rounded-full border px-4 py-2 text-xs font-semibold transition min-h-[44px]",
-                    tab === t
+                    "rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[44px] inline-flex items-center justify-center",
+                    item.active
                       ? "border-[var(--brand)]/60 bg-[var(--brand)]/15 text-[var(--brand)]"
                       : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white",
                   )}
+                  aria-current={item.active ? "page" : undefined}
                 >
-                  {t === "ALL" ? "All" : t === "CAR" ? "Cars" : "Parts"}{" "}
-                  <span className="ml-1 tabular-nums text-zinc-500">({tabCounts[t]})</span>
-                </button>
+                  {item.label}{" "}
+                  <span className="ml-1 tabular-nums text-zinc-500">({item.count})</span>
+                </Link>
               ))}
-            </div>
-            <div className="grid w-full max-w-md grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-center sm:max-w-xs">
+            </nav>
+            <div className="grid w-full max-w-md grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-center sm:max-w-xs">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">In view</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-white">{rows.length}</p>
@@ -138,10 +136,6 @@ export function ShippingHubClient({
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Selected</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--brand)]">{selectedIds.length}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Total load</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-400">{initialRows.length}</p>
               </div>
             </div>
           </div>
@@ -207,7 +201,9 @@ export function ShippingHubClient({
           <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-14 text-center">
             <Package className="mx-auto size-10 text-zinc-600" aria-hidden />
             <p className="mt-3 text-sm font-medium text-zinc-400">No shipments in this view</p>
-            <p className="mt-1 text-xs text-zinc-600">Adjust the date filter or switch tabs — or open Payment intelligence to confirm orders in range.</p>
+            <p className="mt-1 text-xs text-zinc-600">
+              Adjust the date filter or source filter — or open Payment intelligence to confirm orders in range.
+            </p>
           </div>
         ) : (
           rows.map((row) => {
@@ -252,8 +248,10 @@ export function ShippingHubClient({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                    <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 sm:px-3">
-                      {SHIPMENT_STAGE_LABEL[row.currentStage]}
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-zinc-300 sm:px-3">
+                      {row.kind === "PARTS_GHANA"
+                        ? ghanaPartsCustomerStageLabel(row.currentStage)
+                        : SHIPMENT_STAGE_LABEL[row.currentStage]}
                     </span>
                     <Link
                       href={`/admin/orders/${row.orderId}`}
@@ -272,8 +270,11 @@ export function ShippingHubClient({
                 <div className="border-t border-white/5 px-4 pb-5 pt-4 sm:px-5">
                   <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Fulfilment flow</p>
+                    {row.kind === "PARTS_GHANA" ? (
+                      <p className="mt-1 text-[11px] text-zinc-500">Ghana stock — 6 customer-facing milestones (see reference button above).</p>
+                    ) : null}
                     <div className="mt-3 overflow-x-auto pb-1">
-                      <ShipmentFlowVisual currentStage={row.currentStage} />
+                      <ShipmentFlowByKind kind={row.kind} currentStage={row.currentStage} />
                     </div>
                   </div>
 
@@ -427,7 +428,9 @@ export function ShippingHubClient({
                             </div>
                             {ev.description ? <p className="mt-1 text-xs text-zinc-500">{ev.description}</p> : null}
                             <p className="mt-1.5 text-[11px] text-zinc-600">
-                              {SHIPMENT_STAGE_LABEL[ev.stage]}
+                              {row.kind === "PARTS_GHANA"
+                                ? ghanaPartsCustomerStageLabel(ev.stage)
+                                : SHIPMENT_STAGE_LABEL[ev.stage]}
                               {!ev.visibleToCustomer ? (
                                 <span className="text-amber-400/90"> · hidden from customer</span>
                               ) : null}

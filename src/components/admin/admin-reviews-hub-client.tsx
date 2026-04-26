@@ -6,9 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
-  adminApproveReviewAction,
   adminDeleteReviewAction,
-  adminRejectReviewAction,
   adminReassignPartReviewUserAction,
   adminUpsertPartReviewAsUserAction,
 } from "@/actions/admin-reviews";
@@ -22,17 +20,16 @@ export type AdminReviewRow = {
   status: string;
   rating: number;
   body: string;
+  authorName?: string | null;
   verifiedPurchase: boolean;
   createdAt: string;
   part: { id: string; title: string; slug: string } | null;
-  user: { email: string; name: string | null } | null;
+  user: { name: string | null } | null;
 };
 
 export type AdminReviewPartOption = { id: string; title: string; slug: string };
 
 type Props = { rows: AdminReviewRow[]; partOptions: AdminReviewPartOption[] };
-
-const statusOrder: Record<string, number> = { PENDING: 0, APPROVED: 1, REJECTED: 2 };
 
 function Stars({ rating }: { rating: number }) {
   const n = Math.min(5, Math.max(0, rating));
@@ -50,14 +47,19 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
   const [openId, setOpenId] = useState<string | null>(rows[0]?.id ?? null);
 
   const sorted = useMemo(
-    () =>
-      [...rows].sort((a, b) => {
-        const d = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
-        if (d !== 0) return d;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }),
+    () => [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [rows],
   );
+  const groupedByPart = useMemo(() => {
+    const m = new Map<string, AdminReviewRow[]>();
+    for (const row of sorted) {
+      const key = row.part ? `${row.part.id}:${row.part.title}` : "legacy:No linked product";
+      const arr = m.get(key) ?? [];
+      arr.push(row);
+      m.set(key, arr);
+    }
+    return [...m.entries()];
+  }, [sorted]);
 
   const selected = useMemo(() => sorted.find((r) => r.id === openId) ?? null, [sorted, openId]);
 
@@ -82,10 +84,10 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <div className="space-y-6">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-sm font-semibold text-white">Publish or replace a review (customer view)</h2>
+          <h2 className="text-sm font-semibold text-white">Publish review (customer view)</h2>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-            Creates an approved review attributed to the account you choose. It appears on the product page like any
-            other buyer review — only staff audit logs record the change.
+            Adds a live review directly to product inventory. Optionally link it to a system account, or leave account
+            empty and publish with a custom display name only.
           </p>
           <form
             className="mt-4 space-y-3"
@@ -111,12 +113,19 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">Customer account (email)</Label>
+              <Label className="text-xs text-zinc-500">Reviewer display name</Label>
               <Input
-                name="userEmail"
-                type="email"
+                name="authorName"
                 required
-                placeholder="buyer@example.com"
+                placeholder="e.g. Kofi Mensah"
+                className="max-w-md border-white/15 bg-black/40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-500">Optional linked account username</Label>
+              <Input
+                name="userName"
+                placeholder="e.g. Kofi Mensah (optional)"
                 className="max-w-md border-white/15 bg-black/40"
               />
             </div>
@@ -137,33 +146,44 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
               <Textarea name="body" required rows={4} className="border-white/15 bg-black/40 text-sm" placeholder="Text shown on the storefront…" />
             </div>
             <Button type="submit" disabled={pending}>
-              Save as published review
+              Publish review now
             </Button>
           </form>
         </div>
 
         <div>
-          <h2 className="text-sm font-semibold text-white">All reviews</h2>
-          <p className="mt-1 text-xs text-zinc-500">Pending first. Select a row to moderate or reassign author.</p>
-          <ul className="mt-3 max-h-[min(70vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-white/10 p-1">
-            {sorted.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(r.id)}
-                  className={`flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/5 ${
-                    r.id === openId ? "bg-white/10 text-white" : "text-zinc-300"
-                  }`}
-                >
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                    {r.status}
-                    {r.part ? ` · ${r.part.title.slice(0, 42)}${r.part.title.length > 42 ? "…" : ""}` : " · (legacy)"}
-                  </span>
-                  <span className="mt-0.5 line-clamp-2 text-xs text-zinc-400">{r.body}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-sm font-semibold text-white">Inventory-organized reviews</h2>
+          <p className="mt-1 text-xs text-zinc-500">Grouped by product so stars and comments are easy to scan.</p>
+          <div className="mt-3 max-h-[min(70vh,560px)] space-y-3 overflow-y-auto rounded-xl border border-white/10 p-2">
+            {groupedByPart.map(([group, entries]) => {
+              const groupTitle = group.split(":").slice(1).join(":");
+              return (
+                <div key={group} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    {groupTitle} ({entries.length})
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {entries.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(r.id)}
+                          className={`flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/5 ${
+                            r.id === openId ? "bg-white/10 text-white" : "text-zinc-300"
+                          }`}
+                        >
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                            <Stars rating={r.rating} /> · {r.status}
+                          </span>
+                          <span className="mt-0.5 line-clamp-2 text-xs text-zinc-400">{r.body}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -183,8 +203,8 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
               </div>
               <p className="mt-3 text-sm leading-relaxed text-zinc-300">{selected.body}</p>
               <p className="mt-2 text-xs text-zinc-500">
-                {selected.user?.email ?? "No user"}
-                {selected.user?.name ? ` · ${selected.user.name}` : ""}
+                {selected.authorName?.trim() || selected.user?.name?.trim() || "Customer"}
+                {selected.user?.name?.trim() ? "" : " · no linked account"}
               </p>
               {selected.part ? (
                 <p className="mt-2 text-xs">
@@ -196,32 +216,6 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={pending || selected.status === "APPROVED"}
-                onClick={() => {
-                  const fd = new FormData();
-                  fd.set("reviewId", selected.id);
-                  run(async () => adminApproveReviewAction(null, fd), "Approved");
-                }}
-              >
-                Approve
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={pending || selected.status === "REJECTED"}
-                onClick={() => {
-                  const fd = new FormData();
-                  fd.set("reviewId", selected.id);
-                  run(async () => adminRejectReviewAction(null, fd), "Rejected");
-                }}
-              >
-                Reject
-              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -249,12 +243,11 @@ export function AdminReviewsHubClient({ rows, partOptions }: Props) {
               >
                 <input type="hidden" name="reviewId" value={selected.id} />
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Reassign to another account</h3>
-                <p className="text-[11px] text-zinc-600">The storefront will show the new account as the reviewer.</p>
+                <p className="text-[11px] text-zinc-600">Use the target username (display name). Storefront shows username only.</p>
                 <Input
-                  name="userEmail"
-                  type="email"
+                  name="userName"
                   required
-                  placeholder="new-owner@example.com"
+                  placeholder="e.g. Kofi Mensah"
                   className="max-w-sm border-white/15 bg-black/40"
                 />
                 <Button type="submit" size="sm" disabled={pending}>

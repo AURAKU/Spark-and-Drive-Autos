@@ -1,9 +1,17 @@
+import { EngineType } from "@prisma/client";
 import { z } from "zod";
 
 import { DUTY_FORMULA_VERSION } from "./formula-version";
+import { engineTypeLabel } from "@/lib/engine-type-ui";
 
-/** Matches Prisma `EngineType` — duplicated to avoid coupling this module to the ORM. */
-export const DUTY_POWERTRAINS = ["GASOLINE", "ELECTRIC", "HYBRID", "PLUGIN_HYBRID"] as const;
+/** Aligned with Prisma `EngineType` (ICE split into petrol vs diesel for listings). */
+export const DUTY_POWERTRAINS = [
+  EngineType.GASOLINE_PETROL,
+  EngineType.GASOLINE_DIESEL,
+  EngineType.ELECTRIC,
+  EngineType.HYBRID,
+  EngineType.PLUGIN_HYBRID,
+] as const;
 export type DutyPowertrain = (typeof DUTY_POWERTRAINS)[number];
 
 /**
@@ -64,7 +72,7 @@ export function resolveImportDutyRateForPowertrain(params: {
 
   return {
     rate: g,
-    label: `CIF × ${(g * 100).toFixed(0)}% — illustrative gasoline age band (~${vehicleAgeYears}y).`,
+    label: `CIF × ${(g * 100).toFixed(0)}% — illustrative ICE age band (~${vehicleAgeYears}y); same planning curve for petrol and diesel unless ICUMS specifies otherwise.`,
   };
 }
 
@@ -80,7 +88,7 @@ function powertrainMethodologySuffix(powertrain: DutyPowertrain, applyEvDutyWaiv
   if (powertrain === "HYBRID" || powertrain === "PLUGIN_HYBRID") {
     return "Hybrid / PHEV: ICUMS assessment may use ICE cylinder capacity, electric motor data, or combined classification — supply accurate technical data to your clearing agent.";
   }
-  return "Gasoline / diesel-style ICE: where applicable, cylinder capacity and age still drive many published duty bands in GRA reference tables.";
+  return `${engineTypeLabel(powertrain)}: where applicable, cylinder capacity and age still drive many published duty bands in GRA reference tables.`;
 }
 
 /** Inputs for the in-app estimate (not a substitute for ICUMS CCVR). */
@@ -90,7 +98,7 @@ export const dutyEstimateInputSchema = z
     cifGhs: z.number().positive().max(500_000_000),
     vehicleYear: z.number().int().min(1980).max(new Date().getFullYear() + 1),
     engineCc: z.number().int().positive().max(30_000).optional(),
-    powertrain: z.enum(DUTY_POWERTRAINS).default("GASOLINE"),
+    powertrain: z.nativeEnum(EngineType).default(EngineType.GASOLINE_PETROL),
     /** Only applies when powertrain is ELECTRIC — models possible announced relief (see GRA / Finance policy). */
     applyEvDutyWaiver: z.boolean().default(false),
   })
@@ -150,8 +158,8 @@ export function computeDutyEstimate(input: DutyEstimateInput, referenceYear = ne
       ? "Engine cc is not used for BEV — displacement is N/A."
       : input.engineCc != null
         ? `Engine ${input.engineCc} cc noted — illustrative only; ICUMS may use different capacity bands.`
-        : input.powertrain === "GASOLINE"
-          ? "Engine displacement not supplied — confirm classification and cc-based bands in ICUMS where applicable."
+        : input.powertrain === "GASOLINE_PETROL" || input.powertrain === "GASOLINE_DIESEL"
+          ? "Engine displacement not supplied — confirm classification and cc-based bands in ICUMS where applicable (petrol vs diesel per HS/GRA)."
           : "Consider entering ICE cylinder capacity (if any) for closer ICE-side alignment; ICUMS still determines final treatment.";
 
   const lines: DutyEstimateLine[] = [

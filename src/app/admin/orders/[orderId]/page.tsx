@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
-import { ShipmentFlowVisual } from "@/components/shipping/shipment-flow-visual";
+import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
+import { orderPartsLineageLabel } from "@/lib/admin-orders-parts-filter";
 import { formatMoney } from "@/lib/format";
 import { SHIPMENT_KIND_LABEL, SHIPMENT_STAGE_LABEL } from "@/lib/shipping/constants";
+import { ghanaPartsCustomerStageLabel } from "@/lib/shipping/ghana-parts-flow";
 import { getShipmentsForAdminOrderDetail } from "@/lib/shipping/shipment-service";
 import { prisma } from "@/lib/prisma";
 
@@ -22,7 +24,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
     include: {
       user: { select: { email: true, name: true } },
       car: true,
-      partItems: true,
+      partItems: { include: { part: { select: { stockStatus: true, origin: true } } } },
       payments: { orderBy: { createdAt: "desc" }, include: { proofs: true } },
     },
   });
@@ -53,12 +55,18 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       <p className="mt-1 text-sm text-zinc-400">
         {order.user?.email ?? "No user"} · {order.orderStatus.replaceAll("_", " ")}
       </p>
+      <p className="mt-2 text-xs text-zinc-500">
+        Placed: {order.createdAt.toLocaleString()} · Updated: {order.updatedAt.toLocaleString()}
+        {order.kind === "PARTS" ? (
+          <> · <span className="text-zinc-400">Mix: {orderPartsLineageLabel(order)}</span></>
+        ) : null}
+      </p>
       <div className="mt-3">
         <Link
-          href={`/admin/duty-estimator?orderId=${encodeURIComponent(order.id)}&customerId=${encodeURIComponent(order.userId ?? "")}&clientName=${encodeURIComponent(order.user?.name ?? order.user?.email ?? "")}&clientContact=${encodeURIComponent(order.user?.email ?? "")}&vehicleName=${encodeURIComponent(order.car?.title ?? "Vehicle import estimate")}`}
+          href={`/admin/duty-estimator?orderId=${encodeURIComponent(order.id)}&customerId=${encodeURIComponent(order.userId ?? "")}&clientName=${encodeURIComponent(order.user?.name ?? order.user?.email ?? "")}&clientContact=${encodeURIComponent(order.user?.email ?? "")}&vehicleName=${encodeURIComponent(order.car?.title ?? "Duty estimate")}`}
           className="inline-flex items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--brand)] hover:bg-[var(--brand)]/20"
         >
-          Generate vehicle import estimate
+          Generate duty estimate
         </Link>
       </div>
 
@@ -109,13 +117,35 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </div>
         </div>
         {order.kind === "PARTS" && order.deliveryAddressSnapshot ? (
-          <p className="mt-3 text-xs text-zinc-500">
-            <span className="font-medium text-zinc-400">Delivery snapshot: </span>
+          <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-zinc-300">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Customer delivery (checkout)</p>
             {(() => {
               const a = order.deliveryAddressSnapshot as Record<string, string | undefined>;
-              return [a.fullName, a.streetAddress, a.city, a.region, a.phone].filter(Boolean).join(" · ");
+              const dispatch = a.dispatchPhone?.trim() || a.phone;
+              return (
+                <>
+                  <p>
+                    <span className="text-zinc-500">Name &amp; address: </span>
+                    {[a.fullName, a.streetAddress, a.city, a.region, a.digitalAddress].filter(Boolean).join(" · ")}
+                  </p>
+                  <p>
+                    <span className="text-zinc-500">Address phone: </span>
+                    {a.phone ?? "—"}
+                  </p>
+                  <p>
+                    <span className="text-zinc-500">Dispatch / call on arrival: </span>
+                    <span className="font-medium text-emerald-200/90">{dispatch ?? "—"}</span>
+                  </p>
+                  {a.deliveryInstructions ? (
+                    <p>
+                      <span className="text-zinc-500">Notes: </span>
+                      {a.deliveryInstructions}
+                    </p>
+                  ) : null}
+                </>
+              );
             })()}
-          </p>
+          </div>
         ) : null}
         {shipments.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">
@@ -139,12 +169,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                     ) : null}
                     <p className="mt-1 font-mono text-[10px] text-zinc-600">Shipment id: {s.id}</p>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
-                    {SHIPMENT_STAGE_LABEL[s.currentStage]}
+                  <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-zinc-300">
+                    {s.kind === "PARTS_GHANA"
+                      ? ghanaPartsCustomerStageLabel(s.currentStage)
+                      : SHIPMENT_STAGE_LABEL[s.currentStage]}
                   </span>
                 </div>
                 <div className="mt-4">
-                  <ShipmentFlowVisual currentStage={s.currentStage} />
+                  <ShipmentFlowByKind kind={s.kind} currentStage={s.currentStage} />
                 </div>
                 <dl className="mt-4 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
                   {s.feeAmount != null && Number(s.feeAmount) > 0 ? (
@@ -182,7 +214,8 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                         </div>
                         {ev.description ? <p className="mt-1 text-zinc-500">{ev.description}</p> : null}
                         <p className="mt-1 text-[10px] text-zinc-600">
-                          Stage: {SHIPMENT_STAGE_LABEL[ev.stage]}
+                          Stage:{" "}
+                          {s.kind === "PARTS_GHANA" ? ghanaPartsCustomerStageLabel(ev.stage) : SHIPMENT_STAGE_LABEL[ev.stage]}
                           {!ev.visibleToCustomer ? (
                             <span className="text-amber-400/90"> · not visible to customer</span>
                           ) : null}

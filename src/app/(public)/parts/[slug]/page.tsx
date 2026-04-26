@@ -1,10 +1,11 @@
 import { PartListingState } from "@prisma/client";
 import { cookies } from "next/headers";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
+import { PartImageGallery, buildPartGalleryImageList } from "@/components/parts/part-image-gallery";
+import { PartOriginAvailabilityBadge } from "@/components/parts/part-origin-availability-badge";
 import { PartDetailActions } from "@/components/parts/part-detail-actions";
 import { PartReviewsSection } from "@/components/parts/part-reviews-section";
 import { formatConverted, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
@@ -12,6 +13,9 @@ import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
 import { allowedPartCurrencies, getPartDisplayPrice } from "@/lib/parts-pricing";
 import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
+import { publicPartDetailSelect } from "@/lib/part-public-data";
+import { parsePartOptionsMeta } from "@/lib/part-variant-options";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -44,14 +48,7 @@ export default async function PartDetailPage(props: Props) {
   const session = await safeAuth();
   const part = await prisma.part.findUnique({
     where: { slug },
-    include: {
-      images: { orderBy: { sortOrder: "asc" } },
-      deliveryOptions: {
-        where: { enabled: true },
-        include: { template: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    select: publicPartDetailSelect,
   });
   if (!part || part.listingState !== PartListingState.PUBLISHED) {
     notFound();
@@ -72,6 +69,8 @@ export default async function PartDetailPage(props: Props) {
     fx,
   ).amount;
   const cover = part.coverImageUrl;
+  const galleryImages = buildPartGalleryImageList(cover, part.images);
+  const optionLists = parsePartOptionsMeta(part.metaJson);
   const tags = tagsList(part.tags);
   const me =
     session?.user?.id != null
@@ -82,7 +81,7 @@ export default async function PartDetailPage(props: Props) {
             addresses: {
               where: { isDefault: true },
               take: 1,
-              select: { id: true, fullName: true, city: true, region: true, streetAddress: true },
+              select: { id: true, fullName: true, phone: true, city: true, region: true, streetAddress: true },
             },
           },
         })
@@ -121,26 +120,13 @@ export default async function PartDetailPage(props: Props) {
         <span className="text-zinc-400">{part.category}</span>
       </nav>
 
-      <div className="parts-surface mt-6 grid gap-10 rounded-2xl border border-red-300/20 bg-black/40 p-5 shadow-[0_0_45px_-25px_rgba(239,68,68,0.72)] lg:grid-cols-2 sm:p-6">
-        <div className="space-y-4">
-          {cover ? (
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <Image src={cover} alt="" fill className="object-cover" sizes="(max-width: 1024px) 100vw, 50vw" unoptimized />
-            </div>
-          ) : (
-            <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
-              <Image src="/brand/logo-emblem.png" alt="" width={120} height={120} className="opacity-40" />
-            </div>
-          )}
-          {part.images.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {part.images.map((img) => (
-                <div key={img.id} className="relative aspect-square overflow-hidden rounded-lg border border-white/10">
-                  <Image src={img.url} alt="" fill className="object-cover" sizes="120px" unoptimized />
-                </div>
-              ))}
-            </div>
-          ) : null}
+      <div className="parts-surface mt-6 grid gap-10 rounded-2xl border border-red-300/20 bg-black/40 p-5 shadow-[0_0_45px_-25px_rgba(239,68,68,0.72)] sm:p-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-2 lg:col-span-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Availability</p>
+          <PartOriginAvailabilityBadge part={part} className="w-fit px-3 py-1 text-xs" />
+        </div>
+        <div>
+          <PartImageGallery productTitle={part.title} images={galleryImages} />
         </div>
 
         <div>
@@ -157,6 +143,21 @@ export default async function PartDetailPage(props: Props) {
           <p className="mt-2 text-sm text-zinc-500">
             Stock: {part.stockQty} · {part.stockStatus.replaceAll("_", " ")}
           </p>
+          {optionLists.colors.length > 0 ? (
+            <div className="mt-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Available colors</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {optionLists.colors.map((c) => (
+                  <span
+                    key={c}
+                    className="rounded-full border border-white/12 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-200"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {tags.length > 0 ? (
             <div className="mt-4 flex flex-wrap gap-2">
               {tags.map((t) => (
@@ -186,14 +187,28 @@ export default async function PartDetailPage(props: Props) {
                 {part.deliveryOptions.length === 0 ? (
                   <li className="text-zinc-500">No delivery options configured yet. Contact support for quote.</li>
                 ) : (
-                  part.deliveryOptions.map((opt) => (
-                    <li key={opt.id} className="flex flex-wrap items-center justify-between gap-2">
-                      <span>{opt.etaLabel ?? opt.template.etaLabel}</span>
-                      <span className="font-medium text-white">
-                        {formatConverted(Number(opt.feeGhs ?? opt.template.feeGhs), "GHS")}
-                      </span>
-                    </li>
-                  ))
+                  part.deliveryOptions.map((opt) => {
+                    const w = opt.template.weightKg != null ? Number(opt.template.weightKg) : null;
+                    const cbm = opt.template.volumeCbm != null ? Number(opt.template.volumeCbm) : null;
+                    const basis =
+                      (w != null && w > 0) || (cbm != null && cbm > 0)
+                        ? [w != null && w > 0 ? `${w} kg` : null, cbm != null && cbm > 0 ? `${cbm} CBM` : null]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : null;
+                    return (
+                      <li key={opt.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                        <div>
+                          <p className="font-medium text-white">{opt.template.name}</p>
+                          <p className="text-xs text-zinc-500">{opt.etaLabel ?? opt.template.etaLabel}</p>
+                          {basis ? <p className="mt-0.5 text-[11px] text-zinc-600">{basis}</p> : null}
+                        </div>
+                        <span className="shrink-0 font-medium text-[var(--brand)]">
+                          {formatConverted(Number(opt.feeGhs ?? opt.template.feeGhs), "GHS")}
+                        </span>
+                      </li>
+                    );
+                  })
                 )}
               </ul>
             </div>
@@ -214,6 +229,8 @@ export default async function PartDetailPage(props: Props) {
               initialFavorite={Boolean(favorite)}
               agreementVersion={legal.agreementVersion}
               chinaQuotes={chinaQuotes}
+              isPreorder={isChinaPreOrderPart(part)}
+              optionLists={optionLists}
             />
           </div>
         </div>

@@ -6,7 +6,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "node scripts/prep-dev.mjs && next dev --turbopack -p 5173",
+    "dev": "node scripts/prep-dev.mjs && NEXT_DISABLE_DEVTOOLS=1 next dev -p 5173",
     "dev:quick": "next dev --turbopack -p 5173",
     "dev:webpack": "node scripts/prep-dev.mjs && next dev -p 5173",
     "dev:clean": "rm -rf .next && next dev --turbopack -p 5173",
@@ -15,10 +15,13 @@
     "doctor": "node scripts/doctor.mjs",
     "env:bootstrap": "node scripts/ensure-local-env.mjs",
     "build": "next build",
+    "build:clean": "node -e \"try { require('node:fs').rmSync('.next', { recursive: true, force: true }); } catch (_) {}\" && next build",
     "typecheck": "tsc --noEmit",
-    "validate": "npm run lint && npm run typecheck",
+    "validate": "npm run lint && npm run typecheck && npm run test:parts-finder",
+    "env:validate:prod": "node scripts/validate-env.mjs",
     "test:parts-finder": "tsx --test tests/parts-finder/*.test.ts",
     "start": "node scripts/start.mjs",
+    "worker:parts-finder": "tsx src/workers/parts-finder-worker.ts",
     "docker:up": "docker compose up -d --wait",
     "docker:down": "docker compose down",
     "setup:local": "npm run env:bootstrap && docker compose up -d --wait && npx prisma db push && npm run db:seed",
@@ -28,8 +31,11 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:admin": "tsx scripts/seed-super-admin.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "backup:db": "bash scripts/backup-db.sh",
+    "restore:db": "bash scripts/restore-db.sh"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

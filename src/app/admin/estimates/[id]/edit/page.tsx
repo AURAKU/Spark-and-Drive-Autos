@@ -6,7 +6,7 @@ import { cloneVehicleImportEstimateAction, markVehicleImportEstimateSentAction }
 import { VehicleImportEstimateEditorForm } from "@/components/admin/duty-estimator/vehicle-import-estimate-editor-form";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getVehicleImportEstimateById, getVehicleImportEstimateEvents } from "@/lib/vehicle-import-estimate/data";
-import { prisma } from "@/lib/prisma";
+import { fetchVehicleImportEstimateFormLinkOptions } from "@/lib/vehicle-import-estimate/admin-form-options";
 
 export const dynamic = "force-dynamic";
 
@@ -28,36 +28,12 @@ export default async function AdminEstimateEditPage(props: {
   const estimate = await getVehicleImportEstimateById(id);
   if (!estimate) notFound();
 
-  const [users, orders, inquiries, cars, events] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: { id: true, name: true, email: true },
-    }),
-    prisma.order.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: {
-        id: true,
-        reference: true,
-        user: { select: { name: true, email: true } },
-        car: { select: { title: true } },
-      },
-    }),
-    prisma.inquiry.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: {
-        id: true,
-        message: true,
-        createdAt: true,
-        user: { select: { name: true, email: true } },
-      },
-    }),
-    prisma.car.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      select: { id: true, title: true, year: true, engineType: true },
+  const [{ users, orders, inquiries, cars }, events] = await Promise.all([
+    fetchVehicleImportEstimateFormLinkOptions({
+      userId: estimate.customerId,
+      orderId: estimate.orderId,
+      inquiryId: estimate.inquiryId,
+      carId: estimate.carId,
     }),
     getVehicleImportEstimateEvents(id),
   ]);

@@ -145,7 +145,7 @@ export function RequestAutopartsClient() {
         <PageHeading>Request AutoParts or Accessories</PageHeading>
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
           Submitting a sourcing request (including reference photos) requires a free account so we can match your
-          enquiry to you, send updates, and keep everything in one thread. Create an account or sign in to continue.
+          enquiry to you, send updates, and keep everything in one thread. Create Account or sign in to continue.
         </p>
         <p className="mt-3 text-sm text-zinc-500">
           You can still{" "}
@@ -162,7 +162,7 @@ export function RequestAutopartsClient() {
               "bg-[var(--brand)] text-center font-semibold text-black hover:opacity-90",
             )}
           >
-            Create an account
+            Create Account
           </Link>
           <Link
             href={loginHref}
@@ -181,7 +181,7 @@ export function RequestAutopartsClient() {
       <p className="mt-3 text-sm leading-relaxed text-zinc-400">
         Describe what you need — part numbers, symptoms, or photos of labels and damage all help. You can attach up to{" "}
         {MAX_IMAGES} reference images. Track submissions alongside vehicle requests in{" "}
-        <Link href="/dashboard/requests" className="text-[var(--brand)] hover:underline">
+        <Link href="/dashboard/inquiry-requests#sourcing" className="text-[var(--brand)] hover:underline">
           your dashboard
         </Link>
         .
