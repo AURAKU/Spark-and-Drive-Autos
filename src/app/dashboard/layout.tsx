@@ -8,7 +8,6 @@ import { DashboardSidebarNav } from "@/components/layout/dashboard-sidebar-nav";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
 import { LegalReacceptanceGate } from "@/components/legal/legal-reacceptance-gate";
 import { StaffDashboardBar } from "@/components/layout/staff-dashboard-bar";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { parseDisplayCurrency } from "@/lib/currency";
 import { getMissingRequiredPolicies } from "@/lib/legal-reacceptance";
@@ -155,10 +154,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   Overview
                 </Link>
               </div>
-              <CurrencySwitcher initial={displayCurrency} />
-            </div>
-            <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
-              <ThemeToggle className="pointer-events-auto" />
+              <CurrencySwitcher initial={displayCurrency} compact />
             </div>
           </div>
           <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>

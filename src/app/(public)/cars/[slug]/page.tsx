@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeading } from "@/components/typography/page-headings";
 import { CarListingState } from "@prisma/client";
 
-import { auth } from "@/auth";
 import {
   formatVehiclePriceFromRmb,
   getCarDisplayPrice,
@@ -26,6 +25,7 @@ import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "
 import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +60,7 @@ export default async function CarDetailPage(props: Props) {
 
   if (!car) notFound();
 
-  const session = await auth();
+  const session = await safeAuth();
   const userId = session?.user?.id;
   const carFavorite =
     userId != null
