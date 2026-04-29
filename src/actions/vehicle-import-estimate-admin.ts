@@ -116,6 +116,7 @@ export async function createVehicleImportEstimateAction(formData: FormData) {
 
   revalidatePath("/admin/duty-estimator");
   revalidatePath("/admin/estimates");
+  revalidatePath("/admin/duty");
   if (intent === "preview") redirect(`/admin/estimates/${createdId}`);
   if (intent === "sent") redirect(`/admin/estimates/${createdId}/edit?sent=1`);
   redirect(`/admin/estimates/${createdId}/edit`);
@@ -183,6 +184,7 @@ export async function updateVehicleImportEstimateAction(formData: FormData) {
   revalidatePath("/admin/duty-estimator");
   revalidatePath(`/admin/duty-estimator/${idParsed.data}`);
   revalidatePath("/admin/estimates");
+  revalidatePath("/admin/duty");
   revalidatePath(`/admin/estimates/${idParsed.data}/edit`);
   redirect(`/admin/estimates/${idParsed.data}/edit?saved=1`);
 }
@@ -211,6 +213,8 @@ export async function cloneVehicleImportEstimateAction(formData: FormData) {
   });
 
   revalidatePath("/admin/duty-estimator");
+  revalidatePath("/admin/estimates");
+  revalidatePath("/admin/duty");
   redirect(`/admin/duty-estimator/${clonedId}`);
 }
 
@@ -235,6 +239,7 @@ export async function markVehicleImportEstimateSentAction(formData: FormData) {
   await auditLog(session.user.id, "vehicle-import-estimate.mark-sent", "VehicleImportEstimate", idParsed.data, {});
   revalidatePath(`/admin/duty-estimator/${idParsed.data}`);
   revalidatePath("/admin/duty-estimator");
+  revalidatePath("/admin/duty");
   revalidatePath(`/admin/estimates/${idParsed.data}/edit`);
   redirect(`/admin/estimates/${idParsed.data}/edit?sent=1`);
 }

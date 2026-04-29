@@ -66,7 +66,15 @@ export function LegalAcceptanceModal({
             <button type="button" className="text-xs text-[var(--brand)] hover:underline" onClick={() => setViewerOpen(true)}>
               View active policy
             </button>
-            <RequiredLegalCheckbox checked={checked} onChange={setChecked} label={checkboxLabel} />
+            <RequiredLegalCheckbox
+              checked={checked}
+              onChange={(next) => {
+                setChecked(next);
+                if (next) void accept();
+              }}
+              disabled={loading}
+              label={checkboxLabel}
+            />
             {error ? <p className="text-xs text-red-500">{error}</p> : null}
           </div>
           <DialogFooter>

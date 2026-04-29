@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,20 +25,28 @@ type AddressRow = {
   isDefault: boolean;
 };
 
+type LegalStatusRow = {
+  kind: "policy" | "contract";
+  id: string;
+  key: string;
+  title: string;
+  version: string;
+  effectiveAt: Date;
+  accepted: boolean;
+};
+
 export function ProfileClient({
   email,
   name,
-  ghanaCardIdNumber,
-  ghanaCardImageUrl,
   walletBalance,
   addresses,
+  legalRows,
 }: {
   email: string | null | undefined;
   name: string | null | undefined;
-  ghanaCardIdNumber: string | null;
-  ghanaCardImageUrl: string | null;
   walletBalance: number;
   addresses: AddressRow[];
+  legalRows: LegalStatusRow[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -59,7 +66,7 @@ export function ProfileClient({
     notes: "",
     isDefault: addresses.length === 0,
   });
-  const [ghanaCardId, setGhanaCardId] = useState(ghanaCardIdNumber ?? "");
+  const pendingLegalCount = legalRows.filter((r) => !r.accepted).length;
   useEffect(() => {
     if (!walletRef) return;
     let done = false;
@@ -135,44 +142,24 @@ export function ProfileClient({
     }
   }
 
-  async function uploadGhanaCard(file: File) {
-    const sigRes = await fetch("/api/upload/profile-id-signature", { method: "POST" });
-    if (!sigRes.ok) throw new Error("Could not sign upload");
-    const sig = (await sigRes.json()) as {
-      timestamp: number;
-      signature: string;
-      apiKey: string;
-      folder: string;
-      uploadUrl: string;
-    };
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("api_key", sig.apiKey);
-    fd.append("timestamp", String(sig.timestamp));
-    fd.append("signature", sig.signature);
-    fd.append("folder", sig.folder);
-    const up = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-    if (!up.ok) throw new Error("Upload failed");
-    const json = (await up.json()) as { secure_url: string; public_id: string };
-    const save = await fetch("/api/profile/ghana-card", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ghanaCardIdNumber: ghanaCardId, imageUrl: json.secure_url, imagePublicId: json.public_id }),
-    });
-    if (!save.ok) throw new Error("Could not save Ghana Card details");
-  }
-
-  async function onUploadCard(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  async function acceptAllLegal() {
     setLoading(true);
     try {
-      await uploadGhanaCard(file);
-      toast.success("Ghana Card uploaded");
+      const res = await fetch("/api/legal/profile/accept-all", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; acceptedPolicies?: number; acceptedContracts?: number };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? "Could not save legal acceptance.");
+      }
+      const acceptedPolicies = Number(data.acceptedPolicies ?? 0);
+      const acceptedContracts = Number(data.acceptedContracts ?? 0);
+      toast.success(
+        acceptedPolicies + acceptedContracts > 0
+          ? `Accepted ${acceptedPolicies} policy update(s) and ${acceptedContracts} contract update(s).`
+          : "All legal requirements are already accepted.",
+      );
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
+      toast.error(err instanceof Error ? err.message : "Could not save legal acceptance.");
     } finally {
       setLoading(false);
     }
@@ -186,6 +173,38 @@ export function ProfileClient({
         <p className="mt-1"><span className="text-zinc-500">Email:</span> {email ?? "—"}</p>
       </div>
 
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Legal acceptances</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Accept legal updates once here. After acceptance, checkout and payment flows continue without repeated checkboxes.
+          If admins publish a new version, it appears here as pending.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pendingLegalCount === 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-200"}`}>
+            {pendingLegalCount === 0 ? "All legal requirements accepted" : `${pendingLegalCount} pending update${pendingLegalCount > 1 ? "s" : ""}`}
+          </span>
+          <Button type="button" onClick={() => void acceptAllLegal()} disabled={loading || pendingLegalCount === 0}>
+            {loading ? "Saving..." : "Accept all pending legal updates"}
+          </Button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {legalRows.map((row) => (
+            <div key={`${row.kind}-${row.id}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-zinc-100">{row.title}</p>
+                <span className={`rounded-md px-2 py-0.5 text-xs ${row.accepted ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-200"}`}>
+                  {row.accepted ? "Accepted" : "Pending"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                {row.kind === "contract" ? "Contract" : "Policy"} · {row.key} · Version {row.version} · Effective{" "}
+                {new Date(row.effectiveAt).toLocaleDateString()}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <WalletTopupFlow
         walletBalance={walletBalance}
         isSignedIn
@@ -195,28 +214,6 @@ export function ProfileClient({
         supportingText="This balance is for parts and accessories checkout on the storefront. Add funds via Paystack (mobile money). Authorised payments credit your wallet immediately so you can complete purchases."
         signInHref="/login?callbackUrl=%2Fdashboard%2Fprofile"
       />
-
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="text-lg font-semibold text-white">Ghana Card verification</h2>
-        <p className="mt-2 text-sm text-zinc-400">Upload Ghana Card ID photo and ID number for delivery/checkout verification.</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="gh-card-id">Ghana Card ID number</Label>
-              <Input id="gh-card-id" value={ghanaCardId} onChange={(e) => setGhanaCardId(e.target.value)} className="mt-1" placeholder="e.g. GHA-123456789-0" />
-            </div>
-            <div>
-              <input id="gh-card-upload" type="file" accept="image/*" className="hidden" onChange={(e) => void onUploadCard(e)} />
-              <label htmlFor="gh-card-upload" className="inline-flex h-9 cursor-pointer items-center rounded-md border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10">
-                Upload Ghana Card photo
-              </label>
-            </div>
-          </div>
-          <div className="relative h-28 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-            {ghanaCardImageUrl ? <Image src={ghanaCardImageUrl} alt="Ghana Card ID" fill className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-xs text-zinc-500">No ID photo</div>}
-          </div>
-        </div>
-      </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h2 className="text-lg font-semibold text-white">Delivery addresses (Ghana)</h2>

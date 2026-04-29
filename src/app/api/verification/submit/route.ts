@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { getRequestIp } from "@/lib/client-ip";
 import {
+  ALLOWED_VERIFICATION_DOCUMENT_TYPES,
   ID_VERIFICATION_CONSENT_TEXT,
   logVerificationAction,
   submitVerification,
@@ -46,6 +47,12 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request payload", issues: parsed.error.flatten() }, { status: 400 });
+  }
+  if (!ALLOWED_VERIFICATION_DOCUMENT_TYPES.includes(parsed.data.documentType)) {
+    return NextResponse.json(
+      { error: "Unsupported document type. Use Ghana Card, Passport, or Driver License only." },
+      { status: 400 },
+    );
   }
 
   if (!parsed.data.consentAccepted) {

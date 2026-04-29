@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { isAdminRole } from "@/auth";
 import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
-import { getPartsFinderActivationLegalVersions } from "@/lib/legal-enforcement";
+import { ensurePartsFinderActivationPolicyVersions } from "@/lib/legal-ensure-parts-finder-policies";
+import { getPartsFinderActivationLegalVersions, POLICY_KEYS } from "@/lib/legal-enforcement";
 import { getPartsFinderAccessSnapshot } from "@/lib/parts-finder/access";
 import { getPartsFinderActivationSnapshot, getPartsFinderChargeQuote } from "@/lib/parts-finder/pricing";
 import { prisma } from "@/lib/prisma";
@@ -15,6 +17,8 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function PublicPartsFinderActivatePage(props: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/parts-finder/activate");
+  await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
+  const isAdmin = Boolean(session.user.role && isAdminRole(session.user.role));
   const sp = await props.searchParams;
   const statusHint =
     typeof sp.status === "string" ? sp.status : Array.isArray(sp.status) ? sp.status[0] : undefined;
@@ -42,6 +46,35 @@ export default async function PublicPartsFinderActivatePage(props: { searchParam
           Membership &amp; payments are enforced securely on our servers. Activate to run advanced search and view refined
           results for Parts for your vehicle.
         </p>
+        {isAdmin ? (
+          <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-950 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-100">
+            <p className="font-semibold text-foreground dark:text-amber-50">Admin: legal copy for activation</p>
+            <p className="mt-1 text-muted-foreground dark:text-amber-100/85">
+              If you update terms or the Parts Finder disclaimer, publish new versions under Admin → Legal so activation
+              always records acceptance against active policy rows.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={`/admin/legal?policyKey=${encodeURIComponent(POLICY_KEYS.PLATFORM_TERMS_PRIVACY)}`}
+                className="rounded-lg border border-amber-600/50 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-amber-500/15 dark:border-amber-400/40 dark:bg-zinc-950/50"
+              >
+                Edit platform terms &amp; privacy
+              </Link>
+              <Link
+                href={`/admin/legal?policyKey=${encodeURIComponent(POLICY_KEYS.PARTS_FINDER_DISCLAIMER)}`}
+                className="rounded-lg border border-amber-600/50 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-amber-500/15 dark:border-amber-400/40 dark:bg-zinc-950/50"
+              >
+                Edit Parts Finder disclaimer
+              </Link>
+              <Link
+                href="/admin/legal"
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 dark:border-white/15"
+              >
+                All legal policies
+              </Link>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 rounded-xl border border-border bg-background/60 p-4 text-sm text-foreground dark:border-white/10 dark:bg-zinc-950/40">
           <p>
             <span className="text-muted-foreground">Status:</span>{" "}
@@ -53,9 +86,15 @@ export default async function PublicPartsFinderActivatePage(props: { searchParam
           <p className="mt-1">
             <span className="text-muted-foreground">Currency:</span> {pricing.currency}
           </p>
+          {statusHint === "already-active" ? (
+            <p className="mt-2 text-sm font-medium text-cyan-800 dark:text-cyan-300">
+              You already have active access. Payment and wallet renewal are disabled until your membership expires.
+            </p>
+          ) : null}
           {statusHint === "pending-payment" || access.state === "PENDING_PAYMENT" ? (
             <p className="mt-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-              Payment is still pending provider confirmation.
+              Payment is still pending provider confirmation. If this lasts more than ~90 minutes, you can start a new
+              payment attempt.
             </p>
           ) : null}
           {statusHint === "suspended" || access.state === "SUSPENDED" ? (
@@ -66,6 +105,7 @@ export default async function PublicPartsFinderActivatePage(props: { searchParam
         </div>
         <PartsFinderActivationClient
           accessState={access.state}
+          activeUntil={access.activeUntil}
           currency={pricing.currency}
           activationPriceMinor={pricing.activationPriceMinor}
           renewalPriceMinor={pricing.renewalPriceMinor}

@@ -22,8 +22,19 @@ const paystackBtn =
 const walletBtn =
   "inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-cyan-500/70 bg-gradient-to-r from-cyan-600/90 to-teal-600/90 px-5 py-2.5 text-sm font-bold text-white shadow-[0_8px_28px_-6px_rgba(6,182,212,0.45)] transition hover:from-cyan-500 hover:to-teal-500 disabled:opacity-50 dark:from-cyan-600 dark:to-teal-700";
 
+function formatActiveUntil(iso: string | null | undefined) {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
 export function PartsFinderActivationClient(props: {
   accessState: AccessState;
+  /** ISO end of current window when membership is ACTIVE (for messaging only). */
+  activeUntil: string | null;
   currency: string;
   activationPriceMinor: number;
   renewalPriceMinor: number;
@@ -40,6 +51,7 @@ export function PartsFinderActivationClient(props: {
   const [verifyingReturn, setVerifyingReturn] = useState(false);
   const [acceptPlatform, setAcceptPlatform] = useState(false);
   const [acceptDisclaimer, setAcceptDisclaimer] = useState(false);
+  const [acceptingLegal, setAcceptingLegal] = useState(false);
 
   const activationPrice = props.activationPriceMinor / 100;
   const renewalPrice = props.renewalPriceMinor / 100;
@@ -54,10 +66,33 @@ export function PartsFinderActivationClient(props: {
   const legalReady = acceptPlatform && acceptDisclaimer;
   const payDisabled =
     busy !== null ||
+    acceptingLegal ||
     props.accessState === "PENDING_PAYMENT" ||
     props.accessState === "SUSPENDED" ||
     props.accessState === "ACTIVE" ||
     !legalReady;
+
+  async function autoAcceptPendingLegal() {
+    if (acceptingLegal) return false;
+    setAcceptingLegal(true);
+    try {
+      const res = await fetch("/api/legal/profile/accept-all", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setMessage(data.error ?? "Could not save legal acknowledgement.");
+        return false;
+      }
+      setAcceptPlatform(true);
+      setAcceptDisclaimer(true);
+      return true;
+    } finally {
+      setAcceptingLegal(false);
+    }
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -115,9 +150,20 @@ export function PartsFinderActivationClient(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(activatePayload()),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; authorizationUrl?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+        authorizationUrl?: string;
+        activeUntil?: string | null;
+      };
       if (!res.ok || !data.authorizationUrl) {
-        setMessage(data.error ?? "Could not start secure payment. Try again or pay from wallet.");
+        setMessage(
+          data.error ??
+            (data.code === "ALREADY_ACTIVE"
+              ? "Your membership is already active. Renewal opens after it fully expires."
+              : "Could not start secure payment. Try again or pay from wallet."),
+        );
         return;
       }
       window.location.href = data.authorizationUrl;
@@ -136,9 +182,19 @@ export function PartsFinderActivationClient(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(activatePayload()),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; redirectTo?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+        redirectTo?: string;
+      };
       if (!res.ok || !data.ok) {
-        setMessage(data.error ?? "Could not pay from wallet.");
+        setMessage(
+          data.error ??
+            (data.code === "ALREADY_ACTIVE"
+              ? "Your membership is already active. Renewal opens after it fully expires."
+              : "Could not pay from wallet."),
+        );
         return;
       }
       router.push(data.redirectTo ?? "/parts-finder/search");
@@ -149,6 +205,7 @@ export function PartsFinderActivationClient(props: {
   }
 
   if (props.accessState === "ACTIVE") {
+    const untilLabel = formatActiveUntil(props.activeUntil);
     return (
       <div
         className={cn(
@@ -156,7 +213,12 @@ export function PartsFinderActivationClient(props: {
         )}
       >
         <p className="text-base font-semibold text-foreground">Your membership is already active.</p>
-        <p className="mt-2 text-sm text-muted-foreground">Use Find Parts to run advanced search.</p>
+        {untilLabel ? (
+          <p className="mt-2 text-sm font-medium text-cyan-900 dark:text-cyan-200/90">Access through {untilLabel}</p>
+        ) : null}
+        <p className="mt-2 text-sm text-muted-foreground">
+          Use Find Parts to run advanced search. You cannot pay again until this window has fully ended.
+        </p>
       </div>
     );
   }
@@ -193,7 +255,10 @@ export function PartsFinderActivationClient(props: {
           <input
             type="checkbox"
             checked={acceptPlatform}
-            onChange={(e) => setAcceptPlatform(e.target.checked)}
+            onChange={(e) => {
+              if (e.target.checked) void autoAcceptPendingLegal();
+            }}
+            disabled={acceptingLegal}
             className="mt-0.5 accent-[var(--brand)]"
           />
           <span className="font-medium">
@@ -205,7 +270,10 @@ export function PartsFinderActivationClient(props: {
           <input
             type="checkbox"
             checked={acceptDisclaimer}
-            onChange={(e) => setAcceptDisclaimer(e.target.checked)}
+            onChange={(e) => {
+              if (e.target.checked) void autoAcceptPendingLegal();
+            }}
+            disabled={acceptingLegal}
             className="mt-0.5 accent-[var(--brand)]"
           />
           <span className="font-medium">

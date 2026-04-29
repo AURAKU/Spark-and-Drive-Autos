@@ -125,6 +125,9 @@
   :root {
     --brand: #14d8e6;
     --brand-deep: #0a9fb0;
+    --ui-highlight-bg: color-mix(in srgb, var(--brand) 16%, white 84%);
+    --ui-highlight-border: color-mix(in srgb, var(--brand) 35%, transparent);
+    --ui-highlight-text: color-mix(in srgb, var(--brand) 65%, #0f172a 35%);
   }
   html {
     @apply font-sans;
@@ -277,6 +280,11 @@
     color: var(--brand) !important;
     font-weight: 700 !important;
   }
+  .light .ui-highlight-chip {
+    background-color: var(--ui-highlight-bg) !important;
+    border: 1px solid var(--ui-highlight-border);
+    color: var(--ui-highlight-text) !important;
+  }
   .light .text-emerald-400 {
     color: #047857 !important;
     font-weight: 700 !important;
@@ -403,6 +411,12 @@
   .light body.ui-page-nav-pulse::before {
     background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 20%, transparent), transparent 70%);
   }
+}
+
+.dark .ui-highlight-chip {
+  background-color: color-mix(in srgb, var(--brand) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  color: color-mix(in srgb, var(--brand) 80%, white 20%);
 }
 
 @media (pointer: coarse) {

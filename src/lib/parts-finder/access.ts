@@ -7,6 +7,9 @@ import type { MembershipAccessSnapshot, PartsFinderAccessLevel } from "@/lib/par
 
 const MEMBERSHIP_WINDOW_DAYS = 30;
 
+/** Pending Paystack/init records older than this can start a new activation attempt (abandoned checkout). */
+const PENDING_PAYMENT_MAX_AGE_MS = 90 * 60 * 1000;
+
 export class PartsFinderAccessError extends Error {
   constructor(
     message: string,
@@ -63,12 +66,16 @@ export async function loadMembershipSnapshotForUser(userId: string): Promise<Mem
   const activeFrom = membership?.startsAt ?? paymentWindowStartsAt;
   const activeUntil = membership?.endsAt ?? paymentWindowEndsAt;
   const suspensionReason = membership?.status === "SUSPENDED" ? membership.reason ?? "Suspended by admin." : null;
+  const pendingStatuses = new Set<PaymentStatus>([
+    PaymentStatus.PENDING,
+    PaymentStatus.AWAITING_PROOF,
+    PaymentStatus.PROCESSING,
+    PaymentStatus.UNDER_REVIEW,
+  ]);
+  const pendingAgeOk =
+    latestPayment && now.getTime() - latestPayment.createdAt.getTime() < PENDING_PAYMENT_MAX_AGE_MS;
   const hasPendingPayment = Boolean(
-    latestPayment &&
-      (latestPayment.status === PaymentStatus.PENDING ||
-        latestPayment.status === PaymentStatus.AWAITING_PROOF ||
-        latestPayment.status === PaymentStatus.PROCESSING ||
-        latestPayment.status === PaymentStatus.UNDER_REVIEW),
+    latestPayment && pendingStatuses.has(latestPayment.status) && pendingAgeOk,
   );
 
   if (status === "SUSPENDED") {
@@ -130,7 +137,7 @@ export async function loadMembershipSnapshotForUser(userId: string): Promise<Mem
   return {
     userId,
     state: "ACTIVE",
-    allowActivation: true,
+    allowActivation: false,
     allowSearch: true,
     allowResults: true,
     activeFrom: activeFrom?.toISOString() ?? null,
@@ -168,11 +175,24 @@ export async function assertPartsFinderAccess(level: PartsFinderAccessLevel) {
       "UNAUTHENTICATED",
     );
   }
+  const isAdmin = Boolean(session.user.role && isAdminRole(session.user.role));
   if (level === "ADMIN") {
-    if (!session.user.role || !isAdminRole(session.user.role)) {
+    if (!isAdmin) {
       throw new PartsFinderAccessError("Admin privileges required.", 403, "/dashboard", "FORBIDDEN");
     }
     return { session, snapshot: await loadMembershipSnapshotForUser(session.user.id) };
+  }
+  if (isAdmin) {
+    const snapshot = await loadMembershipSnapshotForUser(session.user.id);
+    return {
+      session,
+      snapshot: {
+        ...snapshot,
+        allowActivation: true,
+        allowSearch: true,
+        allowResults: true,
+      },
+    };
   }
   const settings = await prisma.partsFinderSettings.findFirst({
     orderBy: { updatedAt: "desc" },

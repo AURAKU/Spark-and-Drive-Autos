@@ -548,10 +548,12 @@ model User {
   emailVerified          DateTime?
   passwordHash           String?
   name                   String?
-  phone                  String?
+  /// Normalized at registration; unique when set (PostgreSQL allows multiple NULLs).
+  phone                  String?   @unique
   country                String?
   image                  String?
-  ghanaCardIdNumber      String?
+  /// Normalized before save; unique when set — one Ghana Card ID per account.
+  ghanaCardIdNumber      String?   @unique
   ghanaCardImageUrl      String?
   ghanaCardImagePublicId String?
   walletBalance          Decimal   @default(0) @db.Decimal(14, 2)

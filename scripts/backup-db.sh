@@ -5,7 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR="$ROOT_DIR/backups/db"
 TIMESTAMP="$(date +"%Y-%m-%d-%H-%M")"
 FILENAME="sparkdrive-db-${TIMESTAMP}.sql"
-OUT_FILE="$BACKUP_DIR/$FILENAME"
+# Optional override when composing a larger backup (see scripts/backup-full.sh).
+if [[ -n "${BACKUP_SQL_PATH:-}" ]]; then
+  OUT_FILE="$BACKUP_SQL_PATH"
+else
+  OUT_FILE="$BACKUP_DIR/$FILENAME"
+fi
 
 if ! command -v pg_dump >/dev/null 2>&1; then
   echo "Error: pg_dump is not installed or not in PATH." >&2
@@ -17,7 +22,7 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$(dirname "$OUT_FILE")"
 
 echo "Creating PostgreSQL backup..."
 

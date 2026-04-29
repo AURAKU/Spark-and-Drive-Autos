@@ -1,10 +1,15 @@
 "use client";
 
 import { VerificationDocumentType, VerificationStatus } from "@prisma/client";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ID_VERIFICATION_CONSENT_TEXT } from "@/lib/identity-verification";
+import { ALLOWED_VERIFICATION_DOCUMENT_TYPES } from "@/lib/identity-verification";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -71,11 +76,29 @@ function statusTone(status: VerificationStatus) {
   }
 }
 
+function documentTypeLabel(type: VerificationDocumentType): string {
+  if (type === VerificationDocumentType.GHANA_CARD) return "Ghana Card";
+  if (type === VerificationDocumentType.DRIVER_LICENSE) return "Driver License";
+  if (type === VerificationDocumentType.PASSPORT) return "Passport";
+  return type.replaceAll("_", " ");
+}
+
 export function VerificationClient({
+  ghanaCardIdNumber = null,
+  ghanaCardImageUrl = null,
   latest,
 }: {
+  ghanaCardIdNumber?: string | null;
+  ghanaCardImageUrl?: string | null;
   latest: VerificationSnapshot | null;
 }) {
+  const router = useRouter();
+  const [ghanaCardId, setGhanaCardId] = useState(ghanaCardIdNumber ?? "");
+  const [cardUploading, setCardUploading] = useState(false);
+  useEffect(() => {
+    setGhanaCardId(ghanaCardIdNumber ?? "");
+  }, [ghanaCardIdNumber]);
+
   const [documentType, setDocumentType] = useState<VerificationDocumentType>("GHANA_CARD");
   const [reason, setReason] = useState("High-value transaction verification");
   const [front, setFront] = useState<File | null>(null);
@@ -95,6 +118,49 @@ export function VerificationClient({
     if (latest.status === "UNDER_REVIEW") return "Verification is under review by compliance/admin.";
     return "Verification submitted and pending review.";
   }, [latest]);
+
+  async function uploadGhanaCard(file: File) {
+    const sigRes = await fetch("/api/upload/profile-id-signature", { method: "POST" });
+    if (!sigRes.ok) throw new Error("Could not sign upload");
+    const sig = (await sigRes.json()) as {
+      timestamp: number;
+      signature: string;
+      apiKey: string;
+      folder: string;
+      uploadUrl: string;
+    };
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("api_key", sig.apiKey);
+    fd.append("timestamp", String(sig.timestamp));
+    fd.append("signature", sig.signature);
+    fd.append("folder", sig.folder);
+    const up = await fetch(sig.uploadUrl, { method: "POST", body: fd });
+    if (!up.ok) throw new Error("Upload failed");
+    const json = (await up.json()) as { secure_url: string; public_id: string };
+    const save = await fetch("/api/profile/ghana-card", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ghanaCardIdNumber: ghanaCardId, imageUrl: json.secure_url, imagePublicId: json.public_id }),
+    });
+    if (!save.ok) throw new Error("Could not save Ghana Card details");
+  }
+
+  async function onUploadCard(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCardUploading(true);
+    try {
+      await uploadGhanaCard(file);
+      toast.success("Ghana Card uploaded");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setCardUploading(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -155,6 +221,51 @@ export function VerificationClient({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <h2 className="text-lg font-semibold text-white">Ghana Card verification</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Upload Ghana Card ID photo and ID number for delivery/checkout verification.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="verification-gh-card-id">Ghana Card ID number</Label>
+              <Input
+                id="verification-gh-card-id"
+                value={ghanaCardId}
+                onChange={(e) => setGhanaCardId(e.target.value)}
+                className="mt-1"
+                placeholder="e.g. GHA-123456789-0"
+                disabled={cardUploading}
+              />
+            </div>
+            <div>
+              <input
+                id="verification-gh-card-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={cardUploading}
+                onChange={(e) => void onUploadCard(e)}
+              />
+              <label
+                htmlFor="verification-gh-card-upload"
+                className={`inline-flex h-9 cursor-pointer items-center rounded-md border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10 ${cardUploading ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {cardUploading ? "Uploading…" : "Upload Ghana Card photo"}
+              </label>
+            </div>
+          </div>
+          <div className="relative h-28 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+            {ghanaCardImageUrl ? (
+              <Image src={ghanaCardImageUrl} alt="Ghana Card ID" fill className="object-cover" unoptimized />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-zinc-500">No ID photo</div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h2 className="text-lg font-semibold text-white">Identity verification status</h2>
         <p className="mt-1 text-sm text-zinc-400">
           Identity verification helps us protect customers, prevent fraud, verify payments, and safely process high-value transactions.
@@ -181,9 +292,9 @@ export function VerificationClient({
               disabled={uploadDisabled}
               className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white"
             >
-              {Object.values(VerificationDocumentType).map((t) => (
+              {ALLOWED_VERIFICATION_DOCUMENT_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t.replaceAll("_", " ")}
+                  {documentTypeLabel(t)}
                 </option>
               ))}
             </select>

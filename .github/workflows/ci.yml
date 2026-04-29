@@ -32,5 +32,5 @@ jobs:
         run: npm run test:parts-finder
 
       - name: Production build
-        # Clean .next so a prior partial run cannot cause ENOENT during static handling (Next 15+).
-        run: npm run build:clean
+        # `npm run build` clears `.next` first (avoids stale webpack chunk / MODULE_NOT_FOUND failures).
+        run: npm run build

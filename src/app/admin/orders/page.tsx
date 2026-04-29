@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
@@ -18,7 +17,6 @@ import type { OrderKind, Prisma } from "@prisma/client";
 
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 import { buildOrderListSearchWhere, normalizeOrderListSearchQuery } from "@/lib/admin-orders-search";
-import { OPS_ROUTE_CACHE_TAGS } from "@/lib/ops-route-cache-tags";
 import { orderItemTitleSummary } from "@/lib/order-item-display";
 
 export const dynamic = "force-dynamic";
@@ -44,36 +42,32 @@ function readPage(sp: Record<string, string | string[] | undefined>, key: string
   return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
 }
 
-const getAdminOrdersPageData = unstable_cache(
-  async (where: Prisma.OrderWhereInput, pageReq: number) => {
-    const total = await prisma.order.count({ where });
-    const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
-    const page = Math.min(Math.max(1, pageReq), totalPages);
-    const rows = await prisma.order.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        reference: true,
-        kind: true,
-        orderStatus: true,
-        amount: true,
-        currency: true,
-        createdAt: true,
-        updatedAt: true,
-        user: { select: { email: true } },
-        car: { select: { slug: true, title: true, sourceType: true } },
-        partItems: { select: { titleSnapshot: true, origin: true, part: { select: { stockStatus: true } } } },
-        payments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
-      },
-    });
-    return { total, totalPages, page, rows };
-  },
-  ["ops-admin-orders-page:v1"],
-  { revalidate: 10, tags: [OPS_ROUTE_CACHE_TAGS.adminOrders] },
-);
+async function loadAdminOrdersPageData(where: Prisma.OrderWhereInput, pageReq: number) {
+  const total = await prisma.order.count({ where });
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+  const page = Math.min(Math.max(1, pageReq), totalPages);
+  const rows = await prisma.order.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+    select: {
+      id: true,
+      reference: true,
+      kind: true,
+      orderStatus: true,
+      amount: true,
+      currency: true,
+      createdAt: true,
+      updatedAt: true,
+      user: { select: { email: true } },
+      car: { select: { slug: true, title: true, sourceType: true } },
+      partItems: { select: { titleSnapshot: true, origin: true, part: { select: { stockStatus: true } } } },
+      payments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+    },
+  });
+  return { total, totalPages, page, rows };
+}
 
 export default async function AdminOrdersPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
@@ -99,7 +93,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
   if (lineageWhere) whereParts.push(lineageWhere);
   if (searchWhere) whereParts.push(searchWhere);
   const where: Prisma.OrderWhereInput = whereParts.length > 0 ? { AND: whereParts } : {};
-  const { total, totalPages, page, rows } = await getAdminOrdersPageData(where, pageReq);
+  const { total, totalPages, page, rows } = await loadAdminOrdersPageData(where, pageReq);
 
   const buildHref = (kind: "" | "CAR" | "PARTS", nextPage = 1, pl: AdminPartsLineage = null) => {
     const p = new URLSearchParams();

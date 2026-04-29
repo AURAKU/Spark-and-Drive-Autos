@@ -25,6 +25,7 @@ import {
   requiresSourcingContract,
 } from "@/lib/legal-enforcement";
 import { getUserRiskTags } from "@/lib/legal-risk-controls";
+import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
 import { logRiskEvent } from "@/lib/risk-engine";
 import { safeAuth } from "@/lib/safe-auth";
 import { paystackInitialize } from "@/lib/paystack";
@@ -34,7 +35,7 @@ import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
 import { requireVerification } from "@/lib/identity-verification";
-import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
+import { PolicyAcceptanceRequiredError, hasUserAccepted, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -180,28 +181,40 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
-  if (!parsed.data.agreementAccepted) {
-    return NextResponse.json({ error: "You must accept checkout agreement before payment." }, { status: 400 });
+  if (requiresSourcingContract(car.sourceType)) {
+    const acceptedContract = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
+    if (!acceptedContract) {
+      await logRiskEvent({
+        userId: session.user.id,
+        type: "missing_contract_acceptance_attempt",
+        severity: "medium",
+        meta: { sourceType: car.sourceType, carId: car.id },
+      });
+      return NextResponse.json(
+        { error: "Accept pending legal updates in your profile before payment.", code: "REQUIRE_ACCEPTANCE" },
+        { status: 409 },
+      );
+    }
   }
-  if (requiresSourcingContract(car.sourceType) && !parsed.data.contractAccepted) {
-    await logRiskEvent({
-      userId: session.user.id,
-      type: "missing_contract_acceptance_attempt",
-      severity: "medium",
-      meta: { sourceType: car.sourceType, carId: car.id },
-    });
-    return NextResponse.json({ error: "Sourcing contract acceptance is required." }, { status: 400 });
+  if (requiresRiskAcknowledgement(car.sourceType)) {
+    const acceptedRisk = await hasUserAccepted(
+      session.user.id,
+      POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
+      parsed.data.riskVersion ?? "",
+    );
+    if (!acceptedRisk) {
+      await logRiskEvent({
+        userId: session.user.id,
+        type: "missing_risk_acknowledgement_attempt",
+        severity: "medium",
+        meta: { sourceType: car.sourceType, carId: car.id },
+      });
+      return NextResponse.json(
+        { error: "Accept pending legal updates in your profile before payment.", code: "REQUIRE_ACCEPTANCE" },
+        { status: 409 },
+      );
+    }
   }
-  if (requiresRiskAcknowledgement(car.sourceType) && !parsed.data.riskAccepted) {
-    await logRiskEvent({
-      userId: session.user.id,
-      type: "missing_risk_acknowledgement_attempt",
-      severity: "medium",
-      meta: { sourceType: car.sourceType, carId: car.id },
-    });
-    return NextResponse.json({ error: "Risk acknowledgement is required." }, { status: 400 });
-  }
-
   const legalOk = await assertVehicleCheckoutLegalVersions({
     agreementVersion: parsed.data.agreementVersion,
     contractVersion: parsed.data.contractVersion,

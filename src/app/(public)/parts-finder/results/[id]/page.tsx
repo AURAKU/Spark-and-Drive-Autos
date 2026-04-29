@@ -66,7 +66,8 @@ function quickVerdict(params: {
 function sanitizeCustomerText(input: string | null | undefined): string {
   const raw = (input ?? "").trim();
   if (!raw) return "";
-  const blocked = /(ai|openai|anthropic|serper|web-?discovery|external data|provider unavailable|timed out|amazon|walmart|ebay|autozone)/i;
+  const blocked =
+    /(ai|openai|anthropic|serper|web-?discovery|external data|provider unavailable|timed out|amazon|walmart|ebay|autozone|chatgpt|gpt-\d|perplexity|claude|bing|google search)/i;
   if (!blocked.test(raw)) return raw;
   return "Compatibility guidance based on catalog patterns and supplier fitment signals.";
 }
@@ -117,6 +118,11 @@ export default async function PublicPartsFinderResultDetailPage(props: { params:
     confidence?: "LOW" | "MEDIUM";
     warnings?: string[];
     disclaimer?: string;
+    locationOnVehicle?: string;
+    functionRole?: string;
+    whyReplace?: string;
+    operationalImportance?: string;
+    similarApplications?: Array<{ make?: string; model?: string; yearRange?: string; note?: string }>;
   };
   const normalizedQuery =
     (typeof safePayload.normalizedQuery === "string" && safePayload.normalizedQuery.trim().length > 0
@@ -264,25 +270,45 @@ export default async function PublicPartsFinderResultDetailPage(props: { params:
                 topCandidate.partFunctionSummary ??
                 "This component supports core vehicle operation and should be replaced with a VIN/chassis-matched part to avoid fitment or performance issues."}
             </p>
+            {(sanitizeCustomerText(ai.functionRole) || sanitizeCustomerText(ai.locationOnVehicle)) && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {sanitizeCustomerText(ai.functionRole) ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What this part does</p>
+                    <p className="mt-1 text-xs text-foreground">{sanitizeCustomerText(ai.functionRole)}</p>
+                  </div>
+                ) : null}
+                {sanitizeCustomerText(ai.locationOnVehicle) ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Where it fits</p>
+                    <p className="mt-1 text-xs text-foreground">{sanitizeCustomerText(ai.locationOnVehicle)}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-muted/20 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Maintenance note</p>
                 <p className="mt-1 text-xs text-foreground">
-                  {normalizedResult?.maintenanceNote ??
+                  {sanitizeCustomerText(ai.whyReplace) ||
+                    normalizedResult?.maintenanceNote ||
                     "Replace according to manufacturer schedule or earlier when contamination, leakage, or pressure issues are observed."}
                 </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Symptoms to watch</p>
                 <p className="mt-1 text-xs text-foreground">
-                  {normalizedResult?.symptoms ??
+                  {sanitizeCustomerText(ai.operationalImportance) ||
+                    normalizedResult?.symptoms ||
                     "Reduced performance, unusual engine noise, warning lights, or poor lubrication response may indicate mismatch or wear."}
                 </p>
               </div>
             </div>
             <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Compatibility insight</p>
-              <p className="mt-1 text-sm text-foreground">Supplier/catalog evidence reviewed.</p>
+              <p className="mt-1 text-sm text-foreground">
+                Technical correlation for your vehicle and part description is complete. Results are guidance only until VIN-confirmed.
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Confidence: {ai.confidence ?? "LOW"} · Verification status: VIN/chassis confirmation required.
               </p>

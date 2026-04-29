@@ -23,7 +23,7 @@ export function RequiredLegalCheckbox({
         className="mt-1 accent-[var(--brand)]"
       />
       <span className="font-medium">
-        <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 text-[var(--brand)] dark:bg-[var(--brand)]/20">
+        <span className="ui-highlight-chip rounded-md px-1.5 py-0.5">
           {label}
         </span>{" "}
         {version ? <span className="font-mono text-xs text-foreground/80 dark:text-zinc-200/90">(v{version})</span> : null}

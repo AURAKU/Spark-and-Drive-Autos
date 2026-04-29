@@ -144,7 +144,10 @@ async function main() {
     console.log("✓ Port 5173 is free");
   }
 
-  console.log("\n→ npm run dev     then     http://localhost:5173\n");
+  console.log("\n→ npm run dev     then     http://localhost:5173");
+  console.log(
+    "\nBuild tip: `npm run build` always clears `.next` first (avoids stale webpack chunk errors). For a faster repeat build locally: npm run build:incremental\n",
+  );
 }
 
 main().catch((e) => {

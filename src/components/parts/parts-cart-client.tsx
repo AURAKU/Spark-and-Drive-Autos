@@ -289,7 +289,13 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
                   aria-label={`Select ${row.part.title}`}
                 />
                 <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-white/10">
-                  <Image src={row.part.coverImageUrl ?? "/brand/logo-emblem.png"} alt="" fill className="object-cover" />
+                  <Image
+                  src={row.part.coverImageUrl ?? "/brand/logo-emblem.png"}
+                  alt=""
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                />
                 </div>
                 <div>
                   <Link href={`/parts/${row.part.slug}`} className="text-sm font-medium text-white hover:text-[var(--brand)]">

@@ -64,18 +64,27 @@ export async function orchestratePartsFinderSearch(
   const refinedCandidates = filteredCandidates.slice(0, 3);
   const confidence = refinedCandidates.length > 0 ? calculateConfidenceBreakdown(refinedCandidates[0]) : null;
   const summary = summarizePartsFinderResults(refinedCandidates, confidence);
-  const ai = await summarizePartsResults({
-    query: payload.partDescription ?? "",
-    normalizedQuery: cleanedDescription || (payload.partDescription ?? ""),
-    serperResults: rawEvidence.map((row) => ({
-      title: row.title,
-      snippet: row.snippet,
-      sourceUrl: row.sourceUrl ?? null,
-      oemReferences: row.oemReferences,
-      alternateReferences: row.alternateReferences,
-      fitmentClues: row.fitmentClues,
-    })),
-  }, trace);
+  const ai = await summarizePartsResults(
+    {
+      query: payload.partDescription ?? "",
+      normalizedQuery: cleanedDescription || (payload.partDescription ?? ""),
+      serperResults: rawEvidence.map((row) => ({
+        title: row.title,
+        snippet: row.snippet,
+        sourceUrl: row.sourceUrl ?? null,
+        oemReferences: row.oemReferences,
+        alternateReferences: row.alternateReferences,
+        fitmentClues: row.fitmentClues,
+      })),
+      vehicleContext: {
+        brand: vehicle.brand ?? (normalized as { brand?: string | null }).brand ?? null,
+        model: vehicle.model ?? (normalized as { model?: string | null }).model ?? null,
+        year: vehicle.year ?? (normalized as { year?: number | null }).year ?? null,
+        engine: vehicle.engine ?? (normalized as { engine?: string | null }).engine ?? null,
+      },
+    },
+    trace,
+  );
 
   const sessionId = await logPartsFinderSearchEvent({
     userId,

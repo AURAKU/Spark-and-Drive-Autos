@@ -78,6 +78,9 @@ export function CheckoutClient({
     riskVersion: string;
     requiresContract: boolean;
     requiresRisk: boolean;
+    agreementAccepted: boolean;
+    contractAccepted: boolean;
+    riskAccepted: boolean;
   };
 }) {
   const sp = useSearchParams();
@@ -88,9 +91,10 @@ export function CheckoutClient({
     sp.get("type") === "RESERVATION_DEPOSIT" ? "RESERVATION_DEPOSIT" : "FULL";
   const [loading, setLoading] = useState(false);
   const [authGateOpen, setAuthGateOpen] = useState(false);
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
-  const [contractAccepted, setContractAccepted] = useState(false);
-  const [riskAccepted, setRiskAccepted] = useState(false);
+  const [agreementAccepted, setAgreementAccepted] = useState(legalRequirements.agreementAccepted);
+  const [contractAccepted, setContractAccepted] = useState(legalRequirements.contractAccepted);
+  const [riskAccepted, setRiskAccepted] = useState(legalRequirements.riskAccepted);
+  const [acceptingLegal, setAcceptingLegal] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
   const [riskOpen, setRiskOpen] = useState(false);
   const [apiConflict, setApiConflict] = useState<{
@@ -117,6 +121,32 @@ export function CheckoutClient({
     agreementAccepted &&
     (!legalRequirements.requiresContract || contractAccepted) &&
     (!legalRequirements.requiresRisk || riskAccepted);
+
+  async function autoAcceptPendingLegal() {
+    if (acceptingLegal) return false;
+    setAcceptingLegal(true);
+    try {
+      const res = await fetch("/api/legal/profile/accept-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error ?? "Could not save legal acceptance.");
+        return false;
+      }
+      setAgreementAccepted(true);
+      if (legalRequirements.requiresContract) setContractAccepted(true);
+      if (legalRequirements.requiresRisk) setRiskAccepted(true);
+      toast.success("Legal acknowledgement accepted.");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save legal acceptance.");
+      return false;
+    } finally {
+      setAcceptingLegal(false);
+    }
+  }
 
   const initiatePayment = useCallback(async () => {
     if (!carId) {
@@ -418,12 +448,16 @@ export function CheckoutClient({
                   id="checkout-agreement"
                   type="checkbox"
                   checked={agreementAccepted}
-                  onChange={(e) => setAgreementAccepted(e.target.checked)}
+                  disabled={acceptingLegal}
+                  onChange={(e) => {
+                    if (!e.target.checked || agreementAccepted) return;
+                    void autoAcceptPendingLegal();
+                  }}
                   className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                 />
                 <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
-                  I agree to the{" "}
-                  <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                  {agreementAccepted ? "Accepted:" : "Select to auto-accept now:"}{" "}
+                  <span className="ui-highlight-chip rounded-md px-1.5 py-0.5 font-semibold">
                     Checkout Agreement
                   </span>
                   . Version {legalRequirements.agreementVersion}.
@@ -435,12 +469,16 @@ export function CheckoutClient({
                     id="checkout-contract"
                     type="checkbox"
                     checked={contractAccepted}
-                    onChange={(e) => setContractAccepted(e.target.checked)}
+                    disabled={acceptingLegal}
+                    onChange={(e) => {
+                      if (!e.target.checked || contractAccepted) return;
+                      void autoAcceptPendingLegal();
+                    }}
                     className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                   />
                   <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
-                    I have read and accept the{" "}
-                    <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                    {contractAccepted ? "Accepted:" : "I have read and accept the"}{" "}
+                    <span className="ui-highlight-chip rounded-md px-1.5 py-0.5 font-semibold">
                       sourcing contract
                     </span>{" "}
                     for this order. Version{" "}
@@ -465,12 +503,16 @@ export function CheckoutClient({
                     id="checkout-risk"
                     type="checkbox"
                     checked={riskAccepted}
-                    onChange={(e) => setRiskAccepted(e.target.checked)}
+                    disabled={acceptingLegal}
+                    onChange={(e) => {
+                      if (!e.target.checked || riskAccepted) return;
+                      void autoAcceptPendingLegal();
+                    }}
                     className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
                   />
                   <span className="text-sm leading-relaxed text-foreground dark:text-zinc-100 sm:text-base">
-                    I have read and accept the{" "}
-                    <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                    {riskAccepted ? "Accepted:" : "I have read and accept the"}{" "}
+                    <span className="ui-highlight-chip rounded-md px-1.5 py-0.5 font-semibold">
                       risk acknowledgement
                     </span>{" "}
                     for this order. Version {legalRequirements.riskVersion}.{" "}
@@ -507,7 +549,7 @@ export function CheckoutClient({
             </Button>
             {!allAgreementsAccepted ? (
               <p className="mt-2 text-sm text-amber-200/90 sm:text-base">
-                Select every required checkbox above to unlock payment.
+                Select each required legal acknowledgement above to auto-accept and continue instantly.
               </p>
             ) : null}
             <p className="mt-3 text-sm text-zinc-500 sm:text-base">

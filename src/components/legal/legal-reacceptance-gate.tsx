@@ -82,7 +82,15 @@ export function LegalReacceptanceGate({ policies, defaultRedirectTo }: Props) {
         </div>
 
         <label className="mt-5 flex items-start gap-3">
-          <Checkbox checked={agreed} onCheckedChange={(value) => setAgreed(value === true)} className="mt-0.5" />
+          <Checkbox
+            checked={agreed}
+            onCheckedChange={(value) => {
+              const next = value === true;
+              setAgreed(next);
+              if (next) void onAccept();
+            }}
+            className="mt-0.5"
+          />
           <span className="text-sm text-foreground">
             I have read and agree to the latest{" "}
             <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">

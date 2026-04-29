@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createPartsWalletOrder } from "@/lib/parts-checkout";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { isPartsStockError } from "@/lib/parts-stock-customer";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -15,7 +17,6 @@ const schema = z.object({
   partType: z.string().max(120).optional().transform((s) => (s?.trim() ? s.trim() : undefined)),
   addressId: z.string().cuid(),
   requestKey: z.string().min(8).max(80).optional(),
-  agreementAccepted: z.boolean(),
   agreementVersion: z.string().min(1).max(40),
   chinaShippingChoice: z.enum(["AIR", "SEA"]).optional(),
   dispatchPhone: z.string().max(40).optional().transform((s) => (s?.trim() ? s.trim() : undefined)),
@@ -34,8 +35,28 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
 
-  if (!parsed.data.agreementAccepted) {
-    return NextResponse.json({ error: "Checkout agreement is required." }, { status: 400 });
+  try {
+    await requirePolicyAcceptance({
+      userId: session.user.id,
+      policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT,
+      context: "CHECKOUT",
+    });
+  } catch (error) {
+    if (error instanceof PolicyAcceptanceRequiredError) {
+      return NextResponse.json(
+        {
+          error: "Accept pending legal updates in your profile before parts checkout.",
+          code: "REQUIRE_ACCEPTANCE",
+          policyKey: error.policyKey,
+          version: error.version,
+          title: error.title,
+          effectiveDate: error.effectiveDate,
+          context: error.context,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
   }
   const part = await prisma.part.findUnique({
     where: { id: parsed.data.partId },

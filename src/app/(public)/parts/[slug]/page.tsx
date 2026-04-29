@@ -4,12 +4,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
-import { PartImageGallery, buildPartGalleryImageList } from "@/components/parts/part-image-gallery";
+import { PartImageGallery } from "@/components/parts/part-image-gallery";
+import { buildPartGalleryImageList } from "@/lib/part-gallery-images";
 import { PartOriginAvailabilityBadge } from "@/components/parts/part-origin-availability-badge";
 import { PartDetailActions } from "@/components/parts/part-detail-actions";
 import { PartReviewsSection } from "@/components/parts/part-reviews-section";
 import { formatConverted, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { hasUserAccepted } from "@/lib/legal-versioning";
 import { allowedPartCurrencies, getPartDisplayPrice } from "@/lib/parts-pricing";
 import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
 import { getPublicAppUrl } from "@/lib/app-url";
@@ -79,14 +82,17 @@ export default async function PartDetailPage(props: Props) {
           select: {
             walletBalance: true,
             addresses: {
-              where: { isDefault: true },
-              take: 1,
+              orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
               select: { id: true, fullName: true, phone: true, city: true, region: true, streetAddress: true },
             },
           },
         })
       : null;
   const legal = await getCheckoutLegalVersions();
+  const checkoutAgreementAccepted =
+    session?.user?.id != null
+      ? await hasUserAccepted(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT, legal.agreementVersion)
+      : false;
   const favorite =
     session?.user?.id != null
       ? await prisma.partFavorite.findUnique({
@@ -225,9 +231,11 @@ export default async function PartDetailPage(props: Props) {
               currency="GHS"
               walletBalance={Number(me?.walletBalance ?? 0)}
               defaultAddress={me?.addresses[0] ?? null}
+              addresses={me?.addresses ?? []}
               isSignedIn={Boolean(session?.user?.id)}
               initialFavorite={Boolean(favorite)}
               agreementVersion={legal.agreementVersion}
+              initialAgreementAccepted={checkoutAgreementAccepted}
               chinaQuotes={chinaQuotes}
               isPreorder={isChinaPreOrderPart(part)}
               optionLists={optionLists}

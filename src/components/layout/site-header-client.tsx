@@ -104,7 +104,13 @@ export function SiteHeaderClient({
               aria-label="Open site navigation menu"
             >
               <span className="relative inline-flex size-10 items-center justify-center overflow-hidden rounded-full sm:size-11">
-                <Image src="/brand/logo-emblem.png" alt="Spark and Drive Autos logo" fill className="rounded-full object-cover p-1" />
+                <Image
+                  src="/brand/logo-emblem.png"
+                  alt="Spark and Drive Autos logo"
+                  fill
+                  sizes="44px"
+                  className="rounded-full object-cover p-1"
+                />
               </span>
               <ChevronDown className="mr-1 size-4 opacity-75" aria-hidden />
             </DropdownMenuTrigger>

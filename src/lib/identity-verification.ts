@@ -17,6 +17,13 @@ export const VERIFICATION_RISK_TAGS = [
   "PAYMENT_VERIFICATION_REQUIRED",
 ] as const;
 
+/** Customer-facing allowed verification IDs (restricted product scope). */
+export const ALLOWED_VERIFICATION_DOCUMENT_TYPES: VerificationDocumentType[] = [
+  VerificationDocumentType.GHANA_CARD,
+  VerificationDocumentType.PASSPORT,
+  VerificationDocumentType.DRIVER_LICENSE,
+];
+
 export type VerificationContext =
   | "VEHICLE_PURCHASE"
   | "HIGH_VALUE_PAYMENT"

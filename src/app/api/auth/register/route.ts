@@ -7,6 +7,7 @@ import { ACCEPTANCE_CONTEXT, recordUserPolicyAcceptance } from "@/lib/legal-acce
 import { writeLegalAuditLog } from "@/lib/legal-audit";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
 import { prisma } from "@/lib/prisma";
+import { isUniqueConstraintViolation } from "@/lib/prisma-unique";
 import { normalizePhone } from "@/lib/phone";
 import { rateLimitRegister } from "@/lib/rate-limit";
 import { sanitizePlainText } from "@/lib/sanitize";
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
   }
   const phoneNormalized = phone ? normalizePhone(phone) : null;
   if (phoneNormalized) {
-    const phoneExists = await prisma.user.findFirst({
+    const phoneExists = await prisma.user.findUnique({
       where: { phone: phoneNormalized },
       select: { id: true },
     });
@@ -98,16 +99,40 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await hash(password, 12);
-  const user = await prisma.user.create({
-    data: {
-      name: sanitizePlainText(name, 120),
-      email: email.toLowerCase(),
-      passwordHash,
-      phone: phoneNormalized ? sanitizePlainText(phoneNormalized, 40) : null,
-      country: country ? sanitizePlainText(country, 80) : null,
-    },
-    select: { id: true },
-  });
+
+  let user: { id: string };
+  try {
+    user = await prisma.user.create({
+      data: {
+        name: sanitizePlainText(name, 120),
+        email: email.toLowerCase(),
+        passwordHash,
+        phone: phoneNormalized ? sanitizePlainText(phoneNormalized, 40) : null,
+        country: country ? sanitizePlainText(country, 80) : null,
+      },
+      select: { id: true },
+    });
+  } catch (e) {
+    if (isUniqueConstraintViolation(e)) {
+      await recordSecurityObservation({
+        severity: "MEDIUM",
+        channel: "API",
+        title: "Registration blocked (unique constraint / race)",
+        email: email.toLowerCase(),
+        ipAddress: ip,
+        userAgent,
+        path: "/api/auth/register",
+      });
+      return NextResponse.json(
+        {
+          error:
+            "An account already exists with this email or phone number. Sign in instead, or use different contact details.",
+        },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
 
   if (activePlatformTerms && acceptPlatformTerms === true) {
     await recordUserPolicyAcceptance({

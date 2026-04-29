@@ -6,13 +6,8 @@ import Google from "next-auth/providers/google";
 import { z } from "zod";
 
 import { authConfig } from "./auth.config";
-import {
-  AccountSuspendedAuthError,
-  AmbiguousPhoneAuthError,
-  OAuthOnlyAuthError,
-} from "@/lib/auth-credentials-errors";
+import { AccountSuspendedAuthError, OAuthOnlyAuthError } from "@/lib/auth-credentials-errors";
 import { getGoogleOAuthCredentials } from "@/lib/auth/provider-flags";
-import { resolveAppleClientSecret } from "@/lib/apple-client-secret";
 import { getRequestIp } from "@/lib/client-ip";
 import { normalizePhone } from "@/lib/phone";
 import { recordSecurityObservation } from "@/lib/security-observation";
@@ -31,15 +26,19 @@ const credentialsSchema = z.object({
 
 const googleOAuth = getGoogleOAuthCredentials();
 const googleConfigured = Boolean(googleOAuth);
+/** Avoid spam during `next build` (many workers; each has a fresh global). */
 const GOOGLE_OAUTH_LOG_KEY = "__sda_google_oauth_enabled_logged__";
-if (!(globalThis as Record<string, unknown>)[GOOGLE_OAUTH_LOG_KEY]) {
+if (
+  process.env.NODE_ENV === "development" &&
+  !(globalThis as Record<string, unknown>)[GOOGLE_OAUTH_LOG_KEY]
+) {
   console.info(`[auth] Google OAuth enabled: ${googleConfigured}`);
   (globalThis as Record<string, unknown>)[GOOGLE_OAUTH_LOG_KEY] = true;
 }
 
 /** Apple is disabled unless explicitly enabled — see `ENABLE_APPLE_OAUTH` in `.env.example`. */
 const appleOptIn = process.env.ENABLE_APPLE_OAUTH?.trim() === "1";
-const resolvedAppleClientSecret = appleOptIn ? await resolveAppleClientSecret() : undefined;
+const resolvedAppleClientSecret = process.env.AUTH_APPLE_SECRET?.trim();
 const appleConfigured =
   appleOptIn &&
   Boolean(process.env.AUTH_APPLE_ID?.trim()) &&
@@ -143,10 +142,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
         } else {
           const phone = normalizePhone(id);
-          // Prevent ambiguous logins if duplicate phones exist in legacy records.
-          const byPhone = await prisma.user.findMany({
+          user = await prisma.user.findUnique({
             where: { phone },
-            take: 2,
             select: {
               id: true,
               email: true,
@@ -158,25 +155,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               accountBlocked: true,
             },
           });
-          if (byPhone.length === 1) user = byPhone[0] ?? null;
-          else {
-            await recordSecurityObservation({
-              severity: "MEDIUM",
-              channel: "AUTH",
-              title:
-                byPhone.length === 0
-                  ? "Credential login unknown phone"
-                  : "Credential login blocked (ambiguous phone match)",
-              phone,
-              ipAddress: ip,
-              userAgent,
-              metadataJson: { candidateCount: byPhone.length },
-            });
-            if (byPhone.length > 1) {
-              throw new AmbiguousPhoneAuthError();
-            }
-            return null;
-          }
         }
 
         if (!user) {

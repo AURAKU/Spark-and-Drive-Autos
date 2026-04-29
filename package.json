@@ -14,10 +14,12 @@
     "kill:5173": "node scripts/kill-port.mjs 5173",
     "doctor": "node scripts/doctor.mjs",
     "env:bootstrap": "node scripts/ensure-local-env.mjs",
-    "build": "next build",
-    "build:clean": "node -e \"try { require('node:fs').rmSync('.next', { recursive: true, force: true }); } catch (_) {}\" && next build",
-    "typecheck": "tsc --noEmit",
+    "build": "node -e \"try { require('node:fs').rmSync('.next', { recursive: true, force: true }); } catch (_) {}\" && next build",
+    "build:incremental": "next build",
+    "build:clean": "npm run build",
+    "typecheck": "npx tsc --noEmit",
     "validate": "npm run lint && npm run typecheck && npm run test:parts-finder",
+    "validate:full": "npm run validate && npm run build",
     "env:validate:prod": "node scripts/validate-env.mjs",
     "test:parts-finder": "tsx --test tests/parts-finder/*.test.ts",
     "start": "node scripts/start.mjs",
@@ -35,6 +37,7 @@
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:studio": "prisma studio",
     "backup:db": "bash scripts/backup-db.sh",
+    "backup:full": "bash scripts/backup-full.sh",
     "restore:db": "bash scripts/restore-db.sh"
   },
   "prisma": {

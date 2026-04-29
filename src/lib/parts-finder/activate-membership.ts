@@ -22,6 +22,17 @@ export async function upsertPartsFinderMembershipForActivation(
     where: { userId },
     orderBy: { endsAt: "desc" },
   });
+  const alreadyApplied = await db.auditLog.findFirst({
+    where: {
+      action: "parts_finder.membership.auto_activated",
+      entityId: userId,
+      metadataJson: { path: ["paymentId"], equals: payment.id },
+    },
+    select: { id: true },
+  });
+  if (alreadyApplied) {
+    return;
+  }
   const durationDays =
     !existing
       ? snapshot.defaultDurationDays

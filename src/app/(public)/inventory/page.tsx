@@ -2,10 +2,12 @@ import { AvailabilityStatus, CarListingState, type Prisma, SourceType } from "@p
 import { cookies } from "next/headers";
 
 import { CarCard } from "@/components/cars/car-card";
+import { SharePageButton } from "@/components/sharing/share-page-button";
 import { PageHeading } from "@/components/typography/page-headings";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -111,16 +113,32 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
     const qs = params.toString();
     return qs ? `/inventory?${qs}` : "/inventory";
   };
+  const currentParams = new URLSearchParams();
+  if (q) currentParams.set("q", q);
+  if (brand) currentParams.set("brand", brand);
+  if (source) currentParams.set("source", source);
+  if (stock !== "all") currentParams.set("availability", stock);
+  if (page > 1) currentParams.set("page", String(page));
+  const inventoryPath = currentParams.toString() ? `/inventory?${currentParams.toString()}` : "/inventory";
+  const shareUrl = `${getPublicAppUrl()}${inventoryPath}`;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-      <div className="max-w-2xl">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
         <PageHeading variant="hero" className="mt-1">
           Find Your Next Car
         </PageHeading>
         <p className="mt-4 text-base leading-relaxed text-zinc-300 sm:text-lg">
           Browse through our inventory listings across cars already in Ghana or available in China ready to be shipped.
         </p>
+        </div>
+        <SharePageButton
+          url={shareUrl}
+          title="Browse Cars - Spark and Drive Autos"
+          text="Check out these cars on Spark and Drive Autos."
+          className="h-10 rounded-lg border border-white/20 bg-white/[0.03] px-3 text-zinc-200 transition hover:bg-white/8 dark:border-white/20 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/8"
+        />
       </div>
 
       <form

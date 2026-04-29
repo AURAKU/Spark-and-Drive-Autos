@@ -41,9 +41,18 @@ type Props = {
     region: string;
     streetAddress: string;
   } | null;
+  addresses: {
+    id: string;
+    fullName: string;
+    phone: string;
+    city: string;
+    region: string;
+    streetAddress: string;
+  }[];
   isSignedIn: boolean;
   initialFavorite?: boolean;
   agreementVersion: string;
+  initialAgreementAccepted?: boolean;
   /** When set (China-origin part), wallet total includes selected Air/Sea fee. */
   chinaQuotes?: PartsChinaQuotes | null;
   /** China pre-order and similar: allow purchase when on-hand stock is zero. */
@@ -62,9 +71,11 @@ export function PartDetailActions({
   currency,
   walletBalance,
   defaultAddress,
+  addresses,
   isSignedIn,
   initialFavorite = false,
   agreementVersion,
+  initialAgreementAccepted = false,
   chinaQuotes = null,
   isPreorder,
   optionLists,
@@ -83,16 +94,23 @@ export function PartDetailActions({
   useEffect(() => {
     setQty((q) => Math.min(Math.max(1, q), maxQty));
   }, [maxQty]);
-  useEffect(() => {
-    if (defaultAddress?.phone) setDispatchPhone(defaultAddress.phone);
-  }, [defaultAddress?.id, defaultAddress?.phone]);
   const [buyOpen, setBuyOpen] = useState(false);
   const [favorite, setFavorite] = useState(initialFavorite);
   const [buyRequestKey, setBuyRequestKey] = useState<string | null>(null);
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const [agreementAccepted, setAgreementAccepted] = useState(initialAgreementAccepted);
+  const [acceptingLegal, setAcceptingLegal] = useState(false);
   const [dispatchPhone, setDispatchPhone] = useState(defaultAddress?.phone ?? "");
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
+  const [selectedAddressId, setSelectedAddressId] = useState(defaultAddress?.id ?? addresses[0]?.id ?? "");
   const [chinaMode, setChinaMode] = useState<"AIR" | "SEA" | null>(chinaQuotes ? "AIR" : null);
+  const selectedAddress =
+    addresses.find((address) => address.id === selectedAddressId) ??
+    defaultAddress ??
+    addresses[0] ??
+    null;
+  useEffect(() => {
+    if (selectedAddress?.phone) setDispatchPhone(selectedAddress.phone);
+  }, [selectedAddress?.id, selectedAddress?.phone]);
   const chinaFeeGhs = useMemo(() => {
     if (!chinaQuotes || !chinaMode) return 0;
     return chinaMode === "AIR" ? chinaQuotes.air.feeGhs : chinaQuotes.sea.feeGhs;
@@ -102,6 +120,30 @@ export function PartDetailActions({
     [qty, unitPrice, chinaFeeGhs],
   );
   const hasFunds = walletBalance >= total;
+
+  async function autoAcceptPendingLegal() {
+    if (acceptingLegal) return false;
+    setAcceptingLegal(true);
+    try {
+      const res = await fetch("/api/legal/profile/accept-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error ?? "Could not save legal acceptance.");
+        return false;
+      }
+      setAgreementAccepted(true);
+      toast.success("Legal acknowledgement accepted.");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save legal acceptance.");
+      return false;
+    } finally {
+      setAcceptingLegal(false);
+    }
+  }
 
   function assertOptionsOrToast(): boolean {
     if (optionLists.colors.length > 0 && !selColor) {
@@ -155,13 +197,14 @@ export function PartDetailActions({
 
   async function buyNow() {
     if (hasOptionLists && !assertOptionsOrToast()) return;
-    if (!defaultAddress?.id) {
+    if (!selectedAddress?.id) {
       toast.error("Please add a delivery address in your profile before checkout.");
       router.push("/dashboard/profile");
       return;
     }
     if (!agreementAccepted) {
-      toast.error("Please accept checkout agreement before payment.");
+      toast.error("Accept pending legal updates in your profile before payment.");
+      router.push("/dashboard/profile");
       return;
     }
     if (dispatchPhone.trim().length < 8) {
@@ -183,7 +226,7 @@ export function PartDetailActions({
           partId,
           quantity: Math.max(1, qty),
           ...optionBody,
-          addressId: defaultAddress.id,
+          addressId: selectedAddress.id,
           requestKey,
           agreementAccepted,
           agreementVersion,
@@ -408,15 +451,46 @@ export function PartDetailActions({
             <p className="text-zinc-300">
               Wallet balance: {currency} {walletBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
-            {defaultAddress ? (
+            {selectedAddress ? (
+              <>
+                {addresses.length > 1 ? (
+                  <div>
+                    <label htmlFor="buy-address" className="text-xs text-zinc-500">
+                      Delivery address
+                    </label>
+                    <select
+                      id="buy-address"
+                      className="mt-1 h-9 w-full rounded-md border border-white/10 bg-black/30 px-2 text-sm text-white"
+                      value={selectedAddressId}
+                      onChange={(e) => setSelectedAddressId(e.target.value)}
+                    >
+                      {addresses.map((address) => (
+                        <option key={address.id} value={address.id}>
+                          {address.fullName} - {address.streetAddress}, {address.city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            {selectedAddress ? (
               <p className="text-zinc-400">
-                Delivery to {defaultAddress.fullName}, {defaultAddress.streetAddress}, {defaultAddress.city},{" "}
-                {defaultAddress.region}
+                Delivery to {selectedAddress.fullName}, {selectedAddress.streetAddress}, {selectedAddress.city},{" "}
+                {selectedAddress.region}
               </p>
             ) : (
-              <p className="text-amber-300">No saved default address. Add one in profile before payment.</p>
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-amber-300">No saved delivery address. Add one before payment.</p>
+                <Link
+                  href="/dashboard/profile"
+                  className="mt-2 inline-flex rounded-md border border-amber-300/60 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-300/15"
+                >
+                  Add address now
+                </Link>
+              </div>
             )}
-            {defaultAddress ? (
+            {selectedAddress ? (
               <div className="space-y-2">
                 <div>
                   <label htmlFor="buy-dispatch-phone" className="text-xs text-zinc-500">
@@ -450,17 +524,24 @@ export function PartDetailActions({
               <input
                 type="checkbox"
                 checked={agreementAccepted}
-                onChange={(e) => setAgreementAccepted(e.target.checked)}
+                disabled={acceptingLegal}
+                onChange={(e) => {
+                  if (!e.target.checked || agreementAccepted) return;
+                  void autoAcceptPendingLegal();
+                }}
                 className="accent-[var(--brand)]"
               />
               <span className="font-medium">
-                I agree to{" "}
-                <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                {agreementAccepted ? "Accepted:" : "Select to auto-accept now:"}{" "}
+                <span className="ui-highlight-chip rounded-md px-1.5 py-0.5 font-semibold">
                   checkout terms and payment verification requirements
                 </span>{" "}
                 for this order. Version {agreementVersion}.
               </span>
             </label>
+            {!agreementAccepted ? (
+              <p className="text-xs text-amber-200/90">Select the legal acknowledgement above to auto-accept and continue.</p>
+            ) : null}
           </div>
 
           {!hasFunds ? (

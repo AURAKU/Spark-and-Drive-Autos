@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import type { PartsFinderConfidenceLabel, PartsFinderSearchStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { buildUserSafeSessionPayload } from "@/lib/parts-finder/user-safe-response";
 import type { ExternalCandidate } from "@/lib/parts-finder/external/types";
 import type {
   ConfidenceBreakdown,
@@ -295,44 +296,45 @@ export async function getPartsFinderSessionForUser(sessionId: string, userId: st
     },
   });
   if (!row) return null;
+  const baseMeta = {
+    input: row.inputJson,
+    normalizedInput: row.normalizedJson,
+    parsedVehicle: row.vehicleJson,
+    queryForms: row.queryFormsJson,
+    rawHits: row.rawResultsJson,
+    rawEvidence: row.rawEvidenceJson,
+    parsedCandidates: row.parsedResultsJson,
+    refinedResults: row.refinedResultsJson,
+    rankedResults: row.rankedResultsJson,
+    results: row.results.map((r) => ({
+      id: r.id,
+      candidate: r.candidateJson,
+      summary: r.summaryJson,
+      confidenceLabel: r.confidenceLabel,
+      confidenceScore: r.confidenceScore,
+      isTopResult: r.isTopResult,
+      reviewStatus: r.reviewStatus,
+      sourcingLinked: r.sourcingLinked,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    confidence: row.confidenceJson,
+    summary: row.summaryJson,
+    ai: (row.safetyFlagsJson as Record<string, unknown> | null)?.ai ?? null,
+    normalizedQuery: (row.safetyFlagsJson as Record<string, unknown> | null)?.normalizedQuery ?? null,
+    review: {
+      status: row.status,
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
+      reviewerId: row.reviewedById ?? null,
+      adminNote: row.reviewNote ?? null,
+      forcedSummary: row.adminSummaryOverride ?? null,
+    },
+  };
   return {
     id: row.id,
     action: "parts_finder.search.created",
     entityId: row.sessionId,
     createdAt: row.createdAt,
-    metadataJson: {
-      input: row.inputJson,
-      normalizedInput: row.normalizedJson,
-      parsedVehicle: row.vehicleJson,
-      queryForms: row.queryFormsJson,
-      rawHits: row.rawResultsJson,
-      rawEvidence: row.rawEvidenceJson,
-      parsedCandidates: row.parsedResultsJson,
-      refinedResults: row.refinedResultsJson,
-      rankedResults: row.rankedResultsJson,
-      results: row.results.map((r) => ({
-        id: r.id,
-        candidate: r.candidateJson,
-        summary: r.summaryJson,
-        confidenceLabel: r.confidenceLabel,
-        confidenceScore: r.confidenceScore,
-        isTopResult: r.isTopResult,
-        reviewStatus: r.reviewStatus,
-        sourcingLinked: r.sourcingLinked,
-        createdAt: r.createdAt.toISOString(),
-      })),
-      confidence: row.confidenceJson,
-      summary: row.summaryJson,
-      ai: (row.safetyFlagsJson as Record<string, unknown> | null)?.ai ?? null,
-      normalizedQuery: (row.safetyFlagsJson as Record<string, unknown> | null)?.normalizedQuery ?? null,
-      review: {
-        status: row.status,
-        reviewedAt: row.reviewedAt?.toISOString() ?? null,
-        reviewerId: row.reviewedById ?? null,
-        adminNote: row.reviewNote ?? null,
-        forcedSummary: row.adminSummaryOverride ?? null,
-      },
-    },
+    metadataJson: buildUserSafeSessionPayload(baseMeta) as Record<string, unknown>,
   };
 }
 

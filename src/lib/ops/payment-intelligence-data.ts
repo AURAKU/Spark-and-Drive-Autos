@@ -1,7 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { unstable_cache } from "next/cache";
 
-import { OPS_ROUTE_CACHE_TAGS } from "@/lib/ops-route-cache-tags";
 import { prisma } from "@/lib/prisma";
 
 /** Page size for payment records, wallet ledger, and action queue on Payments Intelligence. */
@@ -242,22 +240,6 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
   };
 }
 
-const fetchPaymentIntelligenceAggregateDataCachedInternal = unstable_cache(
-  async (params: {
-    basePaymentWhere: Prisma.PaymentWhereInput;
-    basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
-    walletWhere: Prisma.WalletTransactionWhereInput;
-    paymentsPage?: number;
-    walletPage?: number;
-    actionPage?: number;
-  }) => fetchPaymentIntelligenceAggregateData(params),
-  ["ops-payment-intelligence-aggregate:v1"],
-  {
-    revalidate: 8,
-    tags: [OPS_ROUTE_CACHE_TAGS.adminPaymentsIntelligence, OPS_ROUTE_CACHE_TAGS.adminOrders],
-  },
-);
-
 export async function fetchPaymentIntelligenceAggregateDataCached(params: {
   basePaymentWhere: Prisma.PaymentWhereInput;
   basePaymentWhereSansOrderKind: Prisma.PaymentWhereInput;
@@ -266,7 +248,7 @@ export async function fetchPaymentIntelligenceAggregateDataCached(params: {
   walletPage?: number;
   actionPage?: number;
 }) {
-  return fetchPaymentIntelligenceAggregateDataCachedInternal(params);
+  return fetchPaymentIntelligenceAggregateData(params);
 }
 
 export type PaymentIntelligenceAggregatePayload = Awaited<ReturnType<typeof fetchPaymentIntelligenceAggregateData>>;

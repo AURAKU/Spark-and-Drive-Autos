@@ -171,6 +171,11 @@ function buildNormalizedCustomerResult(payload: Record<string, unknown>): Normal
     fitmentNotes?: string[];
     possibleOemNumbers?: string[];
     possiblePartNames?: string[];
+    locationOnVehicle?: string;
+    functionRole?: string;
+    whyReplace?: string;
+    operationalImportance?: string;
+    similarApplications?: Array<{ make?: string; model?: string; yearRange?: string; note?: string }>;
   };
   const rawResults = Array.isArray(payload.results)
     ? (payload.results as Array<{
@@ -224,6 +229,45 @@ function buildNormalizedCustomerResult(payload: Record<string, unknown>): Normal
     };
   });
   const topTier = normalizedMatches[0]?.tier ?? "low";
+  const proseFunction = [ai.functionRole?.trim(), ai.locationOnVehicle?.trim()].filter(Boolean).join("\n\n");
+  const functionSummary = proseFunction.length
+    ? proseFunction
+    : topCandidate?.partFunctionSummary ??
+      "This component supports normal vehicle operation and should be matched to VIN/chassis for correct fitment.";
+  const maintenanceNote =
+    ai.whyReplace?.trim() ||
+    "Follow manufacturer maintenance intervals and replace early if leakage, contamination, or unusual performance appears.";
+  const symptoms =
+    ai.operationalImportance?.trim() ||
+    "Potential signs include reduced performance, warning lights, unusual noise, or lubrication/flow issues.";
+
+  const fromAiSimilar =
+    Array.isArray(ai.similarApplications) && ai.similarApplications.length > 0
+      ? ai.similarApplications
+          .filter((x) => x?.make?.trim() && x?.model?.trim())
+          .slice(0, 6)
+          .map((x) => ({
+            make: String(x.make).trim(),
+            model: String(x.model).trim(),
+            years: x.yearRange?.trim() || "Check catalog years",
+            confidence: topTier,
+            note: x.note?.trim() || "Verify by VIN/chassis before purchase.",
+          }))
+      : [];
+
+  const mayAlsoFitFallback = extractCompatibleVehicles(
+    `${(ai.fitmentNotes ?? []).join(" ")} ${topCandidate?.fitmentNotes ?? ""} ${topCandidate?.summaryExplanation ?? ""}`,
+  ).map((vehicle) => {
+    const [make = "Vehicle", ...rest] = vehicle.split(" ");
+    return {
+      make,
+      model: rest.join(" ") || "Model",
+      years: "Check catalog years",
+      confidence: topTier,
+      note: "Verify by VIN/chassis before purchase.",
+    };
+  });
+
   return {
     partName: topCandidate?.candidatePartName ?? normalizedInput.partIntent ?? "Part candidate",
     searchedVehicle: {
@@ -233,31 +277,16 @@ function buildNormalizedCustomerResult(payload: Record<string, unknown>): Normal
       engine: normalizedInput.engine ?? null,
     },
     quickVerdict: verdictFor({ topTier, oemCount: codes.length, matchCount: normalizedMatches.length }),
-    functionSummary:
-      topCandidate?.partFunctionSummary ??
-      "This component supports normal vehicle operation and should be matched to VIN/chassis for correct fitment.",
-    maintenanceNote:
-      "Follow manufacturer maintenance intervals and replace early if leakage, contamination, or unusual performance appears.",
-    symptoms:
-      "Potential signs include reduced performance, warning lights, unusual noise, or lubrication/flow issues.",
+    functionSummary,
+    maintenanceNote,
+    symptoms,
     oemNumbers: {
       primary: codes[0] ?? null,
       alternatives: codes.slice(1, 6),
       aftermarket: aftermarket.slice(0, 6),
       confidence: topTier,
     },
-    mayAlsoFit: extractCompatibleVehicles(
-      `${(ai.fitmentNotes ?? []).join(" ")} ${topCandidate?.fitmentNotes ?? ""} ${topCandidate?.summaryExplanation ?? ""}`,
-    ).map((vehicle) => {
-      const [make = "Vehicle", ...rest] = vehicle.split(" ");
-      return {
-        make,
-        model: rest.join(" ") || "Model",
-        years: "Check catalog years",
-        confidence: topTier,
-        note: "Verify by VIN/chassis before purchase.",
-      };
-    }),
+    mayAlsoFit: fromAiSimilar.length > 0 ? fromAiSimilar : mayAlsoFitFallback,
     matches: normalizedMatches,
   };
 }

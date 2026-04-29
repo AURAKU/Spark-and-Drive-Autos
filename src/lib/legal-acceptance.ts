@@ -14,6 +14,7 @@ export const ACCEPTANCE_CONTEXT = {
   SOURCING_REQUEST: "SOURCING_REQUEST",
   REGISTRATION: "REGISTRATION",
   ADMIN: "ADMIN",
+  PROFILE_BULK: "PROFILE_BULK",
 } as const;
 
 export type AcceptanceContext = (typeof ACCEPTANCE_CONTEXT)[keyof typeof ACCEPTANCE_CONTEXT];

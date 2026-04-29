@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { ACCEPTANCE_CONTEXT, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
+import { ensurePartsFinderActivationPolicyVersions } from "@/lib/legal-ensure-parts-finder-policies";
 import { assertPartsFinderActivationLegal, POLICY_KEYS } from "@/lib/legal-enforcement";
 import { getDefaultPaymentProvider, getPaystackCallbackOrigin, getPaystackSecrets } from "@/lib/payment-provider-registry";
 import { paystackInitialize } from "@/lib/paystack";
@@ -71,18 +72,29 @@ export async function POST(req: Request) {
     }
     const access = await getPartsFinderAccessSnapshot();
     if (access.state === "ACTIVE") {
-      return NextResponse.json({ ok: false, error: "Parts Finder membership is already active." }, { status: 400 });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "ALREADY_ACTIVE",
+          error:
+            "Your Parts Finder membership is already active. You can renew only after your current access window ends.",
+          activeUntil: access.activeUntil,
+        },
+        { status: 409 },
+      );
     }
     if (access.state === "PENDING_PAYMENT") {
       return NextResponse.json(
         {
           ok: false,
+          code: "PENDING_PAYMENT",
           error: "A membership payment is still processing. Wait for confirmation, then refresh this page.",
         },
         { status: 409 },
       );
     }
 
+    await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
     const [platformPv, discPv] = await Promise.all([
       prisma.policyVersion.findFirst({
         where: { policyKey: POLICY_KEYS.PLATFORM_TERMS_PRIVACY, isActive: true },
@@ -97,7 +109,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Required legal policies are not published yet. Please contact support or try again later.",
+          error:
+            "Legal policies could not be loaded. Refresh the activation page or ask an admin to publish platform terms and the Parts Finder disclaimer under Admin → Legal.",
         },
         { status: 503 },
       );

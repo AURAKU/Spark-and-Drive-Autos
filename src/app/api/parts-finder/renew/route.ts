@@ -9,7 +9,28 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST() {
   try {
-    const { session } = await requirePartsFinderActivationAccess();
+    const { session, snapshot: access } = await requirePartsFinderActivationAccess();
+    if (access.state === "ACTIVE") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "ALREADY_ACTIVE",
+          error:
+            "Your membership is still active. Renewal is only available after your current access window expires.",
+          activeUntil: access.activeUntil,
+        },
+        { status: 409 },
+      );
+    }
+    if (access.state !== "EXPIRED") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Renewal is only available for expired memberships. Use activation for first-time access.",
+        },
+        { status: 409 },
+      );
+    }
     const snapshot = await getPartsFinderActivationSnapshot();
     if (!session.user.email) {
       return NextResponse.json({ ok: false, error: "Account email missing." }, { status: 400 });

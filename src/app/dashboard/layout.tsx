@@ -23,12 +23,9 @@ const links = [
   { href: "/dashboard/favorites", label: "Favorites & Cart" },
   { href: "/dashboard/orders", label: "All Orders" },
   { href: "/dashboard/payments", label: "All Payments" },
-  { href: "/dashboard/verification", label: "Identity Verification" },
-  { href: "/dashboard/garage", label: "My Garage" },
   { href: "/dashboard/shipping", label: "Shipping & Delivery Tracking" },
   { href: "/dashboard/estimates", label: "Duty Estimates" },
   { href: "/dashboard/parts-finder", label: "Parts Finder", ctaStyle: "parts-finder" as const },
-  { href: "/dashboard/verified-parts", label: "Verified Parts" },
   { href: "/dashboard/inquiry-requests", label: "Customer Inquiry & Request" },
 ];
 

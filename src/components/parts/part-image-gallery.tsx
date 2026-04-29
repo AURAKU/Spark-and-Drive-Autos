@@ -5,35 +5,16 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { PartGalleryImage } from "@/lib/part-gallery-images";
 import { cn } from "@/lib/utils";
 
-export type PartGalleryImage = { id: string; url: string };
+export type { PartGalleryImage };
 
 type Props = {
   images: PartGalleryImage[];
   productTitle: string;
   className?: string;
 };
-
-/**
- * Deduplicated ordered list: cover first (if any), then additional uploads.
- */
-export function buildPartGalleryImageList(
-  cover: string | null | undefined,
-  partImages: PartGalleryImage[],
-): PartGalleryImage[] {
-  const out: PartGalleryImage[] = [];
-  const seen = new Set<string>();
-  const push = (id: string, url: string) => {
-    const u = url.trim();
-    if (!u || seen.has(u)) return;
-    seen.add(u);
-    out.push({ id, url: u });
-  };
-  if (cover) push("cover", cover);
-  for (const img of partImages) push(img.id, img.url);
-  return out;
-}
 
 export function PartImageGallery({ images, productTitle, className }: Props) {
   const [index, setIndex] = useState(0);
@@ -77,7 +58,14 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
           className,
         )}
       >
-        <Image src="/brand/logo-emblem.png" alt="" width={120} height={120} className="opacity-40" />
+        <Image
+          src="/brand/logo-emblem.png"
+          alt=""
+          width={120}
+          height={120}
+          className="h-auto w-auto opacity-40"
+          sizes="120px"
+        />
       </div>
     );
   }

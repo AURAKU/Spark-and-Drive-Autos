@@ -1,8 +1,11 @@
 import type { OrderStatus } from "@prisma/client";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { AdminDutyHubTabs } from "@/components/admin/admin-duty-hub-tabs";
 import { AdminDutyHubClient } from "@/components/admin/admin-duty-hub-client";
+import { AdminEstimatesHub } from "@/components/admin/admin-estimates-hub";
 import { PageHeading } from "@/components/typography/page-headings";
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
 import { DutyEstimateDisclosure } from "@/components/duty/duty-estimate-disclosure";
@@ -11,10 +14,31 @@ import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 import type { AdminDutyOrderRow } from "@/lib/duty/admin-duty-types";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
+
+import { isAdminRole } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 const DUTY_ORDER_PAGE_SIZE = 15;
+const DUTY_SECTION_ESTIMATES = "estimates";
+
+const ESTIMATE_URL_KEYS = [
+  "page",
+  "customer",
+  "vehicle",
+  "vin",
+  "status",
+  "from",
+  "to",
+  "clientName",
+  "clientContact",
+  "vehicleName",
+  "customerId",
+  "orderId",
+  "inquiryId",
+  "carId",
+] as const;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -27,6 +51,31 @@ function readDutyPage(sp: Record<string, string | string[] | undefined>): number
   return Math.min(n, 99_999);
 }
 
+function readDutySection(sp: Record<string, string | string[] | undefined>): "tracking" | "estimates" {
+  const v = sp.dutySection;
+  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  return s === DUTY_SECTION_ESTIMATES ? "estimates" : "tracking";
+}
+
+function buildDutyTrackingHref(sp: Record<string, string | string[] | undefined>): string {
+  const p = new URLSearchParams();
+  appendOpsDateParams(p, sp);
+  const dutyPage = readDutyPage(sp);
+  if (dutyPage > 1) p.set("dutyPage", String(dutyPage));
+  const qs = p.toString();
+  return qs ? `/admin/duty?${qs}` : "/admin/duty";
+}
+
+function buildDutyEstimatesHref(sp: Record<string, string | string[] | undefined>): string {
+  const p = new URLSearchParams();
+  p.set("dutySection", DUTY_SECTION_ESTIMATES);
+  for (const key of ESTIMATE_URL_KEYS) {
+    const v = sp[key];
+    if (typeof v === "string" && v.length > 0) p.set(key, v);
+  }
+  return `/admin/duty?${p.toString()}`;
+}
+
 function dutyListHref(sp: Record<string, string | string[] | undefined>, dutyPage: number): string {
   const p = new URLSearchParams();
   if (dutyPage > 1) p.set("dutyPage", String(dutyPage));
@@ -36,7 +85,31 @@ function dutyListHref(sp: Record<string, string | string[] | undefined>, dutyPag
 }
 
 export default async function AdminDutyPage(props: { searchParams: SearchParams }) {
+  const session = await safeAuth();
+  if (!session?.user?.role || !isAdminRole(session.user.role)) redirect("/dashboard");
+
   const sp = await props.searchParams;
+  const section = readDutySection(sp);
+
+  if (section === "estimates") {
+    return (
+      <div className="space-y-6">
+        <AdminDutyHubTabs
+          active="estimates"
+          trackingHref={buildDutyTrackingHref(sp)}
+          estimatesHref={buildDutyEstimatesHref(sp)}
+        />
+        <AdminEstimatesHub
+          searchParams={sp}
+          pathname="/admin/duty"
+          pinnedQuery={{ dutySection: DUTY_SECTION_ESTIMATES }}
+          operationsDutyHref={buildDutyTrackingHref(sp)}
+          loginCallbackUrl={`/admin/duty?dutySection=${DUTY_SECTION_ESTIMATES}`}
+        />
+      </div>
+    );
+  }
+
   const ops = parseOpsDateFromSearchParams(sp);
   const requestedPage = readDutyPage(sp);
 
@@ -109,12 +182,18 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
 
   return (
     <div className="space-y-8">
+      <AdminDutyHubTabs
+        active="tracking"
+        trackingHref={buildDutyTrackingHref(sp)}
+        estimatesHref={buildDutyEstimatesHref(sp)}
+      />
+
       <Suspense fallback={<div className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.02]" />}>
         <AdminOperationsDateFilter />
       </Suspense>
 
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1420] to-black/60 p-6 shadow-[0_0_60px_-30px_rgba(49,182,199,0.2)]">
-        <PageHeading variant="dashboard">Duty estimation &amp; operations</PageHeading>
+        <PageHeading variant="dashboard">Duty tracking</PageHeading>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
           Manage import duty for vehicle orders arriving in Ghana. Estimates are planning aids only — final charges are
           determined by Ghana Customs / ICUMS at clearance. Link each case to sea freight, publish customer-visible
@@ -132,8 +211,8 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
             All orders
           </Link>
           {" · "}
-          <Link href="/admin/duty-estimator" className="text-[var(--brand)] hover:underline">
-            Duty Estimates
+          <Link href={`/admin/duty?dutySection=${DUTY_SECTION_ESTIMATES}`} className="text-[var(--brand)] hover:underline">
+            Duty estimates
           </Link>
         </p>
       </div>

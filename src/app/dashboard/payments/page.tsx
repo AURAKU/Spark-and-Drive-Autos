@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 
 import { PageHeading } from "@/components/typography/page-headings";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { PaymentStatusBadge, WalletLedgerStatusBadge } from "@/components/payments/payment-status-badge";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
-import { OPS_ROUTE_CACHE_TAGS } from "@/lib/ops-route-cache-tags";
 import { INTEL_LIST_PAGE_SIZE, normalizeIntelListPage } from "@/lib/ops";
 import { settlementMethodLabel } from "@/lib/payment-settlement";
 import { prisma } from "@/lib/prisma";
@@ -23,66 +21,67 @@ function readPage(sp: Record<string, string | string[] | undefined>, key: string
   return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
 }
 
-const getDashboardPaymentsData = unstable_cache(
-  async (userId: string, paymentPageReq: number, walletPageReq: number, pageSize: number) => {
-    const [paymentTotal, walletTotal] = await Promise.all([
-      prisma.payment.count({ where: { userId } }),
-      prisma.walletTransaction.count({ where: { userId } }),
-    ]);
+async function loadDashboardPaymentsData(
+  userId: string,
+  paymentPageReq: number,
+  walletPageReq: number,
+  pageSize: number,
+) {
+  const [paymentTotal, walletTotal] = await Promise.all([
+    prisma.payment.count({ where: { userId } }),
+    prisma.walletTransaction.count({ where: { userId } }),
+  ]);
 
-    const paymentTotalPages = Math.max(1, Math.ceil(Math.max(0, paymentTotal) / pageSize));
-    const walletTotalPages = Math.max(1, Math.ceil(Math.max(0, walletTotal) / pageSize));
-    const paymentPage = Math.min(Math.max(1, paymentPageReq), paymentTotalPages);
-    const walletPage = Math.min(Math.max(1, walletPageReq), walletTotalPages);
+  const paymentTotalPages = Math.max(1, Math.ceil(Math.max(0, paymentTotal) / pageSize));
+  const walletTotalPages = Math.max(1, Math.ceil(Math.max(0, walletTotal) / pageSize));
+  const paymentPage = Math.min(Math.max(1, paymentPageReq), paymentTotalPages);
+  const walletPage = Math.min(Math.max(1, walletPageReq), walletTotalPages);
 
-    const [payments, walletTx] = await Promise.all([
-      prisma.payment.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-        skip: (paymentPage - 1) * pageSize,
-        take: pageSize,
-        select: {
-          id: true,
-          providerReference: true,
-          paymentType: true,
-          settlementMethod: true,
-          status: true,
-          amount: true,
-          currency: true,
-        },
-      }),
-      prisma.walletTransaction.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-        skip: (walletPage - 1) * pageSize,
-        take: pageSize,
-        select: {
-          id: true,
-          createdAt: true,
-          reference: true,
-          purpose: true,
-          method: true,
-          amount: true,
-          currency: true,
-          status: true,
-        },
-      }),
-    ]);
+  const [payments, walletTx] = await Promise.all([
+    prisma.payment.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      skip: (paymentPage - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        providerReference: true,
+        paymentType: true,
+        settlementMethod: true,
+        status: true,
+        amount: true,
+        currency: true,
+      },
+    }),
+    prisma.walletTransaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      skip: (walletPage - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        createdAt: true,
+        reference: true,
+        purpose: true,
+        method: true,
+        amount: true,
+        currency: true,
+        status: true,
+      },
+    }),
+  ]);
 
-    return {
-      paymentTotal,
-      walletTotal,
-      paymentTotalPages,
-      walletTotalPages,
-      paymentPage,
-      walletPage,
-      payments,
-      walletTx,
-    };
-  },
-  ["ops-dashboard-payments-page:v1"],
-  { revalidate: 15, tags: [OPS_ROUTE_CACHE_TAGS.dashboardPayments] },
-);
+  return {
+    paymentTotal,
+    walletTotal,
+    paymentTotalPages,
+    walletTotalPages,
+    paymentPage,
+    walletPage,
+    payments,
+    walletTx,
+  };
+}
 
 export default async function PaymentsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/dashboard/payments");
@@ -102,7 +101,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
     walletPage,
     payments,
     walletTx,
-  } = await getDashboardPaymentsData(userId, paymentPageReq, walletPageReq, pageSize);
+  } = await loadDashboardPaymentsData(userId, paymentPageReq, walletPageReq, pageSize);
 
   const payHref = (next: { paymentPage?: number; walletPage?: number }) => {
     const p = new URLSearchParams();

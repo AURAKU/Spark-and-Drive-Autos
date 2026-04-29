@@ -7,8 +7,12 @@ import type { VehiclePricePreview } from "@/lib/currency";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
 import { getCheckoutLegalVersions, requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
+import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { hasUserAccepted } from "@/lib/legal-versioning";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +23,14 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
     sp.type === "RESERVATION_DEPOSIT" ? PaymentType.RESERVATION_DEPOSIT : PaymentType.FULL;
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
+  const session = await safeAuth();
 
   let checkoutSummary: VehiclePricePreview | null = null;
   let checkoutBlock: { message: string; title: string } | null = null;
   const legalVersions = await getCheckoutLegalVersions();
+  let agreementAccepted = false;
+  let contractAccepted = false;
+  let riskAccepted = false;
   let requiresContract = false;
   let requiresRisk = false;
   if (carId) {
@@ -51,6 +59,23 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         const settlementGhs = getVehicleCheckoutAmountGhs(base, paymentType, fx);
         requiresContract = requiresSourcingContract(car.sourceType);
         requiresRisk = requiresRiskAcknowledgement(car.sourceType);
+        if (session?.user?.id) {
+          agreementAccepted = await hasUserAccepted(
+            session.user.id,
+            POLICY_KEYS.CHECKOUT_AGREEMENT,
+            legalVersions.agreementVersion,
+          );
+          if (requiresContract) {
+            contractAccepted = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
+          }
+          if (requiresRisk) {
+            riskAccepted = await hasUserAccepted(
+              session.user.id,
+              POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
+              legalVersions.riskVersion,
+            );
+          }
+        }
         checkoutSummary = {
           title: car.title,
           basePriceRmb: base,
@@ -77,6 +102,9 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         riskVersion: legalVersions.riskVersion,
         requiresContract,
         requiresRisk,
+        agreementAccepted,
+        contractAccepted,
+        riskAccepted,
       }}
     />
   );
