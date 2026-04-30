@@ -15,6 +15,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
   documentType: z.nativeEnum(VerificationDocumentType),
@@ -66,6 +67,23 @@ export async function POST(req: Request) {
   }
   if (parsed.data.selfieUrl && !isTrustedPaymentProofUrl(parsed.data.selfieUrl)) {
     return NextResponse.json({ error: "Invalid selfie URL." }, { status: 400 });
+  }
+
+  const latest = await prisma.userVerification.findFirst({
+    where: { userId: session.user.id },
+    orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, status: true },
+  });
+  if (latest && ["PENDING", "UNDER_REVIEW", "VERIFIED", "REQUIRED"].includes(latest.status)) {
+    return NextResponse.json(
+      {
+        error:
+          latest.status === "VERIFIED"
+            ? "Your identity is already verified. No new submission is required."
+            : "Your current verification is already submitted and awaiting admin review.",
+      },
+      { status: 409 },
+    );
   }
   try {
     await requirePolicyAcceptance({

@@ -111,6 +111,7 @@ export function VerificationClient({
 
   const canResubmit = !latest || latest.status === "REJECTED" || latest.status === "EXPIRED";
   const uploadDisabled = submitting || !canResubmit;
+  const needsResubmission = latest?.status === "REJECTED" || latest?.status === "EXPIRED";
   const statusMessage = useMemo(() => {
     if (!latest) return "No verification submitted yet.";
     if (latest.status === "VERIFIED") return "Your identity is verified for protected payment and compliance flows.";
@@ -268,6 +269,16 @@ export function VerificationClient({
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <h2 className="text-lg font-semibold text-white">How verification works</h2>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-zinc-300">
+          <li>Upload a clear government-issued ID (front required, back optional) and submit.</li>
+          <li>Your submission is saved and sent to admin/compliance for manual review.</li>
+          <li>You can continue once admin marks your verification as approved.</li>
+          <li>If rejected, follow the reason shown below and submit new, clearer documents.</li>
+        </ol>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h2 className="text-lg font-semibold text-white">Identity verification status</h2>
         <p className="mt-1 text-sm text-zinc-400">
           Identity verification helps us protect customers, prevent fraud, verify payments, and safely process high-value transactions.
@@ -276,6 +287,12 @@ export function VerificationClient({
           Current status: {latest?.status ?? "NOT_REQUIRED"}
         </p>
         <p className="mt-1 text-sm text-zinc-300">{statusMessage}</p>
+        {needsResubmission ? (
+          <div className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-200">
+            Please upload a new valid ID set. Ensure text is readable, edges are visible, and details match your
+            account.
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -283,6 +300,11 @@ export function VerificationClient({
         {!canResubmit ? (
           <p className="mt-2 text-sm text-zinc-400">
             Upload is currently locked while your current verification is {latest?.status?.toLowerCase()}.
+          </p>
+        ) : null}
+        {latest?.status === "REJECTED" ? (
+          <p className="mt-2 text-sm text-red-300">
+            Rejected reason: {latest.rejectionReason ?? "Document did not meet verification requirements."}
           </p>
         ) : null}
         <form onSubmit={submit} className="mt-4 space-y-4">

@@ -4,6 +4,7 @@ import { Bell, ChevronDown, Home, LayoutDashboard, LogOut, Menu, UserCircle2 } f
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
+import { toast } from "sonner";
 import { clearAllNotifications, deleteNotification, markAllNotificationsRead, markNotificationRead } from "@/actions/notifications";
 
 import {
@@ -21,6 +22,15 @@ import { CurrencySwitcher } from "./currency-switcher";
 import { ThemeToggle } from "./theme-toggle";
 
 const AUTH_CALLBACK = "/dashboard";
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "type" in error) {
+    return "Action failed. Please try again.";
+  }
+  return fallback;
+}
 
 /** Stable SSR/client string — avoids `toLocaleString()` hydration mismatches. */
 function formatNotificationTime(iso: string) {
@@ -73,24 +83,40 @@ export function SiteHeaderClient({
     id: string;
     href: string | null;
   }) {
-    await markNotificationRead(notification.id);
-    router.push(notification.href ?? `/dashboard/notifications#notification-${notification.id}`);
-    router.refresh();
+    try {
+      await markNotificationRead(notification.id);
+      router.push(notification.href ?? `/dashboard/notifications#notification-${notification.id}`);
+      router.refresh();
+    } catch (error) {
+      toast.error(toErrorMessage(error, "Could not open notification."));
+    }
   }
 
   async function onMarkAllRead() {
-    await markAllNotificationsRead();
-    router.refresh();
+    try {
+      await markAllNotificationsRead();
+      router.refresh();
+    } catch (error) {
+      toast.error(toErrorMessage(error, "Could not mark notifications as read."));
+    }
   }
 
   async function onClearOne(id: string) {
-    await deleteNotification(id);
-    router.refresh();
+    try {
+      await deleteNotification(id);
+      router.refresh();
+    } catch (error) {
+      toast.error(toErrorMessage(error, "Could not clear notification."));
+    }
   }
 
   async function onClearAll() {
-    await clearAllNotifications();
-    router.refresh();
+    try {
+      await clearAllNotifications();
+      router.refresh();
+    } catch (error) {
+      toast.error(toErrorMessage(error, "Could not clear notifications."));
+    }
   }
 
   return (
@@ -148,12 +174,26 @@ export function SiteHeaderClient({
                   <>
                     <DropdownMenuLabel>Account</DropdownMenuLabel>
                     {appleOAuthConfigured ? (
-                      <DropdownMenuItem className="cursor-pointer" onClick={() => void signIn("apple", { callbackUrl: AUTH_CALLBACK })}>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onClick={() => {
+                          void signIn("apple", { callbackUrl: AUTH_CALLBACK }).catch((error: unknown) => {
+                            toast.error(toErrorMessage(error, "Apple sign-in failed."));
+                          });
+                        }}
+                      >
                         Login with Apple
                       </DropdownMenuItem>
                     ) : null}
                     {googleOAuthConfigured ? (
-                      <DropdownMenuItem className="cursor-pointer" onClick={() => void signIn("google", { callbackUrl: AUTH_CALLBACK })}>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onClick={() => {
+                          void signIn("google", { callbackUrl: AUTH_CALLBACK }).catch((error: unknown) => {
+                            toast.error(toErrorMessage(error, "Google sign-in failed."));
+                          });
+                        }}
+                      >
                         Login with Google
                       </DropdownMenuItem>
                     ) : null}
@@ -234,7 +274,14 @@ export function SiteHeaderClient({
                       <Bell className="size-4" aria-hidden />
                       View all notifications
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => void signOut({ callbackUrl: "/" })}>
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2"
+                      onClick={() => {
+                        void signOut({ callbackUrl: "/" }).catch((error: unknown) => {
+                          toast.error(toErrorMessage(error, "Sign out failed."));
+                        });
+                      }}
+                    >
                       <LogOut className="size-4" aria-hidden />
                       Sign out
                     </DropdownMenuItem>

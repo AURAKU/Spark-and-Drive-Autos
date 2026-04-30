@@ -8,15 +8,28 @@ export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
+  error: unknown;
   reset: () => void;
 }) {
+  const isErrorLike = typeof error === "object" && error !== null;
+  const rawMessage =
+    isErrorLike && "message" in error && typeof (error as { message?: unknown }).message === "string"
+      ? ((error as { message: string }).message ?? "").trim()
+      : "";
+  const errorName =
+    isErrorLike && "name" in error && typeof (error as { name?: unknown }).name === "string"
+      ? (error as { name: string }).name
+      : "";
+  const safeMessage =
+    rawMessage && rawMessage !== "[object Event]"
+      ? rawMessage
+      : "An unexpected error occurred. Please retry this action.";
   const isPrisma =
-    error?.name === "PrismaClientInitializationError" ||
-    error?.message?.includes("Prisma") ||
-    error?.message?.includes("Can't reach database") ||
-    error?.message?.includes("P1001") ||
-    error?.message?.includes("connection");
+    errorName === "PrismaClientInitializationError" ||
+    safeMessage.includes("Prisma") ||
+    safeMessage.includes("Can't reach database") ||
+    safeMessage.includes("P1001") ||
+    safeMessage.includes("connection");
 
   useEffect(() => {
     console.error(error);
@@ -50,7 +63,7 @@ export default function Error({
             </p>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{safeMessage}</p>
         )}
         <button
           type="button"
