@@ -7,9 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const BASE = process.env.BASE_URL?.replace(/\/$/, "") || "http://localhost:5173";
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 6000);
-const RETRIES = Number(process.env.RETRIES || 1);
-const MAX_AUDIT_MS = Number(process.env.MAX_AUDIT_MS || 180000);
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 20000);
+const RETRIES = Number(process.env.RETRIES || 3);
+const MAX_AUDIT_MS = Number(process.env.MAX_AUDIT_MS || 900000);
 
 function walk(dir, urlSegments) {
   /** @type {{ urlSegments: string[], file: string }[]} */

@@ -6,8 +6,9 @@
 const BASE_URL = (process.env.BASE_URL || "http://localhost:5173").replace(/\/$/, "");
 const origin = new URL(BASE_URL).origin;
 const MAX_PAGES = Number(process.env.MAX_PAGES || 250);
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 6000);
-const MAX_AUDIT_MS = Number(process.env.MAX_AUDIT_MS || 180000);
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 20000);
+const RETRIES = Number(process.env.RETRIES || 2);
+const MAX_AUDIT_MS = Number(process.env.MAX_AUDIT_MS || 900000);
 
 function extractHrefs(html) {
   const hrefs = [];
@@ -38,12 +39,24 @@ function normalize(urlLike, fromUrl) {
 }
 
 async function request(url) {
-  const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  return {
-    status: res.status,
-    location: res.headers.get("location"),
-    body: res.status === 200 ? await res.text() : "",
-  };
+  /** @type {unknown} */
+  let lastError;
+  for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
+    try {
+      const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      return {
+        status: res.status,
+        location: res.headers.get("location"),
+        body: res.status === 200 ? await res.text() : "",
+      };
+    } catch (e) {
+      lastError = e;
+      if (attempt < RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function main() {

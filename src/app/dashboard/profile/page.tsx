@@ -138,6 +138,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           ) : (
             <div className="mt-8">
               <ProfileClient
+                userId={user?.id ?? null}
                 email={user?.email}
                 name={user?.name}
                 walletBalance={Number(user?.walletBalance ?? 0)}

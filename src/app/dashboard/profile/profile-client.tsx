@@ -36,12 +36,14 @@ type LegalStatusRow = {
 };
 
 export function ProfileClient({
+  userId,
   email,
   name,
   walletBalance,
   addresses,
   legalRows,
 }: {
+  userId: string | null;
   email: string | null | undefined;
   name: string | null | undefined;
   walletBalance: number;
@@ -53,6 +55,7 @@ export function ProfileClient({
   const walletRef = params.get("walletRef");
 
   const [loading, setLoading] = useState(false);
+  const [accountName, setAccountName] = useState(name ?? "");
   const [address, setAddress] = useState({
     fullName: name ?? "",
     phone: "",
@@ -105,6 +108,26 @@ export function ProfileClient({
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateName(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/profile/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: accountName }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not update name.");
+      toast.success("Name updated.");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update name.");
     } finally {
       setLoading(false);
     }
@@ -169,8 +192,23 @@ export function ProfileClient({
     <div className="space-y-8">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-zinc-300">
         <h2 className="text-lg font-semibold text-white">Account</h2>
-        <p className="mt-2"><span className="text-zinc-500">Name:</span> {name ?? "—"}</p>
+        <p className="mt-2"><span className="text-zinc-500">User ID:</span> <span className="font-mono text-xs">{userId ?? "—"}</span></p>
+        <form className="mt-3 flex flex-col gap-2 sm:max-w-md" onSubmit={(e) => void updateName(e)}>
+          <Label htmlFor="account-name">Name</Label>
+          <Input
+            id="account-name"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            minLength={2}
+            maxLength={120}
+            required
+          />
+          <div className="pt-1">
+            <Button type="submit" disabled={loading}>{loading ? "Saving…" : "Update name"}</Button>
+          </div>
+        </form>
         <p className="mt-1"><span className="text-zinc-500">Email:</span> {email ?? "—"}</p>
+        <p className="mt-1 text-xs text-zinc-500">Email and phone are fixed to this account and cannot be changed here.</p>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
