@@ -8,8 +8,10 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ID_VERIFICATION_CONSENT_TEXT } from "@/lib/identity-verification";
-import { ALLOWED_VERIFICATION_DOCUMENT_TYPES } from "@/lib/identity-verification";
+import {
+  ALLOWED_VERIFICATION_DOCUMENT_TYPES,
+  ID_VERIFICATION_CONSENT_TEXT,
+} from "@/lib/identity-verification-shared";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"];

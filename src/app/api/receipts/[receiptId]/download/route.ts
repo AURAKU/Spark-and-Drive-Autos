@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { isAdminRole } from "@/auth";
 import { getRequestIp } from "@/lib/client-ip";
 import { prisma } from "@/lib/prisma";
+import { readReceiptPdfFromPublicStore, sanitizeReceiptDownloadFilename } from "@/lib/receipt-pdf-files";
 import { safeAuth } from "@/lib/safe-auth";
 
 type Ctx = { params: Promise<{ receiptId: string }> };
@@ -15,7 +16,7 @@ export async function GET(req: Request, ctx: Ctx) {
   const { receiptId } = await ctx.params;
   const receipt = await prisma.generatedReceipt.findUnique({
     where: { id: receiptId },
-    select: { id: true, userId: true, pdfUrl: true },
+    select: { id: true, userId: true, pdfUrl: true, receiptNumber: true },
   });
   if (!receipt) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -32,5 +33,15 @@ export async function GET(req: Request, ctx: Ctx) {
       metadata: { ip: getRequestIp(req) },
     },
   });
+  const filename = sanitizeReceiptDownloadFilename(receipt.receiptNumber);
+  const bytes = await readReceiptPdfFromPublicStore(receipt.pdfUrl);
+  if (bytes) {
+    return new NextResponse(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  }
   return NextResponse.redirect(new URL(receipt.pdfUrl, req.url));
 }

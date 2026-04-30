@@ -6,6 +6,10 @@ import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
 import { createCar } from "@/actions/cars";
+import {
+  DEFAULT_RESERVATION_DEPOSIT_MIN_GHS,
+  DEFAULT_RESERVATION_DEPOSIT_PERCENT,
+} from "@/lib/checkout-amount";
 import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
@@ -159,6 +163,23 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
         label="Base selling price (CNY / RMB)"
         description="Canonical price — reference GHS below is stored on the vehicle when you create the listing."
       />
+      <div>
+        <Label htmlFor="reservationDepositPercent">Reservation deposit (% of list price, GHS)</Label>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Optional. Leave blank for site default ({DEFAULT_RESERVATION_DEPOSIT_PERCENT}%, minimum ₵
+          {DEFAULT_RESERVATION_DEPOSIT_MIN_GHS.toLocaleString("en-GH")}).
+        </p>
+        <Input
+          id="reservationDepositPercent"
+          name="reservationDepositPercent"
+          type="number"
+          step="0.01"
+          min={0}
+          max={100}
+          className="mt-1"
+          placeholder={`Default ${DEFAULT_RESERVATION_DEPOSIT_PERCENT}%`}
+        />
+      </div>
       <div className="sm:col-span-2">
         <Label htmlFor="supplierCostRmb">Supplier / dealership cost (CNY)</Label>
         <p className="mt-0.5 text-xs text-zinc-500">Admin-only — not shown to customers. Leave blank if unknown.</p>

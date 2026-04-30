@@ -31,6 +31,8 @@ export type VehiclePricePreview = {
   settlementGhs: number;
   /** Full vehicle total in GHS (before deposit rule), for deposit checkout context. */
   fullGhs: number;
+  /** % of list price (GHS) used for reservation deposit; set when `paymentType` is `RESERVATION_DEPOSIT`. */
+  reservationDepositPercentApplied: number;
   /** Admin divisor D where GHS = round(RMB ÷ D). */
   rmbToGhsDivisor: number;
   paymentType: "FULL" | "RESERVATION_DEPOSIT";

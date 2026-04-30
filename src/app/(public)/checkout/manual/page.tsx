@@ -40,6 +40,7 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
       listingState: true,
       availabilityStatus: true,
       sourceType: true,
+      reservationDepositPercent: true,
     },
   });
   if (!car) notFound();
@@ -64,7 +65,8 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
   }
 
   const fx = await getGlobalCurrencySettings();
-  const amountGhs = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), paymentType, fx);
+  const pct = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+  const amountGhs = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), paymentType, fx, pct);
 
   return (
     <ManualCheckoutClient

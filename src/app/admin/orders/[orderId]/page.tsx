@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ReceiptStatus } from "@prisma/client";
 
 import { PageHeading } from "@/components/typography/page-headings";
 import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
@@ -32,6 +33,11 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   if (!order) notFound();
 
   const shipments = await getShipmentsForAdminOrderDetail(orderId);
+  const issuedReceipt = await prisma.generatedReceipt.findFirst({
+    where: { orderId, status: { in: [ReceiptStatus.ISSUED, ReceiptStatus.REGENERATED] } },
+    select: { id: true },
+  });
+  const hasReceiptFile = Boolean(order.receiptPdfUrl || issuedReceipt);
 
   const receipt = (order.receiptData ?? null) as
     | {
@@ -267,21 +273,23 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             ) : null}
             <p className="mt-3">{receipt.thankYouNote ?? receipt.thankYou ?? "Thank you for shopping with us."}</p>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <div className="mt-3 flex flex-col gap-3 text-xs">
             <p className="text-zinc-500">Receipt is stored on this order for customer and admin retrieval.</p>
-            {order.receiptPdfUrl ? (
-              <>
-                <a href={order.receiptPdfUrl} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
+            {hasReceiptFile ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/admin/orders/${orderId}/receipt`}
+                  className="font-medium text-[var(--brand)] hover:underline"
+                >
                   View PDF receipt
-                </a>
+                </Link>
                 <a
-                  href={order.receiptPdfUrl}
-                  download={`${order.receiptReference ?? order.reference}.pdf`}
+                  href={`/api/orders/${orderId}/receipt/download`}
                   className="rounded-md border border-white/15 px-2.5 py-1 text-zinc-200 hover:bg-white/10"
                 >
                   Download receipt
                 </a>
-              </>
+              </div>
             ) : null}
           </div>
         </div>

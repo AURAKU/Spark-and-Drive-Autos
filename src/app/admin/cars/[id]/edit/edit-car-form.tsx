@@ -9,6 +9,10 @@ import { toast } from "sonner";
 import { deleteCar, updateCar } from "@/actions/cars";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
+import {
+  DEFAULT_RESERVATION_DEPOSIT_MIN_GHS,
+  DEFAULT_RESERVATION_DEPOSIT_PERCENT,
+} from "@/lib/checkout-amount";
 import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
 import { tagsToCommaList, specificationsToTextarea } from "@/lib/car-form-helpers";
 import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
@@ -228,6 +232,25 @@ export function EditCarForm({
           defaultValue={baseRmb}
           lastSavedReferenceGhs={Number(car.price)}
         />
+        <div>
+          <Label htmlFor="reservationDepositPercent">Reservation deposit (% of list price, GHS)</Label>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Shown on the public vehicle page and used at checkout. Calculated from the listing price in Ghana cedis (from
+            RMB). Leave blank for site default ({DEFAULT_RESERVATION_DEPOSIT_PERCENT}%, minimum ₵
+            {DEFAULT_RESERVATION_DEPOSIT_MIN_GHS.toLocaleString("en-GH")}).
+          </p>
+          <Input
+            id="reservationDepositPercent"
+            name="reservationDepositPercent"
+            type="number"
+            step="0.01"
+            min={0}
+            max={100}
+            className="mt-1"
+            defaultValue={car.reservationDepositPercent != null ? String(car.reservationDepositPercent) : ""}
+            placeholder={`Default ${DEFAULT_RESERVATION_DEPOSIT_PERCENT}%`}
+          />
+        </div>
         <div className="sm:col-span-2">
           <Label htmlFor="supplierCostRmb">Supplier / dealership cost (CNY)</Label>
           <p className="mt-0.5 text-xs text-zinc-500">Admin-only — never shown on the public site.</p>

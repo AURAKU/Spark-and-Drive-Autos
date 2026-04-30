@@ -753,6 +753,8 @@ model Car {
   estimatedDelivery  String?
   /// Estimated sea freight to Ghana (GHS), shown on listing/checkout; copied onto car shipment when paid.
   seaShippingFeeGhs  Decimal?           @db.Decimal(14, 2)
+  /// Reservation deposit as % of vehicle list price in GHS (from base RMB conversion). Null = site default (5%, min ₵5,000).
+  reservationDepositPercent Decimal?    @db.Decimal(5, 2)
   /// Canonical inventory valuation in Chinese Yuan (single source of truth for conversions)
   basePriceRmb       Decimal            @default(0) @db.Decimal(14, 2)
   /// Admin-only supplier or dealership cost (CNY) — never expose on public surfaces

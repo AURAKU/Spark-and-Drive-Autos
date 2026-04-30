@@ -70,6 +70,12 @@ const carSchema = z.object({
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   }, z.number().nonnegative().optional()),
+  reservationDepositPercent: z.preprocess((v) => {
+    if (v === "" || v === undefined) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }, z.number().min(0).max(100).nullable()),
   accidentHistory: optionalStr(8000),
   sourceType: z.nativeEnum(SourceType),
   availabilityStatus: z.nativeEnum(AvailabilityStatus),
@@ -159,6 +165,10 @@ export async function createCar(_prev: unknown, formData: FormData) {
         seaShippingFeeGhs:
           d.seaShippingFeeGhs != null && Number.isFinite(d.seaShippingFeeGhs)
             ? new Prisma.Decimal(d.seaShippingFeeGhs)
+            : null,
+        reservationDepositPercent:
+          d.reservationDepositPercent != null && Number.isFinite(d.reservationDepositPercent)
+            ? new Prisma.Decimal(d.reservationDepositPercent)
             : null,
         accidentHistory: d.accidentHistory,
         tags: tags === undefined ? Prisma.JsonNull : tags,
@@ -300,6 +310,10 @@ export async function updateCar(_prev: unknown, formData: FormData) {
         seaShippingFeeGhs:
           d.seaShippingFeeGhs != null && Number.isFinite(d.seaShippingFeeGhs)
             ? new Prisma.Decimal(d.seaShippingFeeGhs)
+            : null,
+        reservationDepositPercent:
+          d.reservationDepositPercent != null && Number.isFinite(d.reservationDepositPercent)
+            ? new Prisma.Decimal(d.reservationDepositPercent)
             : null,
         accidentHistory: d.accidentHistory,
         tags: tags === undefined ? Prisma.JsonNull : tags,

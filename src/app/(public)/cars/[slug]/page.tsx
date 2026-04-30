@@ -18,6 +18,7 @@ import {
   getGlobalCurrencySettings,
   parseDisplayCurrency,
 } from "@/lib/currency";
+import { depositAmountGhsFromFull, resolveReservationDepositPercent } from "@/lib/checkout-amount";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { buildCarGalleryImages } from "@/lib/car-gallery";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
@@ -75,6 +76,9 @@ export default async function CarDetailPage(props: Props) {
   const fx = await getGlobalCurrencySettings();
   const priceLabel = formatVehiclePriceFromRmb(Number(car.basePriceRmb), displayCurrency, fx);
   const listPriceAsCifHintGhs = getCarDisplayPrice(Number(car.basePriceRmb), "GHS", fx);
+  const depositPctStored = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+  const reservationDepositGhs = depositAmountGhsFromFull(listPriceAsCifHintGhs, depositPctStored);
+  const reservationDepositPercentLabel = resolveReservationDepositPercent(depositPctStored);
 
   const galleryImages = buildCarGalleryImages(car);
   const stockBadge = getVehicleStockBadgeForDisplay(car);
@@ -250,6 +254,8 @@ export default async function CarDetailPage(props: Props) {
               canPayOnline={canPayOnline}
               blockTitle={car.title}
               blockMessage={checkoutBlockedMessage ?? ""}
+              reservationDepositGhs={reservationDepositGhs}
+              reservationDepositPercentLabel={reservationDepositPercentLabel}
             />
             <SharePageButton url={shareUrl} title={car.title} text={`${car.title} — Spark and Drive Autos`} />
             <CarFavoriteButton

@@ -367,7 +367,11 @@ export function CheckoutClient({
                   </p>
                   {checkoutSummary.paymentType === "RESERVATION_DEPOSIT" ? (
                     <p className="mt-4 text-base leading-relaxed text-zinc-400">
-                      Reservation deposit toward this vehicle. Estimated full total in Ghana cedis:{" "}
+                      Reservation deposit:{" "}
+                      <span className="font-semibold text-zinc-200">
+                        {checkoutSummary.reservationDepositPercentApplied}%
+                      </span>{" "}
+                      of the vehicle list price in Ghana cedis (minimum deposit rules may apply). Estimated full total:{" "}
                       <span className="font-semibold text-zinc-200">
                         {formatConverted(checkoutSummary.fullGhs, "GHS")}
                       </span>

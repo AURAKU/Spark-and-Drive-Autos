@@ -2,8 +2,19 @@ import type { NextAuthConfig } from "next-auth";
 import type { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { getAuthSecret } from "@/lib/env-auth";
+import { getAuthCookieDomain, getAuthSecret, getUseSecureCookies } from "@/lib/env-auth";
 import { isAdminRole } from "@/lib/roles";
+
+const useSecureCookies = getUseSecureCookies();
+const authCookieDomain = getAuthCookieDomain();
+/** Shared opts for cookies that may carry `Domain`. Never applied to `__Host-` CSRF cookie. */
+const sharedSessionCookieOptions = {
+  path: "/" as const,
+  sameSite: "lax" as const,
+  httpOnly: true,
+  secure: useSecureCookies,
+  ...(authCookieDomain ? { domain: authCookieDomain } : {}),
+};
 
 /** Service assistants may only access support surfaces under `/admin` (not inventory, payments, etc.). */
 function isServiceAssistantAllowedAdminPath(pathname: string): boolean {
@@ -19,6 +30,15 @@ function isServiceAssistantAllowedAdminPath(pathname: string): boolean {
 export const authConfig = {
   trustHost: true,
   secret: getAuthSecret(),
+  /** Align with production HTTPS + proxy so session cookie names match middleware (see `getUseSecureCookies`). */
+  useSecureCookies,
+  cookies: {
+    sessionToken: { options: sharedSessionCookieOptions },
+    callbackUrl: { options: { ...sharedSessionCookieOptions } },
+    pkceCodeVerifier: { options: { ...sharedSessionCookieOptions } },
+    state: { options: { ...sharedSessionCookieOptions } },
+    nonce: { options: { ...sharedSessionCookieOptions } },
+  },
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   pages: {
     signIn: "/login",

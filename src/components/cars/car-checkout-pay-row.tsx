@@ -4,15 +4,26 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { CheckoutBlockedDialog } from "@/components/checkout/checkout-blocked-dialog";
+import { formatMoney } from "@/lib/format";
 
 type Props = {
   carId: string;
   canPayOnline: boolean;
   blockTitle: string;
   blockMessage: string;
+  /** Shown when online checkout is available: estimated deposit from list price (GHS) and % label. */
+  reservationDepositGhs?: number;
+  reservationDepositPercentLabel?: number;
 };
 
-export function CarCheckoutPayRow({ carId, canPayOnline, blockTitle, blockMessage }: Props) {
+export function CarCheckoutPayRow({
+  carId,
+  canPayOnline,
+  blockTitle,
+  blockMessage,
+  reservationDepositGhs,
+  reservationDepositPercentLabel,
+}: Props) {
   const [blockedDialogOpen, setBlockedDialogOpen] = useState(false);
 
   const payClass =
@@ -22,14 +33,23 @@ export function CarCheckoutPayRow({ carId, canPayOnline, blockTitle, blockMessag
 
   if (canPayOnline) {
     return (
-      <>
-        <Link href={`/checkout?carId=${carId}&type=FULL`} className={payClass}>
-          Pay now
-        </Link>
-        <Link href={`/checkout?carId=${carId}&type=RESERVATION_DEPOSIT`} className={reserveClass}>
-          Reserve with deposit
-        </Link>
-      </>
+      <div className="flex w-full max-w-xl flex-col gap-2">
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/checkout?carId=${carId}&type=FULL`} className={payClass}>
+            Pay now
+          </Link>
+          <Link href={`/checkout?carId=${carId}&type=RESERVATION_DEPOSIT`} className={reserveClass}>
+            Reserve with deposit
+          </Link>
+        </div>
+        {reservationDepositGhs != null && reservationDepositPercentLabel != null ? (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground/90">Reserve with deposit:</span>{" "}
+            {formatMoney(reservationDepositGhs, "GHS")} ({reservationDepositPercentLabel}% of list price in GHS; minimum
+            deposit rules apply).
+          </p>
+        ) : null}
+      </div>
     );
   }
 

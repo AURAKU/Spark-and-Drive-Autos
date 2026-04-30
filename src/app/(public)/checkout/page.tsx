@@ -5,7 +5,10 @@ import { Suspense } from "react";
 import { CheckoutClient } from "./checkout-client";
 import type { VehiclePricePreview } from "@/lib/currency";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
+import {
+  getVehicleCheckoutAmountGhs,
+  resolveReservationDepositPercent,
+} from "@/lib/checkout-amount";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
 import { getCheckoutLegalVersions, requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
@@ -43,6 +46,7 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         seaShippingFeeGhs: true,
         listingState: true,
         availabilityStatus: true,
+        reservationDepositPercent: true,
       },
     });
     if (car) {
@@ -56,7 +60,11 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         const fx = await getGlobalCurrencySettings();
         const base = Number(car.basePriceRmb);
         const fullGhs = getCarDisplayPrice(base, "GHS", fx);
-        const settlementGhs = getVehicleCheckoutAmountGhs(base, paymentType, fx);
+        const pctStored =
+          car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+        const settlementGhs = getVehicleCheckoutAmountGhs(base, paymentType, fx, pctStored);
+        const reservationDepositPercentApplied =
+          paymentType === PaymentType.RESERVATION_DEPOSIT ? resolveReservationDepositPercent(pctStored) : 0;
         requiresContract = requiresSourcingContract(car.sourceType);
         requiresRisk = requiresRiskAcknowledgement(car.sourceType);
         if (session?.user?.id) {
@@ -85,6 +93,7 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
           seaShippingFeeGhs: car.seaShippingFeeGhs != null ? Number(car.seaShippingFeeGhs) : null,
           settlementGhs,
           fullGhs,
+          reservationDepositPercentApplied,
           rmbToGhsDivisor: Number(fx.rmbToGhs),
           paymentType: paymentType === PaymentType.RESERVATION_DEPOSIT ? "RESERVATION_DEPOSIT" : "FULL",
         };

@@ -187,14 +187,20 @@ export default async function CheckoutReturnPage(props: Props) {
                 View order &amp; updates
               </Link>
               {order.receiptPdfUrl ? (
-                <a
-                  href={order.receiptPdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 px-6 text-sm font-semibold text-white hover:bg-white/5"
-                >
-                  Download PDF receipt
-                </a>
+                <>
+                  <Link
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 px-6 text-sm font-semibold text-white hover:bg-white/5"
+                    href={`/dashboard/orders/${order.id}/receipt`}
+                  >
+                    Preview PDF receipt
+                  </Link>
+                  <a
+                    href={`/api/orders/${order.id}/receipt/download`}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 px-6 text-sm font-semibold text-white hover:bg-white/5"
+                  >
+                    Download PDF receipt
+                  </a>
+                </>
               ) : (
                 <p className="self-center text-sm text-zinc-500">
                   Your PDF receipt will appear on the order page once generated.

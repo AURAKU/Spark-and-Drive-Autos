@@ -232,7 +232,14 @@ export async function POST(req: Request) {
   }
 
   const settings = await getGlobalCurrencySettings();
-  const previewAmount = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), parsed.data.paymentType, settings);
+  const depositPctStored =
+    car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+  const previewAmount = getVehicleCheckoutAmountGhs(
+    Number(car.basePriceRmb),
+    parsed.data.paymentType,
+    settings,
+    depositPctStored,
+  );
   try {
     await requireVerification({
       userId: session.user.id,
@@ -292,7 +299,14 @@ export async function POST(req: Request) {
           select: { id: true },
         });
         if (dup) throwCheckoutConflict("ALREADY_PURCHASED");
-        const amountTx = getVehicleCheckoutAmountGhs(Number(carFresh.basePriceRmb), parsed.data.paymentType, settings);
+        const depPct =
+          carFresh.reservationDepositPercent != null ? Number(carFresh.reservationDepositPercent) : null;
+        const amountTx = getVehicleCheckoutAmountGhs(
+          Number(carFresh.basePriceRmb),
+          parsed.data.paymentType,
+          settings,
+          depPct,
+        );
         const ord = await tx.order.create({
           data: {
             reference,

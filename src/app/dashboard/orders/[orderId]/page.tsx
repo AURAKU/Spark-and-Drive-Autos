@@ -296,27 +296,39 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
             ) : null}
             <p className="mt-3 text-zinc-300">{receipt?.thankYouNote ?? receipt?.thankYou ?? "Thank you for shopping with us."}</p>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <div className="mt-3 flex flex-col gap-3 text-xs">
             <p className="text-zinc-500">Receipt remains attached to this order and can be reviewed any time.</p>
-            {order.receiptPdfUrl ? (
-              <>
-                <a href={order.receiptPdfUrl} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
+            {order.receiptPdfUrl || generatedReceipts.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/dashboard/orders/${orderId}/receipt`}
+                  className="font-medium text-[var(--brand)] hover:underline"
+                >
                   View PDF receipt
-                </a>
+                </Link>
                 <a
-                  href={order.receiptPdfUrl}
-                  download={`${order.receiptReference ?? order.reference}.pdf`}
+                  href={`/api/orders/${orderId}/receipt/download`}
                   className="rounded-md border border-white/15 px-2.5 py-1 text-zinc-200 hover:bg-white/10"
                 >
                   Download receipt
                 </a>
-              </>
+              </div>
             ) : null}
-            {generatedReceipts.map((r) => (
-              <a key={r.id} href={`/api/receipts/${r.id}/download`} className="text-[var(--brand)] hover:underline">
-                Download {r.receiptNumber}
-              </a>
-            ))}
+            {generatedReceipts.length > 1 ? (
+              <ul className="space-y-2 border-t border-white/10 pt-3 text-zinc-400">
+                {generatedReceipts.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className="font-mono text-[10px] text-zinc-500">{r.receiptNumber}</span>
+                    <Link className="text-[var(--brand)] hover:underline" href={`/dashboard/receipts/${r.id}/view`}>
+                      View
+                    </Link>
+                    <a className="text-zinc-300 hover:underline" href={`/api/receipts/${r.id}/download`}>
+                      Download
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
       ) : null}

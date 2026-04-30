@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +34,7 @@ export default async function DashboardReceiptsPage() {
               <th className="px-3 py-2">Amount</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Issued</th>
-              <th className="px-3 py-2">PDF</th>
+              <th className="px-3 py-2">Receipt PDF</th>
             </tr>
           </thead>
           <tbody>
@@ -48,9 +50,14 @@ export default async function DashboardReceiptsPage() {
                 <td className="px-3 py-2">{r.status}</td>
                 <td className="px-3 py-2">{r.issuedAt.toISOString().slice(0, 19).replace("T", " ")}</td>
                 <td className="px-3 py-2">
-                  <a href={`/api/receipts/${r.id}/download`} className="text-[var(--brand)] hover:underline">
-                    Download
-                  </a>
+                  <span className="flex flex-wrap gap-x-3 gap-y-1">
+                    <Link href={`/dashboard/receipts/${r.id}/view`} className="text-[var(--brand)] hover:underline">
+                      View
+                    </Link>
+                    <a href={`/api/receipts/${r.id}/download`} className="text-zinc-300 hover:underline">
+                      Download
+                    </a>
+                  </span>
                 </td>
               </tr>
             ))}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { requirePartsFinderMembership } from "@/lib/parts-finder/access";
@@ -6,7 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { nextVerifiedPartRequestNumber, getVerifiedPartSettings } from "@/lib/verified-parts";
 
 const schema = z.object({
-  partsFinderSearchId: z.string().optional(),
+  partsFinderSearchId: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
   selectedMatchId: z.string().optional(),
   userVehicleId: z.string().optional(),
   vin: z.string().trim().optional(),
@@ -36,27 +40,66 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "Selected vehicle was not found in your garage." }, { status: 404 });
       }
     }
+
+    let partsFinderSearchDbId: string | null = null;
+    const rawSearchKey = input.partsFinderSearchId?.trim();
+    if (rawSearchKey) {
+      const searchSession = await prisma.partsFinderSearchSession.findFirst({
+        where: {
+          userId: session.user.id,
+          OR: [{ id: rawSearchKey }, { sessionId: rawSearchKey }],
+        },
+        select: { id: true },
+      });
+      if (!searchSession) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Parts Finder search could not be found or is no longer linked to your account. Open this page again from your Parts Finder results.",
+          },
+          { status: 400 },
+        );
+      }
+      partsFinderSearchDbId = searchSession.id;
+    }
+
     const requestNumber = await nextVerifiedPartRequestNumber();
-    const created = await prisma.verifiedPartRequest.create({
-      data: {
-        requestNumber,
-        userId: session.user.id,
-        userVehicleId: input.userVehicleId ?? null,
-        partsFinderSearchId: input.partsFinderSearchId ?? null,
-        selectedMatchId: input.selectedMatchId ?? null,
-        vin: input.vin ?? null,
-        vehicleYear: input.vehicleYear ?? null,
-        vehicleMake: input.vehicleMake ?? null,
-        vehicleModel: input.vehicleModel ?? null,
-        vehicleEngine: input.vehicleEngine ?? null,
-        partName: input.partName,
-        customerNotes: input.customerNotes ?? null,
-        selectedMatchSnapshot: (input.selectedMatchSnapshot as object | undefined) ?? undefined,
-        status: "AWAITING_PAYMENT",
-        verificationFee: settings.feeAmount,
-        currency: settings.currency,
-      },
-    });
+    let created;
+    try {
+      created = await prisma.verifiedPartRequest.create({
+        data: {
+          requestNumber,
+          userId: session.user.id,
+          userVehicleId: input.userVehicleId ?? null,
+          partsFinderSearchId: partsFinderSearchDbId,
+          selectedMatchId: input.selectedMatchId ?? null,
+          vin: input.vin ?? null,
+          vehicleYear: input.vehicleYear ?? null,
+          vehicleMake: input.vehicleMake ?? null,
+          vehicleModel: input.vehicleModel ?? null,
+          vehicleEngine: input.vehicleEngine ?? null,
+          partName: input.partName,
+          customerNotes: input.customerNotes ?? null,
+          selectedMatchSnapshot: (input.selectedMatchSnapshot as object | undefined) ?? undefined,
+          status: "AWAITING_PAYMENT",
+          verificationFee: settings.feeAmount,
+          currency: settings.currency,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Could not link this request to Parts Finder (reference invalid). Go back to your search results and try again.",
+          },
+          { status: 400 },
+        );
+      }
+      throw err;
+    }
     await prisma.auditLog.create({
       data: {
         actorId: session.user.id,

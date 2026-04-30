@@ -3,10 +3,11 @@
 import { PartListingState, PartOrigin, PartStockStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { createPart, updatePart, type PartActionState } from "@/actions/parts";
+import { AdminGhsSellingPriceField } from "@/components/admin/admin-ghs-selling-price-field";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { PartCoverField } from "@/components/admin/part-cover-field";
@@ -90,8 +91,14 @@ export function PartForm({
     }
   }, [state?.ok, mode, router]);
 
+  useEffect(() => {
+    if (part?.origin) setOriginLane(part.origin);
+  }, [part?.origin]);
+
   const select =
     "mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none ring-[var(--brand)]/30 focus:ring-2";
+
+  const [originLane, setOriginLane] = useState<PartOrigin>(part?.origin ?? PartOrigin.GHANA);
 
   const baseRmb = part != null ? part.basePriceRmb : 0;
   const costRmb = part?.supplierCostRmb ?? null;
@@ -147,13 +154,23 @@ export function PartForm({
       </div>
       <div>
         <Label htmlFor="origin">Origin / availability lane</Label>
-        <select id="origin" name="origin" className={select} required defaultValue={part?.origin ?? PartOrigin.GHANA}>
+        <select
+          id="origin"
+          name="origin"
+          className={select}
+          required
+          value={originLane}
+          onChange={(e) => setOriginLane(e.target.value as PartOrigin)}
+        >
           <option value={PartOrigin.GHANA}>Available in Ghana</option>
           <option value={PartOrigin.CHINA}>China (Pre-order)</option>
         </select>
         <p className="mt-1 text-xs text-zinc-500">
-          For China, the public badge still reflects in-stock vs pre-order from <span className="text-zinc-400">stock status</span> below
-          (e.g. &quot;Available from China&quot; vs &quot;China (Pre-order)&quot;). Lock status if you use &quot;Pre Order on Request&quot;.
+          <span className="text-zinc-300">Ghana stock:</span> set the list price in{" "}
+          <span className="font-medium text-zinc-200">Ghana cedis (GHS)</span> below.{" "}
+          <span className="text-zinc-300">China:</span> list price in RMB. For China, the public badge still reflects
+          in-stock vs pre-order from <span className="text-zinc-400">stock status</span> below. Lock status if you use
+          &quot;Pre Order on Request&quot;.
         </p>
       </div>
       <div>
@@ -162,12 +179,20 @@ export function PartForm({
       </div>
 
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Pricing (admin)</p>
-      <AdminRmbSellingPriceField
-        label="Base selling price (RMB only)"
-        description="Canonical list price — reference GHS is written to priceGhs on every save for admin and storefront quoting."
-        defaultValue={part != null ? Number(part.basePriceRmb) : undefined}
-        lastSavedReferenceGhs={part != null ? Number(part.priceGhs) : null}
-      />
+      {originLane === PartOrigin.GHANA ? (
+        <AdminGhsSellingPriceField
+          label="Base selling price (GHS / cedis)"
+          description="Set the customer-facing list price in Ghana cedis. The system also stores the matching RMB equivalent for the catalog."
+          defaultValue={part != null ? Number(part.priceGhs) : undefined}
+        />
+      ) : (
+        <AdminRmbSellingPriceField
+          label="Base selling price (RMB only)"
+          description="Canonical list price in RMB — reference GHS is written to priceGhs on every save for admin and storefront quoting."
+          defaultValue={part != null ? Number(part.basePriceRmb) : undefined}
+          lastSavedReferenceGhs={part != null ? Number(part.priceGhs) : null}
+        />
+      )}
       <div>
         <Label htmlFor="supplierCostRmb">Supplier / distributor cost (RMB)</Label>
         <p className="mt-0.5 text-xs text-zinc-500">Admin-only — not shown to customers.</p>

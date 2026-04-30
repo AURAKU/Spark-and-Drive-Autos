@@ -9,7 +9,8 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { linesToList, mergePartMetaWithOptions } from "@/lib/part-variant-options";
 import { detectLikelyPartDuplicates } from "@/lib/duplicate-detection";
-import { getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
+import { getGlobalCurrencySettings } from "@/lib/currency";
+import { resolvePartListPricingFromForm } from "@/lib/parts-pricing";
 import { auditLog } from "@/lib/leads";
 import { ensureChinaPreOrderDeliveryOptions } from "@/lib/part-china-preorder-delivery";
 import { maybeNotifyAdminsGhanaLowStock } from "@/lib/ghana-low-stock";
@@ -45,7 +46,16 @@ const partBaseSchema = z.object({
   categoryId: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().cuid().optional()),
   origin: z.nativeEnum(PartOrigin).default(PartOrigin.GHANA),
   sku: optionalStr(120),
-  basePriceRmb: z.coerce.number().nonnegative(),
+  basePriceRmb: z.preprocess((v) => {
+    if (v === "" || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.number().nonnegative().optional()),
+  basePriceGhs: z.preprocess((v) => {
+    if (v === "" || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.number().nonnegative().optional()),
   supplierCostRmb: z.preprocess((v) => {
     if (v === "" || v === undefined) return undefined;
     const n = Number(v);
@@ -69,6 +79,26 @@ const partBaseSchema = z.object({
   optionSizes: optionalStr(20000),
 });
 
+const partBaseSchemaWithOriginPricing = partBaseSchema.superRefine((data, ctx) => {
+  if (data.origin === PartOrigin.GHANA) {
+    if (data.basePriceGhs === undefined || data.basePriceGhs === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Base selling price (GHS) is required",
+        path: ["basePriceGhs"],
+      });
+    }
+  } else if (data.origin === PartOrigin.CHINA) {
+    if (data.basePriceRmb === undefined || data.basePriceRmb === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Base selling price (RMB) is required",
+        path: ["basePriceRmb"],
+      });
+    }
+  }
+});
+
 const updateSlugSchema = z.preprocess(
   (v) => (v === "" || v === undefined ? undefined : v),
   z
@@ -79,7 +109,7 @@ const updateSlugSchema = z.preprocess(
     .optional()
 );
 
-const updateSchema = partBaseSchema.extend({
+const updateSchema = partBaseSchemaWithOriginPricing.extend({
   id: z.string().cuid(),
   slug: updateSlugSchema,
 });
@@ -96,7 +126,7 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
   try {
     const session = await requireAdmin();
     const raw = Object.fromEntries(formData.entries());
-    const parsed = partBaseSchema.safeParse(raw);
+    const parsed = partBaseSchemaWithOriginPricing.safeParse(raw);
     if (!parsed.success) {
       return { issues: parsed.error.flatten() };
     }
@@ -110,7 +140,11 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
     };
     const nextMeta = mergePartMetaWithOptions(null, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
-    const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
+    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPricingFromForm(
+      d.origin,
+      { basePriceRmb: d.basePriceRmb, basePriceGhs: d.basePriceGhs },
+      settings,
+    );
     const categoryRef =
       d.categoryId != null
         ? await prisma.partCategory.findUnique({ where: { id: d.categoryId }, select: { id: true, name: true } })
@@ -123,7 +157,7 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
       title: d.title,
       sku: d.sku ?? undefined,
       category: categoryName,
-      basePriceRmb: d.basePriceRmb,
+      basePriceRmb: basePriceRmbNum,
     });
 
     const part = await prisma.part.create({
@@ -136,12 +170,12 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
         categoryId: categoryRef?.id ?? null,
         origin: d.origin,
         sku: d.sku ?? null,
-        basePriceRmb: new Prisma.Decimal(d.basePriceRmb),
+        basePriceRmb: new Prisma.Decimal(basePriceRmbNum),
         supplierCostRmb:
           d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
             ? new Prisma.Decimal(d.supplierCostRmb)
             : null,
-        priceGhs: new Prisma.Decimal(priceGhs),
+        priceGhs: new Prisma.Decimal(priceGhsNum),
         stockQty: d.stockQty,
         stockStatus,
         stockStatusLocked: d.stockStatusLocked,
@@ -229,7 +263,11 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
     };
     const nextMeta = mergePartMetaWithOptions(existing.metaJson, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
-    const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
+    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPricingFromForm(
+      d.origin,
+      { basePriceRmb: d.basePriceRmb, basePriceGhs: d.basePriceGhs },
+      settings,
+    );
     const categoryRef =
       d.categoryId != null
         ? await prisma.partCategory.findUnique({ where: { id: d.categoryId }, select: { id: true, name: true } })
@@ -240,7 +278,7 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
       title: d.title,
       sku: d.sku ?? undefined,
       category: categoryName,
-      basePriceRmb: d.basePriceRmb,
+      basePriceRmb: basePriceRmbNum,
       excludeId: existing.id,
     });
     const part = await prisma.part.update({
@@ -254,12 +292,12 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
         categoryId: categoryRef?.id ?? null,
         origin: d.origin,
         sku: d.sku ?? null,
-        basePriceRmb: new Prisma.Decimal(d.basePriceRmb),
+        basePriceRmb: new Prisma.Decimal(basePriceRmbNum),
         supplierCostRmb:
           d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
             ? new Prisma.Decimal(d.supplierCostRmb)
             : null,
-        priceGhs: new Prisma.Decimal(priceGhs),
+        priceGhs: new Prisma.Decimal(priceGhsNum),
         stockQty: d.stockQty,
         stockStatus,
         stockStatusLocked: d.stockStatusLocked,
