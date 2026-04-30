@@ -31,51 +31,91 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
   const searchParams = await props.searchParams;
   const view = parseProfileView(firstQueryValue(searchParams, "view"));
   const showReviews = firstQueryValue(searchParams, "reviews") === "1";
-  const [user, legalRows, latestVerification] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        ghanaCardIdNumber: true,
-        ghanaCardImageUrl: true,
-        walletBalance: true,
-        addresses: {
-          orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            region: true,
-            city: true,
-            district: true,
-            locality: true,
-            digitalAddress: true,
-            streetAddress: true,
-            landmark: true,
-            notes: true,
-            isDefault: true,
+  let hadVerificationLoadError = false;
+  let user: {
+    id: string;
+    email: string;
+    name: string | null;
+    ghanaCardIdNumber: string | null;
+    ghanaCardImageUrl: string | null;
+    walletBalance: unknown;
+    addresses: {
+      id: string;
+      fullName: string;
+      phone: string;
+      region: string;
+      city: string;
+      district: string | null;
+      locality: string | null;
+      digitalAddress: string | null;
+      streetAddress: string;
+      landmark: string | null;
+      notes: string | null;
+      isDefault: boolean;
+    }[];
+  } | null = null;
+  let legalRows: Awaited<ReturnType<typeof getUserLegalStatusRows>> = [];
+  let latestVerification: {
+    id: string;
+    status: string;
+    documentType: string;
+    reason: string | null;
+    rejectionReason: string | null;
+    submittedAt: Date;
+    reviewedAt: Date | null;
+    expiresAt: Date | null;
+  } | null = null;
+
+  try {
+    [user, legalRows, latestVerification] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          ghanaCardIdNumber: true,
+          ghanaCardImageUrl: true,
+          walletBalance: true,
+          addresses: {
+            orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              region: true,
+              city: true,
+              district: true,
+              locality: true,
+              digitalAddress: true,
+              streetAddress: true,
+              landmark: true,
+              notes: true,
+              isDefault: true,
+            },
           },
         },
-      },
-    }),
-    getUserLegalStatusRows(session.user.id),
-    prisma.userVerification.findFirst({
-      where: { userId: session.user.id },
-      orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        status: true,
-        documentType: true,
-        reason: true,
-        rejectionReason: true,
-        submittedAt: true,
-        reviewedAt: true,
-        expiresAt: true,
-      },
-    }),
-  ]);
+      }),
+      getUserLegalStatusRows(session.user.id),
+      prisma.userVerification.findFirst({
+        where: { userId: session.user.id },
+        orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          status: true,
+          documentType: true,
+          reason: true,
+          rejectionReason: true,
+          submittedAt: true,
+          reviewedAt: true,
+          expiresAt: true,
+        },
+      }),
+    ]);
+  } catch (error) {
+    hadVerificationLoadError = true;
+    console.error("[dashboard/profile] Failed to load verification data", error);
+  }
 
   return (
     <div>
@@ -151,13 +191,23 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
       ) : null}
       {view === "verification" ? (
         <div className="mt-8">
+          {hadVerificationLoadError ? (
+            <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              We could not load your latest verification record right now. You can still upload and submit a new
+              verification request.
+            </div>
+          ) : null}
           <VerificationClient
             ghanaCardIdNumber={user?.ghanaCardIdNumber ?? null}
             ghanaCardImageUrl={user?.ghanaCardImageUrl ?? null}
             latest={
               latestVerification
                 ? {
-                    ...latestVerification,
+                    id: latestVerification.id,
+                    status: latestVerification.status as never,
+                    documentType: latestVerification.documentType as never,
+                    reason: latestVerification.reason,
+                    rejectionReason: latestVerification.rejectionReason,
                     submittedAt: latestVerification.submittedAt.toISOString(),
                     reviewedAt: latestVerification.reviewedAt?.toISOString() ?? null,
                     expiresAt: latestVerification.expiresAt?.toISOString() ?? null,

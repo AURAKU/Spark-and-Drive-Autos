@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 
-import { getStaffOperationsHref, isAdminRole, isSupportStaffRole } from "@/auth";
 import { CurrencySwitcher } from "@/components/layout/currency-switcher";
 import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
 import { DashboardSidebarNav } from "@/components/layout/dashboard-sidebar-nav";
@@ -12,6 +11,7 @@ import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { parseDisplayCurrency } from "@/lib/currency";
 import { getMissingRequiredPolicies } from "@/lib/legal-reacceptance";
 import { prisma } from "@/lib/prisma";
+import { getStaffOperationsHref, isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { parseViewMode, VIEW_MODE_COOKIE } from "@/lib/view-mode";
 import { requireActiveSessionOrRedirect } from "@/lib/auth-helpers";
 

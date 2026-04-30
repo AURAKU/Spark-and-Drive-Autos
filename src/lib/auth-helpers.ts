@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { isAdminRole, isSuperAdminRole } from "@/auth";
+import { isAdminRole, isSuperAdminRole } from "@/lib/roles";
 import { safeAuth } from "@/lib/safe-auth";
 
 /**
