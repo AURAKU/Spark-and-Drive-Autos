@@ -57,3 +57,18 @@ export function getAuthSecret(): string {
   );
   return "dev-only-insecure-auth-secret-min-32-chars!!";
 }
+
+/**
+ * Rotation-safe secret list for Auth.js JWT decrypt/sign.
+ * - First entry is used for new signing.
+ * - Remaining entries are accepted for decryption (old cookies/tokens).
+ */
+export function getAuthSecrets(): string | string[] {
+  const fromEnv = [process.env.AUTH_SECRET, process.env.NEXTAUTH_SECRET]
+    .map((s) => s?.trim())
+    .filter((s): s is string => Boolean(s && s.length >= 32));
+  const unique = Array.from(new Set(fromEnv));
+  if (unique.length > 1) return unique;
+  if (unique.length === 1) return unique[0];
+  return getAuthSecret();
+}

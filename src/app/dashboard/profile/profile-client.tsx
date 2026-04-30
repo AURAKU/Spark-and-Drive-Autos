@@ -39,6 +39,7 @@ export function ProfileClient({
   userId,
   email,
   name,
+  phone,
   walletBalance,
   addresses,
   legalRows,
@@ -46,6 +47,7 @@ export function ProfileClient({
   userId: string | null;
   email: string | null | undefined;
   name: string | null | undefined;
+  phone: string | null | undefined;
   walletBalance: number;
   addresses: AddressRow[];
   legalRows: LegalStatusRow[];
@@ -194,7 +196,7 @@ export function ProfileClient({
         <h2 className="text-lg font-semibold text-white">Account</h2>
         <p className="mt-2"><span className="text-zinc-500">User ID:</span> <span className="font-mono text-xs">{userId ?? "—"}</span></p>
         <form className="mt-3 flex flex-col gap-2 sm:max-w-md" onSubmit={(e) => void updateName(e)}>
-          <Label htmlFor="account-name">Name</Label>
+          <Label htmlFor="account-name">Username</Label>
           <Input
             id="account-name"
             value={accountName}
@@ -204,9 +206,10 @@ export function ProfileClient({
             required
           />
           <div className="pt-1">
-            <Button type="submit" disabled={loading}>{loading ? "Saving…" : "Update name"}</Button>
+            <Button type="submit" disabled={loading}>{loading ? "Saving…" : "Update username"}</Button>
           </div>
         </form>
+        <p className="mt-3"><span className="text-zinc-500">Phone:</span> {phone ?? "—"}</p>
         <p className="mt-1"><span className="text-zinc-500">Email:</span> {email ?? "—"}</p>
         <p className="mt-1 text-xs text-zinc-500">Email and phone are fixed to this account and cannot be changed here.</p>
       </div>

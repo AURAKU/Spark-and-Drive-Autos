@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -121,6 +122,15 @@ export default async function AdminUsersPage(props: { searchParams: SearchParams
       </p>
 
       <UsersRolesTabs panel={panel} />
+      <div className="mt-4 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <p className="text-xs text-zinc-400">Need to review submitted IDs and approvals?</p>
+        <Link
+          href="/admin/ghana-card"
+          className="inline-flex h-9 items-center rounded-lg bg-[var(--brand)] px-3 text-sm font-semibold text-black hover:opacity-90"
+        >
+          Identification Verification Review
+        </Link>
+      </div>
 
       {panel === "users" ? (
         <div className="mt-6">

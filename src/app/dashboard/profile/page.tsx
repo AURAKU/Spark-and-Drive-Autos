@@ -1,10 +1,12 @@
+import { GhanaCardVerificationStatus } from "@prisma/client";
+import Link from "next/link";
+
 import { ProfilePartReviews } from "@/components/dashboard/profile-part-reviews";
 import { VerificationClient } from "@/components/dashboard/verification-client";
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { getUserLegalStatusRows } from "@/lib/legal-profile";
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
 
 import { ProfileClient } from "./profile-client";
 
@@ -12,14 +14,14 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+type ProfileView = "profile" | "verification";
+
 function firstQueryValue(sp: Record<string, string | string[] | undefined>, key: string): string | undefined {
   const v = sp[key];
   if (typeof v === "string") return v;
   if (Array.isArray(v)) return v.find((x): x is string => typeof x === "string");
   return undefined;
 }
-
-type ProfileView = "profile" | "verification";
 
 function parseProfileView(raw: string | undefined): ProfileView {
   if (raw === "verification") return "verification";
@@ -31,13 +33,22 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
   const searchParams = await props.searchParams;
   const view = parseProfileView(firstQueryValue(searchParams, "view"));
   const showReviews = firstQueryValue(searchParams, "reviews") === "1";
+
   let hadVerificationLoadError = false;
   let user: {
     id: string;
     email: string;
     name: string | null;
+    phone: string | null;
     ghanaCardIdNumber: string | null;
     ghanaCardImageUrl: string | null;
+    ghanaCardExpiresAt: Date | null;
+    ghanaCardVerificationStatus: GhanaCardVerificationStatus;
+    ghanaCardPendingIdNumber: string | null;
+    ghanaCardPendingImageUrl: string | null;
+    ghanaCardPendingExpiresAt: Date | null;
+    ghanaCardAiSuggestedNumber: string | null;
+    ghanaCardRejectedReason: string | null;
     walletBalance: unknown;
     addresses: {
       id: string;
@@ -54,6 +65,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
       isDefault: boolean;
     }[];
   } | null = null;
+
   let legalRows: Awaited<ReturnType<typeof getUserLegalStatusRows>> = [];
   let latestVerification: {
     id: string;
@@ -74,8 +86,16 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           id: true,
           email: true,
           name: true,
+          phone: true,
           ghanaCardIdNumber: true,
           ghanaCardImageUrl: true,
+          ghanaCardExpiresAt: true,
+          ghanaCardVerificationStatus: true,
+          ghanaCardPendingIdNumber: true,
+          ghanaCardPendingImageUrl: true,
+          ghanaCardPendingExpiresAt: true,
+          ghanaCardAiSuggestedNumber: true,
+          ghanaCardRejectedReason: true,
           walletBalance: true,
           addresses: {
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
@@ -133,28 +153,27 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           Ghana Card details for checkout and delivery, plus full identity verification for protected flows.
         </p>
       )}
+
       <div className="mt-5 inline-flex rounded-xl border border-border bg-muted/40 p-1 dark:border-white/10 dark:bg-white/[0.03]">
-        {[
-          { key: "profile" as const, label: "Profile" },
-          { key: "verification" as const, label: "Identity verification" },
-        ].map((item) => {
-          const active = item.key === view;
-          const href = item.key === "profile" ? "/dashboard/profile" : "/dashboard/profile?view=verification";
-          return (
-            <Link
-              key={item.key}
-              href={href}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                active
-                  ? "bg-[var(--brand)] text-black font-semibold"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+        {[{ key: "profile" as const, label: "Profile" }, { key: "verification" as const, label: "Identity verification" }].map(
+          (item) => {
+            const active = item.key === view;
+            const href = item.key === "profile" ? "/dashboard/profile" : "/dashboard/profile?view=verification";
+            return (
+              <Link
+                key={item.key}
+                href={href}
+                className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                  active ? "bg-[var(--brand)] text-black font-semibold" : "text-muted-foreground hover:bg-background hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          },
+        )}
       </div>
+
       {view === "profile" ? (
         <>
           <div className="mt-5">
@@ -168,9 +187,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           {showReviews ? (
             <div className="mt-8 rounded-2xl border border-border bg-card p-5 sm:p-6">
               <h2 className="text-lg font-semibold text-foreground">Your product reviews</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Showing only your review activity for a focused view.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Showing only your review activity for a focused view.</p>
               <div className="mt-5">
                 <ProfilePartReviews userId={session.user.id} />
               </div>
@@ -181,6 +198,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
                 userId={user?.id ?? null}
                 email={user?.email}
                 name={user?.name}
+                phone={user?.phone ?? null}
                 walletBalance={Number(user?.walletBalance ?? 0)}
                 addresses={user?.addresses ?? []}
                 legalRows={legalRows}
@@ -189,17 +207,25 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           )}
         </>
       ) : null}
+
       {view === "verification" ? (
         <div className="mt-8">
           {hadVerificationLoadError ? (
             <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-              We could not load your latest verification record right now. You can still upload and submit a new
-              verification request.
+              We could not load your latest verification record right now. You can still upload and submit a new verification request.
             </div>
           ) : null}
+
           <VerificationClient
             ghanaCardIdNumber={user?.ghanaCardIdNumber ?? null}
             ghanaCardImageUrl={user?.ghanaCardImageUrl ?? null}
+            ghanaCardExpiresAt={user?.ghanaCardExpiresAt?.toISOString() ?? null}
+            ghanaCardVerificationStatus={user?.ghanaCardVerificationStatus ?? GhanaCardVerificationStatus.NONE}
+            ghanaCardPendingIdNumber={user?.ghanaCardPendingIdNumber ?? null}
+            ghanaCardPendingImageUrl={user?.ghanaCardPendingImageUrl ?? null}
+            ghanaCardPendingExpiresAt={user?.ghanaCardPendingExpiresAt?.toISOString() ?? null}
+            ghanaCardAiSuggestedNumber={user?.ghanaCardAiSuggestedNumber ?? null}
+            ghanaCardRejectedReason={user?.ghanaCardRejectedReason ?? null}
             latest={
               latestVerification
                 ? {

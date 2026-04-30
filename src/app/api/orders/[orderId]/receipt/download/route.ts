@@ -48,20 +48,24 @@ export async function GET(req: Request, ctx: Ctx) {
   const filename = sanitizeReceiptDownloadFilename(
     order.receiptReference ?? generated?.receiptNumber ?? order.reference,
   );
+
+  await prisma.receiptAuditLog.create({
+    data: {
+      receiptId: generated?.id ?? null,
+      actorId: session.user.id,
+      action: isAdmin ? "RECEIPT_DOWNLOADED_BY_ADMIN" : "RECEIPT_DOWNLOADED_BY_CUSTOMER",
+      metadata: {
+        ip: getRequestIp(req),
+        source: "order_receipt_download",
+        pdfSource: order.receiptPdfUrl ? "order.receiptPdfUrl" : "generatedReceipt.pdfUrl",
+        orderId: order.id,
+      },
+    },
+  });
+
   const bytes = await readReceiptPdfFromPublicStore(pdfUrl);
   if (!bytes) {
     return NextResponse.redirect(new URL(pdfUrl, req.url));
-  }
-
-  if (generated) {
-    await prisma.receiptAuditLog.create({
-      data: {
-        receiptId: generated.id,
-        actorId: session.user.id,
-        action: isAdmin ? "RECEIPT_DOWNLOADED_BY_ADMIN" : "RECEIPT_DOWNLOADED_BY_CUSTOMER",
-        metadata: { ip: getRequestIp(req), source: "order_receipt_download" },
-      },
-    });
   }
 
   return new NextResponse(new Uint8Array(bytes), {

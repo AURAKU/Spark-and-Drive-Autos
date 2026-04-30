@@ -122,13 +122,35 @@ export type PartActionState = {
   issues?: { fieldErrors: Record<string, string[] | undefined>; formErrors: string[] };
 } | null;
 
+function enhancePartPricingIssues(flat: {
+  fieldErrors: Record<string, string[] | undefined>;
+  formErrors: string[];
+}): {
+  fieldErrors: Record<string, string[] | undefined>;
+  formErrors: string[];
+} {
+  const next = {
+    fieldErrors: { ...flat.fieldErrors },
+    formErrors: [...flat.formErrors],
+  };
+  const missingGhs = next.fieldErrors.basePriceGhs?.some((m: string) => m.includes("required")) ?? false;
+  const missingRmb = next.fieldErrors.basePriceRmb?.some((m: string) => m.includes("required")) ?? false;
+  if (missingGhs) {
+    next.formErrors.push("For Ghana-origin parts, fill Base selling price (GHS / cedis).");
+  }
+  if (missingRmb) {
+    next.formErrors.push("For China-origin parts, fill Base selling price (RMB only).");
+  }
+  return next;
+}
+
 export async function createPart(_prev: PartActionState, formData: FormData): Promise<PartActionState> {
   try {
     const session = await requireAdmin();
     const raw = Object.fromEntries(formData.entries());
     const parsed = partBaseSchemaWithOriginPricing.safeParse(raw);
     if (!parsed.success) {
-      return { issues: parsed.error.flatten() };
+      return { issues: enhancePartPricingIssues(parsed.error.flatten()) };
     }
     const d = parsed.data;
     const slug = slugify(d.title);
@@ -240,7 +262,7 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
     const raw = Object.fromEntries(formData.entries());
     const parsed = updateSchema.safeParse(raw);
     if (!parsed.success) {
-      return { issues: parsed.error.flatten() };
+      return { issues: enhancePartPricingIssues(parsed.error.flatten()) };
     }
     const d = parsed.data;
     const existing = await prisma.part.findUnique({ where: { id: d.id } });

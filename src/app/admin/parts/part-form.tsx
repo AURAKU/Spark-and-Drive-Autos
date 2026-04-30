@@ -66,6 +66,7 @@ export function PartForm({
   const router = useRouter();
   const action = mode === "create" ? createPart : updatePart;
   const [state, formAction] = useActionState(action, null as PartActionState);
+  const [originLane, setOriginLane] = useState<PartOrigin>(part?.origin ?? PartOrigin.GHANA);
 
   useEffect(() => {
     if (state?.ok && state.id && mode === "create") {
@@ -97,8 +98,6 @@ export function PartForm({
 
   const select =
     "mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none ring-[var(--brand)]/30 focus:ring-2";
-
-  const [originLane, setOriginLane] = useState<PartOrigin>(part?.origin ?? PartOrigin.GHANA);
 
   const baseRmb = part != null ? part.basePriceRmb : 0;
   const costRmb = part?.supplierCostRmb ?? null;

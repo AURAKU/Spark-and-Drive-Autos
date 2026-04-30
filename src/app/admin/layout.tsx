@@ -44,9 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
   const isAssistant = session?.user?.role === "SERVICE_ASSISTANT";
   const isSuperAdmin = Boolean(session?.user?.role && isSuperAdminRole(session.user.role));
-  const links = (isAssistant ? assistantLinks : fullAdminLinks).filter(
-    (link) => isSuperAdmin || !superAdminOnlyLinks.has(link.href),
-  );
+  const links = (isAssistant ? assistantLinks : fullAdminLinks).filter((link) => isSuperAdmin || !superAdminOnlyLinks.has(link.href));
 
   return (
     <div className="flex min-h-screen min-w-0 flex-col">

@@ -125,6 +125,14 @@ export async function requireVerification(input: {
   ipAddress?: string | null;
   userAgent?: string | null;
 }) {
+  const actor = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true },
+  });
+  if (actor?.role && isAdminRole(actor.role)) {
+    return { required: false, status: VerificationStatus.VERIFIED, bypass: "ADMIN_ROLE" as const };
+  }
+
   const riskTagged = await userHasRiskTagRequiringVerification(input.userId);
   const highValue =
     typeof input.amountGhs === "number" &&

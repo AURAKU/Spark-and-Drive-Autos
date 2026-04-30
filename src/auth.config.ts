@@ -2,7 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import type { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { getAuthCookieDomain, getAuthSecret, getUseSecureCookies } from "@/lib/env-auth";
+import { getAuthCookieDomain, getAuthSecrets, getUseSecureCookies } from "@/lib/env-auth";
 import { isAdminRole } from "@/lib/roles";
 
 const useSecureCookies = getUseSecureCookies();
@@ -29,7 +29,7 @@ function isServiceAssistantAllowedAdminPath(pathname: string): boolean {
  */
 export const authConfig = {
   trustHost: true,
-  secret: getAuthSecret(),
+  secret: getAuthSecrets(),
   /** Align with production HTTPS + proxy so session cookie names match middleware (see `getUseSecureCookies`). */
   useSecureCookies,
   cookies: {

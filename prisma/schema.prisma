@@ -190,6 +190,15 @@ enum VerificationDocumentType {
   OTHER
 }
 
+/// Ghana Card photo + ID: pending admin approval before linking canonical `ghanaCardIdNumber`.
+enum GhanaCardVerificationStatus {
+  NONE
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
 enum PaymentDisputeStatus {
   OPEN
   UNDER_REVIEW
@@ -556,6 +565,23 @@ model User {
   ghanaCardIdNumber      String?   @unique
   ghanaCardImageUrl      String?
   ghanaCardImagePublicId String?
+  /// Canonical expiry date for approved ID.
+  ghanaCardExpiresAt     DateTime?
+  /// Workflow: upload runs AI read + pending review; admin approves before canonical ID is official.
+  ghanaCardVerificationStatus GhanaCardVerificationStatus @default(NONE)
+  /// ID number proposed from OCR / user input; promoted to `ghanaCardIdNumber` on admin approve.
+  ghanaCardPendingIdNumber    String?
+  /// Pending image stored temporarily until approval.
+  ghanaCardPendingImageUrl      String?
+  ghanaCardPendingImagePublicId String?
+  /// Pending expiry candidate captured from upload/AI and confirmed on admin approval.
+  ghanaCardPendingExpiresAt     DateTime?
+  /// Raw AI-extracted suggestion (may differ from pending after user edit).
+  ghanaCardAiSuggestedNumber  String?
+  ghanaCardRejectedReason     String?   @db.VarChar(500)
+  ghanaCardReviewedAt         DateTime?
+  ghanaCardReviewedById       String?
+  ghanaCardReviewedBy         User?     @relation("GhanaCardReviewedBy", fields: [ghanaCardReviewedById], references: [id], onDelete: SetNull)
   walletBalance          Decimal   @default(0) @db.Decimal(14, 2)
   role                   UserRole  @default(CUSTOMER)
   /// When true, user cannot send chat messages (admin moderation).
@@ -631,6 +657,7 @@ model User {
   paymentProviderConfigsUpdated    PaymentProviderConfig[]       @relation("PaymentProviderConfigUpdater")
   verifications                    UserVerification[]
   verificationsReviewed            UserVerification[]            @relation("UserVerificationReviewer")
+  ghanaCardReviewsPerformed        User[]                        @relation("GhanaCardReviewedBy")
   verificationAuditLogsActor       VerificationAuditLog[]        @relation("VerificationAuditActor")
   verificationAuditLogsUser        VerificationAuditLog[]        @relation("VerificationAuditUser")
   disputesOpened                   DisputeCase[]                 @relation("DisputeCaseUser")
