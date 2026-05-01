@@ -669,6 +669,11 @@ model User {
   userVehicles                     UserVehicle[]
   verifiedPartRequests             VerifiedPartRequest[] @relation("VerifiedPartRequestUser")
   verifiedPartRequestsAssigned     VerifiedPartRequest[] @relation("VerifiedPartRequestAssignee")
+
+  @@index([role])
+  @@index([ghanaCardVerificationStatus])
+  @@index([ghanaCardVerificationStatus, updatedAt])
+  @@index([ghanaCardVerificationStatus, ghanaCardExpiresAt])
 }
 
 /// Audit log row when an admin broadcasts an in-app announcement to all user accounts.
@@ -890,6 +895,7 @@ model Inquiry {
   vehicleImportEstimates VehicleImportEstimate[]
 
   @@index([carId])
+  @@index([userId])
   @@index([status])
   @@index([createdAt])
 }
@@ -927,6 +933,7 @@ model CarRequest {
   chats  ChatThread[]
   disputeCases DisputeCase[]
 
+  @@index([userId])
   @@index([status])
   @@index([createdAt])
 }

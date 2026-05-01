@@ -3,15 +3,28 @@
 import { PartListingState, PartOrigin, PartStockStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { createPart, updatePart, type PartActionState } from "@/actions/parts";
+import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
+import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
 import { AdminGhsSellingPriceField } from "@/components/admin/admin-ghs-selling-price-field";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { PartCoverField } from "@/components/admin/part-cover-field";
 import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
+import {
+  AUTOFILL_TOAST_REVIEW,
+  getFormCheckboxChecked,
+  getFormControlString,
+  parsePartSummaryForAutofill,
+  setFormControlString,
+  shouldApplyAutofillCheckbox,
+  shouldApplyAutofillEnum,
+  shouldApplyAutofillNumber,
+  shouldApplyAutofillText,
+} from "@/lib/admin-summary-autofill";
 import { partStockStatusLabel } from "@/lib/part-stock";
 import { parsePartOptionsMeta } from "@/lib/part-variant-options";
 import { Button } from "@/components/ui/button";
@@ -64,9 +77,14 @@ export function PartForm({
   cancelHref = "/admin/parts",
 }: Props) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const action = mode === "create" ? createPart : updatePart;
   const [state, formAction] = useActionState(action, null as PartActionState);
   const [originLane, setOriginLane] = useState<PartOrigin>(part?.origin ?? PartOrigin.GHANA);
+  const [listingPriceKey, setListingPriceKey] = useState(0);
+  const [priceGhsSeed, setPriceGhsSeed] = useState<number | undefined>(undefined);
+  const [priceRmbSeed, setPriceRmbSeed] = useState<number | undefined>(undefined);
+  const [autofillUnmapped, setAutofillUnmapped] = useState<string[]>([]);
 
   useEffect(() => {
     if (state?.ok && state.id && mode === "create") {
@@ -106,12 +124,138 @@ export function PartForm({
   const optionDefaults = part ? parsePartOptionsMeta(part.metaJson) : { colors: [], sizes: [], types: [] };
   const optionLines = (list: string[]) => list.join("\n");
 
+  const initialTextFields = useMemo(() => {
+    const opts = part ? parsePartOptionsMeta(part.metaJson) : { colors: [], sizes: [], types: [] };
+    const s: Record<string, string> = {
+      title: part?.title ?? "",
+      category: part?.category ?? "",
+      sku: part?.sku ?? "",
+      shortDescription: part?.shortDescription ?? "",
+      description: part?.description ?? "",
+      tags: part ? tagsToString(part.tags) : "",
+      supplierDistributorRef: part?.supplierDistributorRef ?? "",
+      supplierDistributorPhone: part?.supplierDistributorPhone ?? "",
+      optionColors: optionLines(opts.colors),
+      optionSizes: optionLines(opts.sizes),
+    };
+    if (mode === "edit" && part) s.slug = part.slug;
+    return s;
+  }, [part, mode]);
+
+  const initialOrigin = part?.origin ?? PartOrigin.GHANA;
+  const initialStockQtyStr = part != null ? String(part.stockQty) : "0";
+  const initialSupplierCostStr = part?.supplierCostRmb != null ? String(part.supplierCostRmb) : "";
+  const initialFeatured = part?.featured ?? false;
+  const initialStockLocked = part?.stockStatusLocked ?? false;
+  const initialPriceGhsStr = part != null ? String(Math.round(Number(part.priceGhs))) : "";
+  const initialPriceRmbStr = part != null ? String(part.basePriceRmb) : "";
+
+  function applyPartSummary(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setAutofillUnmapped([]);
+      toast.error("Paste or type something in the summary box first.");
+      return;
+    }
+    const parsed = parsePartSummaryForAutofill(trimmed);
+    setAutofillUnmapped(parsed.unmappedConcepts);
+    const form = formRef.current;
+    if (!form) return;
+
+    if (
+      parsed.originEnum &&
+      shouldApplyAutofillEnum(
+        originLane,
+        initialOrigin,
+        { value: parsed.originEnum.value, confidence: parsed.originEnum.confidence },
+      )
+    ) {
+      setOriginLane(parsed.originEnum.value);
+    }
+
+    let bumpPrice = false;
+    if (
+      parsed.basePriceGhs &&
+      shouldApplyAutofillNumber(getFormControlString(form, "basePriceGhs"), initialPriceGhsStr, parsed.basePriceGhs)
+    ) {
+      setPriceGhsSeed(parsed.basePriceGhs.value);
+      bumpPrice = true;
+    }
+    if (
+      parsed.basePriceRmb &&
+      shouldApplyAutofillNumber(getFormControlString(form, "basePriceRmb"), initialPriceRmbStr, parsed.basePriceRmb)
+    ) {
+      setPriceRmbSeed(parsed.basePriceRmb.value);
+      bumpPrice = true;
+    }
+    if (bumpPrice) setListingPriceKey((k) => k + 1);
+
+    const supCost = parsed.numberFields.supplierCostRmb;
+    if (
+      supCost &&
+      shouldApplyAutofillNumber(getFormControlString(form, "supplierCostRmb"), initialSupplierCostStr, supCost)
+    ) {
+      setFormControlString(form, "supplierCostRmb", String(supCost.value));
+    }
+
+    const stockN = parsed.numberFields.stockQty;
+    if (
+      stockN &&
+      shouldApplyAutofillNumber(getFormControlString(form, "stockQty"), initialStockQtyStr, stockN)
+    ) {
+      setFormControlString(form, "stockQty", String(stockN.value));
+    }
+
+    for (const [key, proposed] of Object.entries(parsed.stringFields)) {
+      if (!proposed?.value) continue;
+      const initial = initialTextFields[key] ?? "";
+      const current = getFormControlString(form, key);
+      let val = proposed.value;
+      if (key === "optionColors" || key === "optionSizes") {
+        val = val.includes("\n") ? val : val.split(",").map((s) => s.trim()).filter(Boolean).join("\n");
+      }
+      if (shouldApplyAutofillText(current, initial, { ...proposed, value: val })) {
+        setFormControlString(form, key, val);
+      }
+    }
+
+    if (
+      parsed.featured &&
+      shouldApplyAutofillCheckbox(getFormCheckboxChecked(form, "featured"), initialFeatured, parsed.featured)
+    ) {
+      setFormControlString(form, "featured", parsed.featured.value ? "on" : "");
+    }
+    if (
+      parsed.stockStatusLocked &&
+      shouldApplyAutofillCheckbox(
+        getFormCheckboxChecked(form, "stockStatusLocked"),
+        initialStockLocked,
+        parsed.stockStatusLocked,
+      )
+    ) {
+      setFormControlString(form, "stockStatusLocked", parsed.stockStatusLocked.value ? "on" : "");
+    }
+
+    toast.info(AUTOFILL_TOAST_REVIEW);
+  }
+
   return (
-    <form action={formAction} className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
+    <form ref={formRef} action={formAction} className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
       {mode === "edit" && part ? <input type="hidden" name="id" value={part.id} /> : null}
 
       {state?.error && <p className="sm:col-span-2 text-sm text-red-400">{state.error}</p>}
       <AdminZodIssues issues={state?.issues} />
+
+      <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <PasteSummaryAutofill onAutofill={applyPartSummary} />
+        <AutofillUnmappedHint items={autofillUnmapped} />
+        <p className="mt-2 text-xs text-zinc-500">
+          Labeled lines (e.g. <span className="font-mono text-zinc-400">Title:</span>,{" "}
+          <span className="font-mono text-zinc-400">SKU:</span>, <span className="font-mono text-zinc-400">price GHS:</span>)
+          are applied first; free text fills short description when safe. Origin, stock, and checkboxes respect your edits unless
+          the summary line is clearly labeled.
+        </p>
+      </div>
 
       <p className="sm:col-span-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Basics</p>
       <div className="sm:col-span-2">
@@ -180,15 +324,17 @@ export function PartForm({
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Pricing (admin)</p>
       {originLane === PartOrigin.GHANA ? (
         <AdminGhsSellingPriceField
+          key={`ghs-${listingPriceKey}`}
           label="Base selling price (GHS / cedis)"
           description="Set the customer-facing list price in Ghana cedis. The system also stores the matching RMB equivalent for the catalog."
-          defaultValue={part != null ? Number(part.priceGhs) : undefined}
+          defaultValue={priceGhsSeed ?? (part != null ? Number(part.priceGhs) : undefined)}
         />
       ) : (
         <AdminRmbSellingPriceField
+          key={`rmb-${listingPriceKey}`}
           label="Base selling price (RMB only)"
           description="Canonical list price in RMB — reference GHS is written to priceGhs on every save for admin and storefront quoting."
-          defaultValue={part != null ? Number(part.basePriceRmb) : undefined}
+          defaultValue={priceRmbSeed ?? (part != null ? Number(part.basePriceRmb) : undefined)}
           lastSavedReferenceGhs={part != null ? Number(part.priceGhs) : null}
         />
       )}
@@ -375,7 +521,11 @@ export function PartForm({
       </div>
 
       <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-        <PartCoverField initialUrl={part?.coverImageUrl} initialPublicId={part?.coverImagePublicId} />
+        <PartCoverField
+          key={part?.id ?? "new-part-cover"}
+          initialUrl={part?.coverImageUrl ?? null}
+          initialPublicId={part?.coverImagePublicId ?? null}
+        />
       </div>
 
       <div className="sm:col-span-2 flex flex-wrap gap-3">

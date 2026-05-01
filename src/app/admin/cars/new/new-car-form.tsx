@@ -2,14 +2,30 @@
 
 import { AvailabilityStatus, CarListingState, EngineType, SourceType } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { createCar } from "@/actions/cars";
+import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
+import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
 import {
   DEFAULT_RESERVATION_DEPOSIT_MIN_GHS,
   DEFAULT_RESERVATION_DEPOSIT_PERCENT,
 } from "@/lib/checkout-amount";
+import type { FxRatesInput } from "@/lib/currency";
+import {
+  AUTOFILL_TOAST_REVIEW,
+  ghsAmountToCanonicalRmb,
+  getFormCheckboxChecked,
+  getFormControlString,
+  parseCarSummaryForAutofill,
+  setFormControlString,
+  shouldApplyAutofillCheckbox,
+  shouldApplyAutofillEnum,
+  shouldApplyAutofillNumber,
+  shouldApplyAutofillText,
+  usdAmountToCanonicalRmb,
+} from "@/lib/admin-summary-autofill";
 import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
@@ -33,7 +49,11 @@ type NewCarFormProps = {
 
 export function NewCarForm({ onCreated }: NewCarFormProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [state, action] = useActionState(createCar, null as State);
+  const [listingPriceKey, setListingPriceKey] = useState(0);
+  const [priceRmbSeed, setPriceRmbSeed] = useState<number | undefined>(undefined);
+  const [autofillUnmapped, setAutofillUnmapped] = useState<string[]>([]);
 
   useEffect(() => {
     if (state?.ok && state.id) {
@@ -49,10 +69,192 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
   const select =
     "mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none ring-[var(--brand)]/30 focus:ring-2";
 
+  const enumBaselineRef = useRef({
+    engineType: EngineType.GASOLINE_PETROL as EngineType | string,
+    sourceType: "" as string,
+    availabilityStatus: "" as string,
+    listingState: CarListingState.DRAFT as CarListingState | string,
+  });
+
+  useEffect(() => {
+    const f = formRef.current;
+    if (!f) return;
+    const engineRaw = getFormControlString(f, "engineType");
+    const listingRaw = getFormControlString(f, "listingState");
+    enumBaselineRef.current = {
+      engineType: (engineRaw as EngineType) || EngineType.GASOLINE_PETROL,
+      sourceType: getFormControlString(f, "sourceType"),
+      availabilityStatus: getFormControlString(f, "availabilityStatus"),
+      listingState: (listingRaw as CarListingState) || CarListingState.DRAFT,
+    };
+  }, []);
+
+  const TEXT_BASELINE: Record<string, string> = {
+    title: "",
+    brand: "",
+    model: "",
+    year: "",
+    trim: "",
+    bodyType: "",
+    transmission: "",
+    drivetrain: "",
+    mileage: "",
+    colorExterior: "",
+    colorInterior: "",
+    vin: "",
+    condition: "",
+    shortDescription: "",
+    longDescription: "",
+    engineDetails: "",
+    inspectionStatus: "",
+    estimatedDelivery: "",
+    seaShippingFeeGhs: "",
+    accidentHistory: "",
+    tags: "",
+    specifications: "",
+    location: "",
+    coverImageUrl: "",
+    coverImagePublicId: "",
+    supplierDealerName: "",
+    supplierDealerPhone: "",
+    supplierDealerReference: "",
+    supplierDealerNotes: "",
+    supplierCostRmb: "",
+    reservationDepositPercent: "",
+    basePriceRmb: "",
+  };
+
+  async function applyCarSummary(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setAutofillUnmapped([]);
+      toast.error("Paste or type something in the summary box first.");
+      return;
+    }
+    const parsed = parseCarSummaryForAutofill(trimmed);
+    setAutofillUnmapped(parsed.unmappedConcepts);
+    const form = formRef.current;
+    if (!form) return;
+
+    const ratesRes = await fetch("/api/currency/rates");
+    const ratesJson = (await ratesRes.json()) as {
+      rates: { usdToRmb: number; rmbToGhs: number; usdToGhsStored: number };
+    };
+    const fx: FxRatesInput = {
+      usdToRmb: ratesJson.rates.usdToRmb,
+      rmbToGhs: ratesJson.rates.rmbToGhs,
+      usdToGhs: ratesJson.rates.usdToGhsStored,
+    };
+
+    let priceProposed = parsed.basePriceRmb;
+    const alt = parsed.listPriceAlternate;
+    if (alt) {
+      let converted:
+        | {
+            value: number;
+            confidence: (typeof alt)["confidence"];
+          }
+        | undefined;
+      if (alt.currency === "GHS") converted = { value: ghsAmountToCanonicalRmb(alt.amount, fx), confidence: alt.confidence };
+      else if (alt.currency === "USD") converted = { value: usdAmountToCanonicalRmb(alt.amount, fx), confidence: alt.confidence };
+      if (converted) {
+        if (!priceProposed) priceProposed = converted;
+        else if (converted.confidence === "explicit" && priceProposed.confidence === "heuristic") priceProposed = converted;
+      }
+    }
+
+    if (priceProposed && shouldApplyAutofillNumber(getFormControlString(form, "basePriceRmb"), "", priceProposed)) {
+      setPriceRmbSeed(priceProposed.value);
+      setListingPriceKey((k) => k + 1);
+    }
+
+    const supCost = parsed.numberFields.supplierCostRmb;
+    if (supCost && shouldApplyAutofillNumber(getFormControlString(form, "supplierCostRmb"), "", supCost)) {
+      setFormControlString(form, "supplierCostRmb", String(supCost.value));
+    }
+
+    const yr = parsed.numberFields.year;
+    if (yr && shouldApplyAutofillNumber(getFormControlString(form, "year"), "", yr)) {
+      setFormControlString(form, "year", String(yr.value));
+    }
+
+    const mi = parsed.numberFields.mileage;
+    if (mi && shouldApplyAutofillNumber(getFormControlString(form, "mileage"), "", mi)) {
+      setFormControlString(form, "mileage", String(mi.value));
+    }
+
+    if (
+      parsed.engineTypeEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "engineType"), enumBaselineRef.current.engineType, {
+        value: parsed.engineTypeEnum.value,
+        confidence: parsed.engineTypeEnum.confidence,
+      })
+    ) {
+      setFormControlString(form, "engineType", parsed.engineTypeEnum.value);
+    }
+    if (
+      parsed.sourceTypeEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "sourceType"), enumBaselineRef.current.sourceType, {
+        value: parsed.sourceTypeEnum.value,
+        confidence: parsed.sourceTypeEnum.confidence,
+      })
+    ) {
+      setFormControlString(form, "sourceType", parsed.sourceTypeEnum.value);
+    }
+    if (
+      parsed.availabilityEnum &&
+      shouldApplyAutofillEnum(
+        getFormControlString(form, "availabilityStatus"),
+        enumBaselineRef.current.availabilityStatus,
+        { value: parsed.availabilityEnum.value, confidence: parsed.availabilityEnum.confidence },
+      )
+    ) {
+      setFormControlString(form, "availabilityStatus", parsed.availabilityEnum.value);
+    }
+    if (
+      parsed.listingStateEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "listingState"), enumBaselineRef.current.listingState, {
+        value: parsed.listingStateEnum.value,
+        confidence: parsed.listingStateEnum.confidence,
+      })
+    ) {
+      setFormControlString(form, "listingState", parsed.listingStateEnum.value);
+    }
+
+    if (
+      parsed.featured &&
+      shouldApplyAutofillCheckbox(getFormCheckboxChecked(form, "featured"), false, parsed.featured)
+    ) {
+      setFormControlString(form, "featured", parsed.featured.value ? "on" : "");
+    }
+
+    for (const [key, proposed] of Object.entries(parsed.stringFields)) {
+      if (!proposed?.value) continue;
+      const initial = TEXT_BASELINE[key] ?? "";
+      const current = getFormControlString(form, key);
+      if (shouldApplyAutofillText(current, initial, proposed)) {
+        setFormControlString(form, key, proposed.value);
+      }
+    }
+
+    toast.info(AUTOFILL_TOAST_REVIEW);
+  }
+
   return (
-    <form action={action} className="mt-8 grid max-w-3xl gap-4 sm:grid-cols-2">
+    <form ref={formRef} action={action} className="mt-8 grid max-w-3xl gap-4 sm:grid-cols-2">
       {state?.error && <p className="sm:col-span-2 text-sm text-red-400">{state.error}</p>}
       <AdminZodIssues issues={state?.issues} />
+
+      <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <PasteSummaryAutofill onAutofill={applyCarSummary} />
+        <AutofillUnmappedHint items={autofillUnmapped} />
+        <p className="mt-2 text-xs text-zinc-500">
+          Use labeled lines for precise fields (e.g. <span className="font-mono text-zinc-400">VIN:</span>,{" "}
+          <span className="font-mono text-zinc-400">price RMB:</span>, <span className="font-mono text-zinc-400">price GHS:</span>
+          ). Comma-separated snippets fill make/model/year, mileage, transmission, and color when detected. GHS/USD prices convert
+          to canonical RMB using admin FX rates.
+        </p>
+      </div>
 
       <p className="sm:col-span-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Identity</p>
       <div className="sm:col-span-2">
@@ -160,8 +362,10 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
         </select>
       </div>
       <AdminRmbSellingPriceField
+        key={`car-rmb-${listingPriceKey}`}
         label="Base selling price (CNY / RMB)"
         description="Canonical price — reference GHS below is stored on the vehicle when you create the listing."
+        defaultValue={priceRmbSeed}
       />
       <div>
         <Label htmlFor="reservationDepositPercent">Reservation deposit (% of list price, GHS)</Label>
