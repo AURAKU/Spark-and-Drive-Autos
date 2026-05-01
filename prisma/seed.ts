@@ -219,12 +219,16 @@ async function main() {
       },
     ];
 
+    const RMB_TO_GHS = 0.586;
     for (const c of cars) {
+      const basePriceAmount = new Prisma.Decimal(Number(c.basePriceRmb) / RMB_TO_GHS);
       const car = await tx.car.upsert({
         where: { slug: c.slug },
         update: {
           title: c.title,
           listingState: CarListingState.PUBLISHED,
+          basePriceAmount,
+          basePriceCurrency: "GHS",
           basePriceRmb: c.basePriceRmb,
           price: c.price,
           inspectionStatus: "Verified (demo)",
@@ -250,6 +254,8 @@ async function main() {
           colorInterior: c.colorInterior,
           sourceType: c.sourceType,
           availabilityStatus: c.availabilityStatus,
+          basePriceAmount,
+          basePriceCurrency: "GHS",
           basePriceRmb: c.basePriceRmb,
           price: c.price,
           currency: c.currency,
@@ -328,6 +334,8 @@ async function main() {
             description:
               "Includes primary filter and drain washer where applicable. Ask concierge for vehicle-specific confirmation before purchase.",
             basePriceRmb: new Prisma.Decimal("95.00"),
+            sellingPriceCurrency: "GHS",
+            supplierCostCurrency: "GHS",
             priceGhs: new Prisma.Decimal("120.00"),
             category: "Service",
             categoryId: serviceCategory.id,
@@ -345,6 +353,8 @@ async function main() {
             shortDescription: "Durable mats to protect interior carpets year-round.",
             description: "Trim-to-fit design. Contact us with your vehicle make and model for best results.",
             basePriceRmb: new Prisma.Decimal("260.00"),
+            sellingPriceCurrency: "CNY",
+            supplierCostCurrency: "CNY",
             priceGhs: new Prisma.Decimal("450.00"),
             category: "Interior",
             categoryId: interiorCategory.id,

@@ -206,9 +206,12 @@ export async function createPartsWalletOrder(input: {
   if (billableChinaPartIds.length > 0) {
     if (!input.chinaShippingChoice) throw new Error("Select Air or Sea shipping for China in-stock parts.");
     const q = await computeChinaShippingQuote(billableChinaPartIds, input.chinaShippingChoice, { forCheckout: true });
-    chinaTotalAtCheckout = q.feeGhs;
+    /** Product cost only at checkout; intl fee quoted for ops / later settlement (see shipment `internalNotes`). */
+    chinaTotalAtCheckout = 0;
     chinaLegs.push({
       deferred: false,
+      pendingIntlFeeAtCheckout: true,
+      quotedIntlFeeGhs: q.feeGhs,
       chinaShippingChoice: input.chinaShippingChoice,
       chinaFeeGhs: q.feeGhs,
       chinaEta: q.etaSummary,
@@ -238,7 +241,11 @@ export async function createPartsWalletOrder(input: {
     total: i.lineTotal,
   }));
   for (const leg of chinaLegs) {
-    if (!leg.deferred && (leg.chinaFeeGhs ?? 0) > 0) {
+    if (
+      !leg.deferred &&
+      !leg.pendingIntlFeeAtCheckout &&
+      (leg.chinaFeeGhs ?? 0) > 0
+    ) {
       receiptLineItems.push({
         title: `International shipping — ${leg.legLabel} (${leg.chinaShippingChoice === "SEA" ? "Sea" : "Air"})`,
         quantity: 1,

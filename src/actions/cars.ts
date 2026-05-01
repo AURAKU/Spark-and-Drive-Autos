@@ -9,7 +9,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { detectLikelyCarDuplicates } from "@/lib/duplicate-detection";
 import { auditLog } from "@/lib/leads";
-import { getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
+import { adminAmountToCanonicalRmb, getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { carHasSuccessfulFullVehiclePayment } from "@/lib/sold-vehicle";
 
@@ -42,6 +42,8 @@ function parseSpecificationsFromForm(raw: unknown): Prisma.InputJsonValue | unde
 
 const optionalStr = (max: number) =>
   z.preprocess((v) => (v === "" || v === undefined ? undefined : v), z.string().max(max).optional());
+
+const vehicleCurrencySchema = z.enum(["GHS", "USD", "CNY"]);
 
 const carSchema = z.object({
   title: z.string().min(3).max(200),
@@ -79,12 +81,17 @@ const carSchema = z.object({
   accidentHistory: optionalStr(8000),
   sourceType: z.nativeEnum(SourceType),
   availabilityStatus: z.nativeEnum(AvailabilityStatus),
-  basePriceRmb: z.coerce.number().nonnegative(),
-  supplierCostRmb: z.preprocess((v) => {
+  basePriceAmount: z.coerce.number().nonnegative(),
+  basePriceCurrency: vehicleCurrencySchema,
+  supplierCostAmount: z.preprocess((v) => {
     if (v === "" || v === undefined) return undefined;
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   }, z.number().nonnegative().optional()),
+  supplierCostCurrency: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    vehicleCurrencySchema.optional(),
+  ),
   supplierDealerName: optionalStr(200),
   supplierDealerPhone: optionalStr(40),
   supplierDealerReference: optionalStr(8000),
@@ -132,14 +139,20 @@ export async function createCar(_prev: unknown, formData: FormData) {
 
     const d = parsed.data;
     const settings = await getGlobalCurrencySettings();
-    const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
+    const basePriceRmb = adminAmountToCanonicalRmb(d.basePriceAmount, d.basePriceCurrency, settings);
+    let supplierCostRmb: number | null = null;
+    if (d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0) {
+      const cur = d.supplierCostCurrency ?? "CNY";
+      supplierCostRmb = adminAmountToCanonicalRmb(d.supplierCostAmount, cur, settings);
+    }
+    const priceGhs = getCarDisplayPrice(basePriceRmb, "GHS", settings);
     const duplicates = await detectLikelyCarDuplicates(prisma, {
       title: d.title,
       brand: d.brand,
       model: d.model,
       year: d.year,
       vin: d.vin ?? undefined,
-      basePriceRmb: d.basePriceRmb,
+      basePriceRmb,
     });
 
     const car = await prisma.car.create({
@@ -175,11 +188,19 @@ export async function createCar(_prev: unknown, formData: FormData) {
         specifications: spec === undefined ? Prisma.JsonNull : spec,
         sourceType: d.sourceType,
         availabilityStatus: d.availabilityStatus,
-        basePriceRmb: d.basePriceRmb,
-        supplierCostRmb:
-          d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
-            ? new Prisma.Decimal(d.supplierCostRmb)
+        basePriceAmount: new Prisma.Decimal(d.basePriceAmount),
+        basePriceCurrency: d.basePriceCurrency,
+        basePriceRmb: new Prisma.Decimal(basePriceRmb),
+        supplierCostAmount:
+          d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+            ? new Prisma.Decimal(d.supplierCostAmount)
             : null,
+        supplierCostCurrency:
+          d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+            ? d.supplierCostCurrency ?? "CNY"
+            : null,
+        supplierCostRmb:
+          supplierCostRmb != null && Number.isFinite(supplierCostRmb) ? new Prisma.Decimal(supplierCostRmb) : null,
         supplierDealerName: d.supplierDealerName,
         supplierDealerPhone: d.supplierDealerPhone,
         supplierDealerReference: d.supplierDealerReference,
@@ -252,6 +273,14 @@ export async function updateCar(_prev: unknown, formData: FormData) {
     const existing = await prisma.car.findUnique({ where: { id: d.id } });
     if (!existing) return { error: "Vehicle not found" };
 
+    const settings = await getGlobalCurrencySettings();
+    const basePriceRmb = adminAmountToCanonicalRmb(d.basePriceAmount, d.basePriceCurrency, settings);
+    let supplierCostRmb: number | null = null;
+    if (d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0) {
+      const cur = d.supplierCostCurrency ?? "CNY";
+      supplierCostRmb = adminAmountToCanonicalRmb(d.supplierCostAmount, cur, settings);
+    }
+
     const inventoryOverride =
       raw.inventoryOverride === "on" || raw.inventoryOverride === "true" || raw.inventoryOverride === "1";
     const hadFullVehiclePayment = await carHasSuccessfulFullVehiclePayment(existing.id);
@@ -274,15 +303,14 @@ export async function updateCar(_prev: unknown, formData: FormData) {
       nextSlug = d.slug;
     }
 
-    const settings = await getGlobalCurrencySettings();
-    const priceGhs = getCarDisplayPrice(d.basePriceRmb, "GHS", settings);
+    const priceGhs = getCarDisplayPrice(basePriceRmb, "GHS", settings);
     const duplicates = await detectLikelyCarDuplicates(prisma, {
       title: d.title,
       brand: d.brand,
       model: d.model,
       year: d.year,
       vin: d.vin ?? undefined,
-      basePriceRmb: d.basePriceRmb,
+      basePriceRmb,
       excludeId: existing.id,
     });
 
@@ -320,11 +348,19 @@ export async function updateCar(_prev: unknown, formData: FormData) {
         specifications: spec === undefined ? Prisma.JsonNull : spec,
         sourceType: d.sourceType,
         availabilityStatus: d.availabilityStatus,
-        basePriceRmb: d.basePriceRmb,
-        supplierCostRmb:
-          d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
-            ? new Prisma.Decimal(d.supplierCostRmb)
+        basePriceAmount: new Prisma.Decimal(d.basePriceAmount),
+        basePriceCurrency: d.basePriceCurrency,
+        basePriceRmb: new Prisma.Decimal(basePriceRmb),
+        supplierCostAmount:
+          d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+            ? new Prisma.Decimal(d.supplierCostAmount)
             : null,
+        supplierCostCurrency:
+          d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+            ? d.supplierCostCurrency ?? "CNY"
+            : null,
+        supplierCostRmb:
+          supplierCostRmb != null && Number.isFinite(supplierCostRmb) ? new Prisma.Decimal(supplierCostRmb) : null,
         supplierDealerName: d.supplierDealerName,
         supplierDealerPhone: d.supplierDealerPhone,
         supplierDealerReference: d.supplierDealerReference,

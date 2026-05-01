@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 
 import { requireAdmin } from "@/lib/auth-helpers";
-import { getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
+import {
+  adminAmountToCanonicalRmb,
+  getCarDisplayPrice,
+  getGlobalCurrencySettings,
+  type DisplayCurrency,
+} from "@/lib/currency";
 import {
   parseCsvText,
   rowToRecord,
@@ -30,6 +36,99 @@ const schema = z.object({
 function nonEmpty(s: string | undefined): string | undefined {
   const t = (s ?? "").trim();
   return t.length ? t : undefined;
+}
+
+/** CSV currency cell — only explicit ISO-style codes (RMB → CNY). */
+function parseBulkDisplayCurrency(raw: string | undefined): DisplayCurrency | undefined {
+  const t = (raw ?? "").trim().toUpperCase();
+  if (!t) return undefined;
+  if (t === "RMB" || t === "CNY") return "CNY";
+  if (t === "USD") return "USD";
+  if (t === "GHS") return "GHS";
+  return undefined;
+}
+
+type CarListPricingResolved = {
+  basePriceRmb: number;
+  basePriceAmount: Prisma.Decimal;
+  basePriceCurrency: string;
+  supplierCostRmb: Prisma.Decimal | null;
+  supplierCostAmount: Prisma.Decimal | null;
+  supplierCostCurrency: string | null;
+};
+
+function resolveCarListPricingForImport(
+  record: Record<string, string>,
+  fx: Awaited<ReturnType<typeof getGlobalCurrencySettings>>,
+  existing: {
+    basePriceRmb: unknown;
+    basePriceAmount: unknown;
+    basePriceCurrency: string;
+    supplierCostRmb: unknown | null;
+    supplierCostAmount: unknown | null;
+    supplierCostCurrency: string | null;
+  } | null,
+): CarListPricingResolved {
+  const baseAmt = parseDecimal(record.basePriceAmount);
+  const baseCur = parseBulkDisplayCurrency(record.basePriceCurrency);
+  const rmbCol = parseDecimal(record.basePriceRmb);
+
+  let basePriceRmb: number;
+  let baseAmount: number;
+  let baseCurrency: DisplayCurrency;
+
+  if (baseAmt != null) {
+    const cur: DisplayCurrency = baseCur ?? "GHS";
+    baseAmount = baseAmt;
+    baseCurrency = cur;
+    basePriceRmb = adminAmountToCanonicalRmb(baseAmt, cur, fx);
+  } else if (rmbCol != null) {
+    basePriceRmb = rmbCol;
+    baseAmount = rmbCol;
+    baseCurrency = "CNY";
+  } else if (existing) {
+    basePriceRmb = Number(existing.basePriceRmb);
+    baseAmount = Number(existing.basePriceAmount);
+    baseCurrency = (existing.basePriceCurrency as DisplayCurrency) || "CNY";
+  } else {
+    basePriceRmb = 0;
+    baseAmount = 0;
+    baseCurrency = "GHS";
+  }
+
+  const supAmt = parseDecimal(record.supplierCostAmount);
+  const supCur = parseBulkDisplayCurrency(record.supplierCostCurrency);
+  const supRmbCol = parseDecimal(record.supplierCostRmb);
+
+  let supplierCostRmb: Prisma.Decimal | null = null;
+  let supplierCostAmount: Prisma.Decimal | null = null;
+  let supplierCostCurrency: string | null = null;
+
+  if (supAmt != null && supAmt > 0) {
+    const cur: DisplayCurrency = supCur ?? "CNY";
+    const rmb = adminAmountToCanonicalRmb(supAmt, cur, fx);
+    supplierCostRmb = new Prisma.Decimal(rmb);
+    supplierCostAmount = new Prisma.Decimal(supAmt);
+    supplierCostCurrency = cur;
+  } else if (supRmbCol != null) {
+    supplierCostRmb = new Prisma.Decimal(supRmbCol);
+    supplierCostAmount = new Prisma.Decimal(supRmbCol);
+    supplierCostCurrency = "CNY";
+  } else if (existing && existing.supplierCostRmb != null) {
+    supplierCostRmb = new Prisma.Decimal(Number(existing.supplierCostRmb));
+    supplierCostAmount =
+      existing.supplierCostAmount != null ? new Prisma.Decimal(Number(existing.supplierCostAmount)) : null;
+    supplierCostCurrency = existing.supplierCostCurrency;
+  }
+
+  return {
+    basePriceRmb,
+    basePriceAmount: new Prisma.Decimal(baseAmount),
+    basePriceCurrency: baseCurrency,
+    supplierCostRmb,
+    supplierCostAmount,
+    supplierCostCurrency,
+  };
 }
 
 function isRecordEffectivelyEmpty(record: Record<string, string>) {
@@ -197,23 +296,39 @@ async function importPartRow(record: Record<string, string>, fx: Awaited<ReturnT
 
 async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnType<typeof getGlobalCurrencySettings>>) {
   const title = nonEmpty(record.title);
-  const baseRmb = parseDecimal(record.basePriceRmb) ?? null;
   const priceOverride = parseDecimal(record.price);
-  const priceGhs = baseRmb != null ? (priceOverride ?? getCarDisplayPrice(baseRmb, "GHS", fx)) : priceOverride;
   const id = nonEmpty(record.id);
   const slugIn = nonEmpty(record.slug);
+
+  const pricingKeysPresent =
+    record.basePriceAmount !== undefined ||
+    record.basePriceCurrency !== undefined ||
+    record.basePriceRmb !== undefined ||
+    record.supplierCostAmount !== undefined ||
+    record.supplierCostCurrency !== undefined ||
+    record.supplierCostRmb !== undefined;
 
   if (id && z.string().cuid().safeParse(id).success) {
     const existing = await prisma.car.findUnique({ where: { id } });
     if (existing) {
+      const pricing = resolveCarListPricingForImport(record, fx, {
+        basePriceRmb: existing.basePriceRmb,
+        basePriceAmount: existing.basePriceAmount,
+        basePriceCurrency: existing.basePriceCurrency,
+        supplierCostRmb: existing.supplierCostRmb,
+        supplierCostAmount: existing.supplierCostAmount,
+        supplierCostCurrency: existing.supplierCostCurrency,
+      });
+      const nextPrice =
+        priceOverride ?? getCarDisplayPrice(pricing.basePriceRmb, "GHS", fx);
+
       let nextSlug = existing.slug;
       if (slugIn && slugIn !== existing.slug) {
         const clash = await prisma.car.findUnique({ where: { slug: slugIn } });
         if (clash && clash.id !== id) throw new Error(`slug already in use: ${slugIn}`);
         nextSlug = slugIn;
       }
-      const nextBaseRmb = baseRmb ?? Number(existing.basePriceRmb);
-      const nextPrice = priceGhs ?? getCarDisplayPrice(nextBaseRmb, "GHS", fx);
+
       await prisma.car.update({
         where: { id },
         data: {
@@ -227,8 +342,17 @@ async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnTy
           ...(record.transmission !== undefined ? { transmission: nonEmpty(record.transmission) ?? null } : {}),
           ...(record.sourceType !== undefined && nonEmpty(record.sourceType) ? { sourceType: pickSource(record.sourceType) } : {}),
           ...(record.availabilityStatus !== undefined && nonEmpty(record.availabilityStatus) ? { availabilityStatus: pickAvailability(record.availabilityStatus) } : {}),
-          ...(baseRmb != null ? { basePriceRmb: baseRmb } : {}),
-          ...(priceGhs != null || baseRmb != null ? { price: nextPrice } : {}),
+          ...(pricingKeysPresent || priceOverride != null
+            ? {
+                basePriceAmount: pricing.basePriceAmount,
+                basePriceCurrency: pricing.basePriceCurrency,
+                basePriceRmb: new Prisma.Decimal(pricing.basePriceRmb),
+                supplierCostRmb: pricing.supplierCostRmb,
+                supplierCostAmount: pricing.supplierCostAmount,
+                supplierCostCurrency: pricing.supplierCostCurrency,
+                price: nextPrice,
+              }
+            : {}),
           ...(record.currency !== undefined && nonEmpty(record.currency) ? { currency: nonEmpty(record.currency)! } : {}),
           ...(record.listingState !== undefined && nonEmpty(record.listingState) ? { listingState: pickCarListing(record.listingState) } : {}),
           ...(record.featured !== undefined && nonEmpty(record.featured) ? { featured: parseBool(record.featured, existing.featured) } : {}),
@@ -237,7 +361,6 @@ async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnTy
           ...(record.location !== undefined ? { location: nonEmpty(record.location) ?? null } : {}),
           ...(record.shortDescription !== undefined ? { shortDescription: nonEmpty(record.shortDescription) ?? null } : {}),
           ...(record.seaShippingFeeGhs !== undefined && parseDecimal(record.seaShippingFeeGhs) != null ? { seaShippingFeeGhs: parseDecimal(record.seaShippingFeeGhs) } : {}),
-          ...(record.supplierCostRmb !== undefined && parseDecimal(record.supplierCostRmb) != null ? { supplierCostRmb: parseDecimal(record.supplierCostRmb) } : {}),
           ...(record.coverImageUrl !== undefined ? { coverImageUrl: nonEmpty(record.coverImageUrl) ?? null } : {}),
         },
       });
@@ -245,8 +368,8 @@ async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnTy
     }
   }
   if (!title) throw new Error("title is required for new cars row");
-  const finalBaseRmb = baseRmb ?? 0;
-  const finalPrice = priceGhs ?? getCarDisplayPrice(finalBaseRmb, "GHS", fx);
+  const pricing = resolveCarListPricingForImport(record, fx, null);
+  const finalPrice = priceOverride ?? getCarDisplayPrice(pricing.basePriceRmb, "GHS", fx);
 
   let slug = slugIn ?? "";
   if (!slug) {
@@ -268,7 +391,12 @@ async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnTy
       transmission: nonEmpty(record.transmission) ?? null,
       sourceType: pickSource(record.sourceType),
       availabilityStatus: pickAvailability(record.availabilityStatus),
-      basePriceRmb: finalBaseRmb,
+      basePriceAmount: pricing.basePriceAmount,
+      basePriceCurrency: pricing.basePriceCurrency,
+      basePriceRmb: new Prisma.Decimal(pricing.basePriceRmb),
+      supplierCostRmb: pricing.supplierCostRmb,
+      supplierCostAmount: pricing.supplierCostAmount,
+      supplierCostCurrency: pricing.supplierCostCurrency,
       price: finalPrice,
       currency: nonEmpty(record.currency) ?? "GHS",
       listingState: pickCarListing(record.listingState),
@@ -278,7 +406,6 @@ async function importCarRow(record: Record<string, string>, fx: Awaited<ReturnTy
       location: nonEmpty(record.location) ?? null,
       shortDescription: nonEmpty(record.shortDescription) ?? null,
       seaShippingFeeGhs: parseDecimal(record.seaShippingFeeGhs),
-      supplierCostRmb: parseDecimal(record.supplierCostRmb),
       coverImageUrl: nonEmpty(record.coverImageUrl) ?? null,
     },
   });

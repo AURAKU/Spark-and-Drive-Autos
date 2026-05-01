@@ -2,14 +2,19 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
-import { AdminOrdersExportButtons } from "@/components/admin/admin-orders-export-buttons";
+import { AdminOrdersInteractive } from "@/components/admin/admin-orders-interactive";
 import { AdminOrdersRefreshButton } from "@/components/admin/admin-orders-refresh-button";
 import { AdminOrdersSearchForm } from "@/components/admin/admin-orders-search-form";
 import { PageHeading } from "@/components/typography/page-headings";
-import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
-import { orderPartsLineageLabel, type AdminPartsLineage, wherePartsLineageForAdminList } from "@/lib/admin-orders-parts-filter";
-import { formatMoney } from "@/lib/format";
+import { type AdminPartsLineage } from "@/lib/admin-orders-parts-filter";
+import {
+  ADMIN_ORDERS_PAGE_SIZE,
+  buildAdminOrdersBaseWhere,
+  fetchAdminOrdersRich,
+} from "@/lib/admin-orders-export-query";
+import { buildAdminOrderListRow } from "@/lib/admin-orders-list-serialize";
+import { getGlobalCurrencySettings } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
@@ -17,22 +22,11 @@ import type { OrderKind, Prisma } from "@prisma/client";
 
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 import { buildOrderListSearchWhere, normalizeOrderListSearchQuery } from "@/lib/admin-orders-search";
-import { orderItemTitleSummary } from "@/lib/order-item-display";
 
 export const dynamic = "force-dynamic";
 
-function formatOrderActivityLine(d: Date) {
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-const PAGE_SIZE = 15;
+const PAGE_SIZE = ADMIN_ORDERS_PAGE_SIZE;
 
 function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
   const v = sp[key];
@@ -46,26 +40,12 @@ async function loadAdminOrdersPageData(where: Prisma.OrderWhereInput, pageReq: n
   const total = await prisma.order.count({ where });
   const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
   const page = Math.min(Math.max(1, pageReq), totalPages);
-  const rows = await prisma.order.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
+  const settings = await getGlobalCurrencySettings();
+  const richRows = await fetchAdminOrdersRich(where, {
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
-    select: {
-      id: true,
-      reference: true,
-      kind: true,
-      orderStatus: true,
-      amount: true,
-      currency: true,
-      createdAt: true,
-      updatedAt: true,
-      user: { select: { email: true } },
-      car: { select: { slug: true, title: true, sourceType: true } },
-      partItems: { select: { titleSnapshot: true, origin: true, part: { select: { stockStatus: true } } } },
-      payments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
-    },
   });
+  const rows = richRows.map((r) => buildAdminOrderListRow(r, settings));
   return { total, totalPages, page, rows };
 }
 
@@ -83,16 +63,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
   const searchQ = normalizeOrderListSearchQuery(sp.q);
   const searchWhere = buildOrderListSearchWhere(searchQ);
 
-  const lineageWhere =
-    !kindFilter || kindFilter === "PARTS" ? wherePartsLineageForAdminList(partsLineage) : undefined;
-  const whereParts: Prisma.OrderWhereInput[] = [];
-  if (kindFilter) whereParts.push({ kind: kindFilter });
-  if (ops.range) {
-    whereParts.push({ createdAt: { gte: ops.range.gte, lt: ops.range.lt } });
-  }
-  if (lineageWhere) whereParts.push(lineageWhere);
-  if (searchWhere) whereParts.push(searchWhere);
-  const where: Prisma.OrderWhereInput = whereParts.length > 0 ? { AND: whereParts } : {};
+  const where = buildAdminOrdersBaseWhere(kindFilter, ops.range, partsLineage, searchWhere);
   const { total, totalPages, page, rows } = await loadAdminOrdersPageData(where, pageReq);
 
   const buildHref = (kind: "" | "CAR" | "PARTS", nextPage = 1, pl: AdminPartsLineage = null) => {
@@ -123,9 +94,6 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AdminOrdersRefreshButton />
-          <Suspense fallback={<span className="text-xs text-muted-foreground">Export…</span>}>
-            <AdminOrdersExportButtons />
-          </Suspense>
         </div>
       </div>
 
@@ -211,91 +179,22 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
         </div>
       )}
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-border bg-card/50 shadow-sm ring-1 ring-border/40">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="border-b border-border bg-muted/50 text-xs font-medium tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3">Item</th>
-              <th className="px-4 py-3 w-[1%]">Parts</th>
-              <th className="px-4 py-3 w-[1%]">Status</th>
-              <th className="px-4 py-3 min-w-[11rem]">Customer</th>
-              <th className="px-4 py-3 w-[1%] whitespace-nowrap">Amount</th>
-              <th className="px-4 py-3 min-w-[8.5rem]">Placed &amp; updated</th>
-              <th className="px-4 py-3 w-[1%]" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                  {searchQ ? "No orders match this search. Try a different term or clear the search." : "No orders yet."}
-                </td>
-              </tr>
-            ) : (
-              rows.map((o) => {
-                const updatedDiffers =
-                  o.updatedAt.getTime() !== o.createdAt.getTime();
-                return (
-                  <tr
-                    key={o.id}
-                    className="border-b border-border/60 last:border-0 hover:bg-muted/40 dark:hover:bg-white/[0.04]"
-                  >
-                    <td className="px-4 py-3.5 font-mono text-xs text-foreground/90 align-top">{o.reference}</td>
-                    <td className="max-w-[min(20rem,32vw)] px-4 py-3.5 align-top text-foreground/90">
-                      {o.kind === "CAR" && o.car ? (
-                        <Link className="text-[var(--brand)] hover:underline" href={`/cars/${o.car.slug}`}>
-                          {orderItemTitleSummary(o)}
-                        </Link>
-                      ) : (
-                        <span className="line-clamp-2">{orderItemTitleSummary(o)}</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-xs text-muted-foreground align-top">
-                      {o.kind === "PARTS" ? orderPartsLineageLabel(o) : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 align-top">
-                      {o.payments[0] ? (
-                        <PaymentStatusBadge status={o.payments[0].status} />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 break-all text-sm text-muted-foreground align-top" title={o.user?.email ?? ""}>
-                      {o.user?.email ?? "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-[var(--brand)] font-medium tabular-nums whitespace-nowrap align-top">
-                      {formatMoney(Number(o.amount), o.currency)}
-                    </td>
-                    <td className="px-4 py-3.5 align-top">
-                      <div className="flex flex-col gap-1.5 text-xs leading-snug">
-                        <div>
-                          <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">Placed</p>
-                          <p className="text-foreground tabular-nums">{formatOrderActivityLine(o.createdAt)}</p>
-                        </div>
-                        {updatedDiffers ? (
-                          <div>
-                            <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">Updated</p>
-                            <p className="text-foreground/85 tabular-nums">{formatOrderActivityLine(o.updatedAt)}</p>
-                          </div>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-right align-top">
-                      <Link
-                        className="inline-flex text-sm font-medium text-[var(--brand)] hover:underline"
-                        href={`/admin/orders/${o.id}`}
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Suspense
+        fallback={
+          <div className="mt-8 h-64 animate-pulse rounded-2xl border border-border bg-muted/30 dark:bg-white/[0.02]" />
+        }
+      >
+        <AdminOrdersInteractive
+          rows={rows}
+          emptyHint={
+            total === 0
+              ? searchQ
+                ? "No orders match this search. Try a different term or clear the search."
+                : "No orders yet."
+              : undefined
+          }
+        />
+      </Suspense>
       {total > 0 ? (
         <ListPaginationFooter
           page={page}

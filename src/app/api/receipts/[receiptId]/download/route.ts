@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { isAdminRole } from "@/auth";
 import { getRequestIp } from "@/lib/client-ip";
 import { prisma } from "@/lib/prisma";
-import { readReceiptPdfFromPublicStore, sanitizeReceiptDownloadFilename } from "@/lib/receipt-pdf-files";
+import { resolveReceiptPdfBytes, sanitizeReceiptDownloadFilename } from "@/lib/receipt-pdf-files";
 import { safeAuth } from "@/lib/safe-auth";
 
 type Ctx = { params: Promise<{ receiptId: string }> };
@@ -34,7 +34,7 @@ export async function GET(req: Request, ctx: Ctx) {
     },
   });
   const filename = sanitizeReceiptDownloadFilename(receipt.receiptNumber);
-  const bytes = await readReceiptPdfFromPublicStore(receipt.pdfUrl);
+  const bytes = await resolveReceiptPdfBytes(receipt.pdfUrl);
   if (bytes) {
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
@@ -43,5 +43,9 @@ export async function GET(req: Request, ctx: Ctx) {
       },
     });
   }
-  return NextResponse.redirect(new URL(receipt.pdfUrl, req.url));
+  const target = receipt.pdfUrl.trim();
+  if (target.startsWith("/") || /^https?:\/\//i.test(target)) {
+    return NextResponse.redirect(new URL(target, req.url));
+  }
+  return NextResponse.json({ error: "Receipt file not available" }, { status: 404 });
 }

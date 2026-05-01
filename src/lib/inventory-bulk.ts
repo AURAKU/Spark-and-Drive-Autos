@@ -36,6 +36,8 @@ export const CAR_BULK_COLUMNS = [
   "sourceType",
   "availabilityStatus",
   "basePriceRmb",
+  "basePriceAmount",
+  "basePriceCurrency",
   "price",
   "currency",
   "listingState",
@@ -46,6 +48,8 @@ export const CAR_BULK_COLUMNS = [
   "shortDescription",
   "seaShippingFeeGhs",
   "supplierCostRmb",
+  "supplierCostAmount",
+  "supplierCostCurrency",
   "coverImageUrl",
 ] as const;
 
@@ -235,6 +239,8 @@ export type CarExportShape = {
   sourceType: SourceType;
   availabilityStatus: AvailabilityStatus;
   basePriceRmb: unknown;
+  basePriceAmount: unknown;
+  basePriceCurrency: string;
   price: unknown;
   currency: string;
   listingState: CarListingState;
@@ -245,6 +251,8 @@ export type CarExportShape = {
   shortDescription: string | null;
   seaShippingFeeGhs: unknown | null;
   supplierCostRmb: unknown | null;
+  supplierCostAmount: unknown | null;
+  supplierCostCurrency: string | null;
   coverImageUrl: string | null;
 };
 
@@ -262,6 +270,8 @@ export function carToCsvValues(c: CarExportShape): string[] {
     c.sourceType,
     c.availabilityStatus,
     String(Number(c.basePriceRmb)),
+    String(Number(c.basePriceAmount)),
+    c.basePriceCurrency,
     String(Number(c.price)),
     c.currency,
     c.listingState,
@@ -272,6 +282,8 @@ export function carToCsvValues(c: CarExportShape): string[] {
     c.shortDescription ?? "",
     c.seaShippingFeeGhs != null ? String(Number(c.seaShippingFeeGhs)) : "",
     c.supplierCostRmb != null ? String(Number(c.supplierCostRmb)) : "",
+    c.supplierCostAmount != null ? String(Number(c.supplierCostAmount)) : "",
+    c.supplierCostCurrency ?? "",
     c.coverImageUrl ?? "",
   ];
 }

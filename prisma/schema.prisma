@@ -787,9 +787,16 @@ model Car {
   seaShippingFeeGhs  Decimal?           @db.Decimal(14, 2)
   /// Reservation deposit as % of vehicle list price in GHS (from base RMB conversion). Null = site default (5%, min ₵5,000).
   reservationDepositPercent Decimal?    @db.Decimal(5, 2)
-  /// Canonical inventory valuation in Chinese Yuan (single source of truth for conversions)
+  /// Admin-entered list price amount in `basePriceCurrency` (preserved for sourcing / accounting)
+  basePriceAmount    Decimal            @default(0) @db.Decimal(14, 2)
+  /// Currency for `basePriceAmount` — GHS, USD, or CNY (RMB)
+  basePriceCurrency  String             @default("GHS") @db.VarChar(3)
+  /// Canonical inventory valuation in RMB (derived on save from amount + currency + FX)
   basePriceRmb       Decimal            @default(0) @db.Decimal(14, 2)
-  /// Admin-only supplier or dealership cost (CNY) — never expose on public surfaces
+  /// Admin-only supplier / dealership cost in `supplierCostCurrency`
+  supplierCostAmount Decimal?           @db.Decimal(14, 2)
+  supplierCostCurrency String?          @db.VarChar(3)
+  /// Admin-only supplier cost in RMB equivalent (derived on save) — internal margins
   supplierCostRmb    Decimal?           @db.Decimal(14, 2)
   /// Admin-only: supplier or dealer name (never shown on public vehicle pages)
   supplierDealerName         String?    @db.VarChar(200)
@@ -2018,8 +2025,23 @@ model Part {
   description        String?          @db.Text
   /// Canonical part valuation in RMB. Display currencies are derived from this where applicable.
   basePriceRmb       Decimal          @default(0) @db.Decimal(14, 2)
+  /// Currency for the admin-entered list price amount (GHS / USD / CNY); default GHS for new rows.
+  sellingPriceCurrency String         @default("GHS") @db.VarChar(3)
   /// Admin-only supplier or distributor cost (CNY) — never expose on public surfaces
   supplierCostRmb    Decimal?         @db.Decimal(14, 2)
+  /// Currency the admin used for supplier cost input (GHS / USD / CNY).
+  supplierCostCurrency String         @default("GHS") @db.VarChar(3)
+  partNumber         String?          @db.VarChar(120)
+  oemNumber          String?          @db.VarChar(120)
+  compatibleMake     String?          @db.VarChar(80)
+  compatibleModel    String?          @db.VarChar(80)
+  compatibleYearNote String?          @db.VarChar(80)
+  /// Manufacturer / product brand (e.g. Bosch), not vehicle make.
+  brand              String?          @db.VarChar(80)
+  condition          String?          @db.VarChar(120)
+  warehouseLocation  String?          @db.VarChar(200)
+  countryOfOrigin    String?          @db.VarChar(80)
+  internalNotes      String?          @db.Text
   /// Admin-only: where the part was sourced (distributor name, invoice ref, etc.)
   supplierDistributorRef  String?     @db.Text
   /// Admin-only: supplier / distributor phone for internal traceability

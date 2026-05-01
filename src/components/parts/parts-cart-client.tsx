@@ -47,9 +47,18 @@ type Props = {
     isDefault: boolean;
   }>;
   agreementVersion: string;
+  /** True when profile already satisfies checkout + payment-notice policies (matches `/api/parts/cart/checkout` gates). */
+  legalCheckoutReady?: boolean;
 };
 
-export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, agreementVersion }: Props) {
+export function PartsCartClient({
+  chinaQuotes,
+  items,
+  walletBalance,
+  addresses,
+  agreementVersion,
+  legalCheckoutReady = false,
+}: Props) {
   const [rows, setRows] = useState(items);
   const [addressId, setAddressId] = useState(addresses.find((a) => a.isDefault)?.id ?? addresses[0]?.id ?? "");
   const [dispatchPhone, setDispatchPhone] = useState(
@@ -58,13 +67,17 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkoutRequestKey, setCheckoutRequestKey] = useState<string | null>(null);
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const [agreementAccepted, setAgreementAccepted] = useState(legalCheckoutReady);
   const [chinaMode, setChinaMode] = useState<"AIR" | "SEA" | null>(chinaQuotes ? "AIR" : null);
 
   useEffect(() => {
     const a = addresses.find((x) => x.id === addressId);
     if (a?.phone) setDispatchPhone(a.phone);
   }, [addressId, addresses]);
+
+  useEffect(() => {
+    if (legalCheckoutReady) setAgreementAccepted(true);
+  }, [legalCheckoutReady]);
 
   const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
   const selectedStockIssues = useMemo(() => {
@@ -87,13 +100,14 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
     () => selectedRows.some((r) => r.part.origin === "CHINA" && !isChinaPreOrderPart(r.part)),
     [selectedRows],
   );
-  const chinaAddon = useMemo(() => {
-    if (!chinaQuotes || !hasBillableChinaSelected || !chinaMode) return 0;
-    return chinaMode === "AIR" ? chinaQuotes.air.feeGhs : chinaQuotes.sea.feeGhs;
+  /** Reference quote only — China in-stock intl is not added to wallet checkout (settled manually after ops confirm). */
+  const chinaQuoteReference = useMemo(() => {
+    if (!chinaQuotes || !hasBillableChinaSelected || !chinaMode) return null;
+    return chinaMode === "AIR" ? chinaQuotes.air : chinaQuotes.sea;
   }, [chinaQuotes, chinaMode, hasBillableChinaSelected]);
   const selectedTotal = useMemo(
-    () => selectedRows.reduce((sum, row) => sum + row.part.unitPriceGhs * row.quantity, 0) + chinaAddon,
-    [selectedRows, chinaAddon],
+    () => selectedRows.reduce((sum, row) => sum + row.part.unitPriceGhs * row.quantity, 0),
+    [selectedRows],
   );
   const hasFunds = walletBalance >= selectedTotal;
 
@@ -195,7 +209,7 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
       toast.error("Select at least one item.");
       return;
     }
-    if (!agreementAccepted) {
+    if (!legalCheckoutReady && !agreementAccepted) {
       toast.error("Please accept checkout agreement before payment.");
       return;
     }
@@ -377,11 +391,16 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
           Selected items: <span className="text-white">{selectedRows.length}</span>
         </p>
         <p className="mt-1 text-sm text-zinc-300">
-          Total: <span className="font-semibold text-[var(--brand)]">GHS {selectedTotal.toLocaleString()}</span>
-          {chinaAddon > 0 ? (
-            <span className="ml-2 text-xs text-zinc-500">(includes China shipping GHS {chinaAddon.toLocaleString()})</span>
-          ) : null}
+          Total due now:{" "}
+          <span className="font-semibold text-[var(--brand)]">GHS {selectedTotal.toLocaleString()}</span>
+          <span className="ml-2 text-xs text-zinc-500">(parts subtotal only)</span>
         </p>
+        {chinaQuoteReference ? (
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+            China warehouse freight reference (~GHS {chinaQuoteReference.feeGhs.toLocaleString()}, {chinaQuoteReference.eta}
+            ) — not charged at checkout. Operations will confirm the international fee for separate payment.
+          </p>
+        ) : null}
         {hasChinaSelected && hasBillableChinaSelected && !chinaQuotes ? (
           <p className="mt-3 text-[11px] leading-relaxed text-amber-200/90">
             China in-stock intl add-on: ensure delivery templates are set in admin. Pre-order (China) lines are billed
@@ -390,9 +409,10 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
         ) : null}
         {chinaQuotes && hasBillableChinaSelected ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
-            <p className="text-xs font-semibold text-white">China in-stock — warehouse to Ghana</p>
+            <p className="text-xs font-semibold text-white">China in-stock — delivery mode preference</p>
             <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-              Applies to in-stock China SKUs. Pre-order (China) intl is paid later on your order under Shipping.
+              Choose how we should plan the international leg. Your wallet charge is parts only; freight is quoted for
+              reference and invoiced after confirmation. Pre-order (China) lines follow the separate pre-order flow.
             </p>
             <div className="mt-3 grid gap-2">
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
@@ -493,21 +513,31 @@ export function PartsCartClient({ chinaQuotes, items, walletBalance, addresses, 
             />
           </div>
         ) : null}
-        <label className="mt-4 flex items-start gap-2 rounded-lg border border-border/70 bg-background/80 p-3 text-xs text-foreground dark:border-white/15 dark:bg-white/[0.05] dark:text-zinc-100">
-          <input
-            type="checkbox"
-            checked={agreementAccepted}
-            onChange={(e) => setAgreementAccepted(e.target.checked)}
-            className="accent-[var(--brand)]"
-          />
-          <span className="font-medium">
-            I agree to{" "}
-            <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
-              checkout terms and payment verification requirements
-            </span>{" "}
-            for selected items. Version {agreementVersion}.
-          </span>
-        </label>
+        {legalCheckoutReady ? (
+          <p className="mt-4 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100/95">
+            Legal requirements for checkout are already accepted on your account. No duplicate checkbox needed.
+          </p>
+        ) : (
+          <label className="mt-4 flex items-start gap-2 rounded-lg border border-border/70 bg-background/80 p-3 text-xs text-foreground dark:border-white/15 dark:bg-white/[0.05] dark:text-zinc-100">
+            <input
+              type="checkbox"
+              checked={agreementAccepted}
+              onChange={(e) => setAgreementAccepted(e.target.checked)}
+              className="accent-[var(--brand)]"
+            />
+            <span className="font-medium">
+              I agree to{" "}
+              <span className="rounded-md bg-[var(--brand)]/12 px-1.5 py-0.5 font-semibold text-[var(--brand)] dark:bg-[var(--brand)]/20">
+                checkout terms and payment verification requirements
+              </span>{" "}
+              for selected items. Version {agreementVersion}. For fastest checkout, accept all policies in{" "}
+              <Link href="/dashboard/profile" className="text-[var(--brand)] underline-offset-2 hover:underline">
+                Profile
+              </Link>
+              .
+            </span>
+          </label>
+        )}
 
         <Button
           type="button"

@@ -2,15 +2,15 @@
 
 import { PartListingState, PartOrigin, PartStockStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import type { DisplayCurrency } from "@/lib/currency";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { createPart, updatePart, type PartActionState } from "@/actions/parts";
 import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
+import { AdminVehicleListPriceField } from "@/components/admin/admin-vehicle-list-price-field";
 import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
-import { AdminGhsSellingPriceField } from "@/components/admin/admin-ghs-selling-price-field";
-import { AdminRmbSellingPriceField } from "@/components/admin/admin-rmb-selling-price-field";
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { PartCoverField } from "@/components/admin/part-cover-field";
 import { profitAmountRmb, profitMarginPercent } from "@/lib/admin-profit";
@@ -19,11 +19,13 @@ import {
   getFormCheckboxChecked,
   getFormControlString,
   parsePartSummaryForAutofill,
+  previewRowsFromPartParse,
   setFormControlString,
   shouldApplyAutofillCheckbox,
   shouldApplyAutofillEnum,
   shouldApplyAutofillNumber,
   shouldApplyAutofillText,
+  shouldApplyListingPrice,
 } from "@/lib/admin-summary-autofill";
 import { partStockStatusLabel } from "@/lib/part-stock";
 import { parsePartOptionsMeta } from "@/lib/part-variant-options";
@@ -49,9 +51,23 @@ type Props = {
     categoryId: string | null;
     origin: PartOrigin;
     sku: string | null;
+    partNumber: string | null;
+    oemNumber: string | null;
+    compatibleMake: string | null;
+    compatibleModel: string | null;
+    compatibleYearNote: string | null;
+    brand: string | null;
+    condition: string | null;
+    warehouseLocation: string | null;
+    countryOfOrigin: string | null;
+    internalNotes: string | null;
     basePriceRmb: number;
     supplierCostRmb: number | null;
     priceGhs: number;
+    sellingPriceCurrency: DisplayCurrency;
+    supplierCostCurrency: DisplayCurrency;
+    sellingDisplayAmount: number;
+    supplierDisplayAmount: number | null;
     stockQty: number;
     stockStatus: PartStockStatus;
     stockStatusLocked: boolean;
@@ -69,6 +85,18 @@ type Props = {
   cancelHref?: string;
 };
 
+const PART_PASTE_PLACEHOLDER = `Paste supplier or catalog text (10–30 lines), e.g.:
+title: Honda CRV 2020 brake pads
+part number: BP-2020-CRV
+OEM: 45022-TLA-A00
+supplier cost: CNY 120
+selling price: GHS 350
+quantity: 12
+compatible vehicle: Honda CRV 2017-2022
+brand: Bosch
+condition: New
+location: Shelf A2`;
+
 export function PartForm({
   mode,
   part,
@@ -82,8 +110,9 @@ export function PartForm({
   const [state, formAction] = useActionState(action, null as PartActionState);
   const [originLane, setOriginLane] = useState<PartOrigin>(part?.origin ?? PartOrigin.GHANA);
   const [listingPriceKey, setListingPriceKey] = useState(0);
-  const [priceGhsSeed, setPriceGhsSeed] = useState<number | undefined>(undefined);
-  const [priceRmbSeed, setPriceRmbSeed] = useState<number | undefined>(undefined);
+  const [supplierCostKey, setSupplierCostKey] = useState(0);
+  const [sellingSeed, setSellingSeed] = useState<{ amount?: number; currency?: DisplayCurrency } | undefined>(undefined);
+  const [supplierSeed, setSupplierSeed] = useState<{ amount?: number; currency?: DisplayCurrency } | undefined>(undefined);
   const [autofillUnmapped, setAutofillUnmapped] = useState<string[]>([]);
 
   useEffect(() => {
@@ -130,6 +159,16 @@ export function PartForm({
       title: part?.title ?? "",
       category: part?.category ?? "",
       sku: part?.sku ?? "",
+      partNumber: part?.partNumber ?? "",
+      oemNumber: part?.oemNumber ?? "",
+      compatibleMake: part?.compatibleMake ?? "",
+      compatibleModel: part?.compatibleModel ?? "",
+      compatibleYearNote: part?.compatibleYearNote ?? "",
+      brand: part?.brand ?? "",
+      condition: part?.condition ?? "",
+      warehouseLocation: part?.warehouseLocation ?? "",
+      countryOfOrigin: part?.countryOfOrigin ?? "",
+      internalNotes: part?.internalNotes ?? "",
       shortDescription: part?.shortDescription ?? "",
       description: part?.description ?? "",
       tags: part ? tagsToString(part.tags) : "",
@@ -144,13 +183,19 @@ export function PartForm({
 
   const initialOrigin = part?.origin ?? PartOrigin.GHANA;
   const initialStockQtyStr = part != null ? String(part.stockQty) : "0";
-  const initialSupplierCostStr = part?.supplierCostRmb != null ? String(part.supplierCostRmb) : "";
   const initialFeatured = part?.featured ?? false;
   const initialStockLocked = part?.stockStatusLocked ?? false;
-  const initialPriceGhsStr = part != null ? String(Math.round(Number(part.priceGhs))) : "";
-  const initialPriceRmbStr = part != null ? String(part.basePriceRmb) : "";
+  const initialSellingAmountStr =
+    part != null && Number.isFinite(part.sellingDisplayAmount) ? String(part.sellingDisplayAmount) : "";
+  const initialSellingCurrency = part?.sellingPriceCurrency ?? "GHS";
+  const initialSupplierAmountStr =
+    part?.supplierDisplayAmount != null && Number.isFinite(part.supplierDisplayAmount)
+      ? String(part.supplierDisplayAmount)
+      : "";
+  const initialSupplierCurrency = part?.supplierCostCurrency ?? "GHS";
 
-  function applyPartSummary(raw: string) {
+  async function applyPartSummary(raw: string, opts?: { overwrite?: boolean }) {
+    const overwrite = opts?.overwrite ?? false;
     const trimmed = raw.trim();
     if (!trimmed) {
       setAutofillUnmapped([]);
@@ -168,40 +213,58 @@ export function PartForm({
         originLane,
         initialOrigin,
         { value: parsed.originEnum.value, confidence: parsed.originEnum.confidence },
+        overwrite,
       )
     ) {
       setOriginLane(parsed.originEnum.value);
     }
 
-    let bumpPrice = false;
-    if (
-      parsed.basePriceGhs &&
-      shouldApplyAutofillNumber(getFormControlString(form, "basePriceGhs"), initialPriceGhsStr, parsed.basePriceGhs)
-    ) {
-      setPriceGhsSeed(parsed.basePriceGhs.value);
-      bumpPrice = true;
+    let bumpSelling = false;
+    if (parsed.listPrice) {
+      const applyAmount = shouldApplyListingPrice(
+        getFormControlString(form, "sellingPriceAmount"),
+        initialSellingAmountStr,
+        parsed.listPrice,
+        overwrite,
+      );
+      const applyCur = shouldApplyAutofillEnum(
+        getFormControlString(form, "sellingPriceCurrency"),
+        initialSellingCurrency,
+        { value: parsed.listPrice.currency, confidence: parsed.listPrice.confidence },
+        overwrite,
+      );
+      if (applyAmount || applyCur) {
+        setSellingSeed({ amount: parsed.listPrice.amount, currency: parsed.listPrice.currency });
+        bumpSelling = true;
+      }
     }
-    if (
-      parsed.basePriceRmb &&
-      shouldApplyAutofillNumber(getFormControlString(form, "basePriceRmb"), initialPriceRmbStr, parsed.basePriceRmb)
-    ) {
-      setPriceRmbSeed(parsed.basePriceRmb.value);
-      bumpPrice = true;
-    }
-    if (bumpPrice) setListingPriceKey((k) => k + 1);
+    if (bumpSelling) setListingPriceKey((k) => k + 1);
 
-    const supCost = parsed.numberFields.supplierCostRmb;
-    if (
-      supCost &&
-      shouldApplyAutofillNumber(getFormControlString(form, "supplierCostRmb"), initialSupplierCostStr, supCost)
-    ) {
-      setFormControlString(form, "supplierCostRmb", String(supCost.value));
+    let bumpSupplier = false;
+    if (parsed.supplierCost) {
+      const applyAmount = shouldApplyListingPrice(
+        getFormControlString(form, "supplierCostAmount"),
+        initialSupplierAmountStr,
+        parsed.supplierCost,
+        overwrite,
+      );
+      const applyCur = shouldApplyAutofillEnum(
+        getFormControlString(form, "supplierCostCurrency"),
+        initialSupplierCurrency,
+        { value: parsed.supplierCost.currency, confidence: parsed.supplierCost.confidence },
+        overwrite,
+      );
+      if (applyAmount || applyCur) {
+        setSupplierSeed({ amount: parsed.supplierCost.amount, currency: parsed.supplierCost.currency });
+        bumpSupplier = true;
+      }
     }
+    if (bumpSupplier) setSupplierCostKey((k) => k + 1);
 
     const stockN = parsed.numberFields.stockQty;
     if (
       stockN &&
-      shouldApplyAutofillNumber(getFormControlString(form, "stockQty"), initialStockQtyStr, stockN)
+      shouldApplyAutofillNumber(getFormControlString(form, "stockQty"), initialStockQtyStr, stockN, overwrite)
     ) {
       setFormControlString(form, "stockQty", String(stockN.value));
     }
@@ -214,14 +277,14 @@ export function PartForm({
       if (key === "optionColors" || key === "optionSizes") {
         val = val.includes("\n") ? val : val.split(",").map((s) => s.trim()).filter(Boolean).join("\n");
       }
-      if (shouldApplyAutofillText(current, initial, { ...proposed, value: val })) {
+      if (shouldApplyAutofillText(current, initial, { ...proposed, value: val }, overwrite)) {
         setFormControlString(form, key, val);
       }
     }
 
     if (
       parsed.featured &&
-      shouldApplyAutofillCheckbox(getFormCheckboxChecked(form, "featured"), initialFeatured, parsed.featured)
+      shouldApplyAutofillCheckbox(getFormCheckboxChecked(form, "featured"), initialFeatured, parsed.featured, overwrite)
     ) {
       setFormControlString(form, "featured", parsed.featured.value ? "on" : "");
     }
@@ -231,6 +294,7 @@ export function PartForm({
         getFormCheckboxChecked(form, "stockStatusLocked"),
         initialStockLocked,
         parsed.stockStatusLocked,
+        overwrite,
       )
     ) {
       setFormControlString(form, "stockStatusLocked", parsed.stockStatusLocked.value ? "on" : "");
@@ -247,13 +311,17 @@ export function PartForm({
       <AdminZodIssues issues={state?.issues} />
 
       <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-        <PasteSummaryAutofill onAutofill={applyPartSummary} />
+        <PasteSummaryAutofill
+          buildPreviewRows={(t) => previewRowsFromPartParse(parsePartSummaryForAutofill(t))}
+          onApply={(t, o) => void applyPartSummary(t, o)}
+          placeholder={PART_PASTE_PLACEHOLDER}
+        />
         <AutofillUnmappedHint items={autofillUnmapped} />
         <p className="mt-2 text-xs text-zinc-500">
-          Labeled lines (e.g. <span className="font-mono text-zinc-400">Title:</span>,{" "}
-          <span className="font-mono text-zinc-400">SKU:</span>, <span className="font-mono text-zinc-400">price GHS:</span>)
-          are applied first; free text fills short description when safe. Origin, stock, and checkboxes respect your edits unless
-          the summary line is clearly labeled.
+          Labeled lines (e.g. <span className="font-mono text-zinc-400">OEM:</span>,{" "}
+          <span className="font-mono text-zinc-400">selling price: GHS 350</span>) take priority. Values stop at commas or the
+          next label. Heuristic rows are marked—please verify. Use <span className="font-medium text-zinc-300">Overwrite</span>{" "}
+          only when you intend to replace fields you already filled.
         </p>
       </div>
 
@@ -309,50 +377,73 @@ export function PartForm({
           <option value={PartOrigin.CHINA}>China (Pre-order)</option>
         </select>
         <p className="mt-1 text-xs text-zinc-500">
-          <span className="text-zinc-300">Ghana stock:</span> set the list price in{" "}
-          <span className="font-medium text-zinc-200">Ghana cedis (GHS)</span> below.{" "}
-          <span className="text-zinc-300">China:</span> list price in RMB. For China, the public badge still reflects
-          in-stock vs pre-order from <span className="text-zinc-400">stock status</span> below. Lock status if you use
-          &quot;Pre Order on Request&quot;.
+          Lane controls pre-order badges and delivery templates. Selling price can be entered in{" "}
+          <span className="font-medium text-zinc-300">GHS</span>, <span className="font-medium text-zinc-300">USD</span>, or{" "}
+          <span className="font-medium text-zinc-300">CNY</span> regardless of lane; canonical valuation is stored as RMB.
         </p>
       </div>
       <div>
         <Label htmlFor="sku">SKU (optional)</Label>
         <Input id="sku" name="sku" className="mt-1" defaultValue={part?.sku ?? ""} />
       </div>
-
-      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Pricing (admin)</p>
-      {originLane === PartOrigin.GHANA ? (
-        <AdminGhsSellingPriceField
-          key={`ghs-${listingPriceKey}`}
-          label="Base selling price (GHS / cedis)"
-          description="Set the customer-facing list price in Ghana cedis. The system also stores the matching RMB equivalent for the catalog."
-          defaultValue={priceGhsSeed ?? (part != null ? Number(part.priceGhs) : undefined)}
-        />
-      ) : (
-        <AdminRmbSellingPriceField
-          key={`rmb-${listingPriceKey}`}
-          label="Base selling price (RMB only)"
-          description="Canonical list price in RMB — reference GHS is written to priceGhs on every save for admin and storefront quoting."
-          defaultValue={priceRmbSeed ?? (part != null ? Number(part.basePriceRmb) : undefined)}
-          lastSavedReferenceGhs={part != null ? Number(part.priceGhs) : null}
-        />
-      )}
       <div>
-        <Label htmlFor="supplierCostRmb">Supplier / distributor cost (RMB)</Label>
-        <p className="mt-0.5 text-xs text-zinc-500">Admin-only — not shown to customers.</p>
+        <Label htmlFor="partNumber">Part number (optional)</Label>
+        <Input id="partNumber" name="partNumber" className="mt-1" defaultValue={part?.partNumber ?? ""} />
+      </div>
+      <div>
+        <Label htmlFor="oemNumber">OEM number (optional)</Label>
+        <Input id="oemNumber" name="oemNumber" className="mt-1" placeholder="e.g. 45022-TLA-A00" defaultValue={part?.oemNumber ?? ""} />
+      </div>
+      <div>
+        <Label htmlFor="brand">Brand / manufacturer (optional)</Label>
+        <Input id="brand" name="brand" className="mt-1" placeholder="e.g. Bosch" defaultValue={part?.brand ?? ""} />
+      </div>
+
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Compatibility</p>
+      <div>
+        <Label htmlFor="compatibleMake">Compatible make (optional)</Label>
+        <Input id="compatibleMake" name="compatibleMake" className="mt-1" defaultValue={part?.compatibleMake ?? ""} />
+      </div>
+      <div>
+        <Label htmlFor="compatibleModel">Compatible model (optional)</Label>
+        <Input id="compatibleModel" name="compatibleModel" className="mt-1" defaultValue={part?.compatibleModel ?? ""} />
+      </div>
+      <div className="sm:col-span-2">
+        <Label htmlFor="compatibleYearNote">Compatible years (optional)</Label>
         <Input
-          id="supplierCostRmb"
-          name="supplierCostRmb"
-          type="number"
-          min={0}
-          step="0.01"
+          id="compatibleYearNote"
+          name="compatibleYearNote"
           className="mt-1"
-          defaultValue={part?.supplierCostRmb ?? ""}
+          placeholder="e.g. 2017-2022 or 2020"
+          defaultValue={part?.compatibleYearNote ?? ""}
         />
       </div>
+
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Pricing (admin)</p>
+      <AdminVehicleListPriceField
+        key={`sell-${listingPriceKey}`}
+        amountName="sellingPriceAmount"
+        currencyName="sellingPriceCurrency"
+        label="Selling price (list)"
+        description="Amount and currency for the customer-facing list price. Checkout still settles in GHS from the derived RMB valuation."
+        defaultAmount={sellingSeed?.amount ?? part?.sellingDisplayAmount}
+        defaultCurrency={sellingSeed?.currency ?? part?.sellingPriceCurrency ?? "GHS"}
+        lastSavedReferenceGhs={part != null ? Number(part.priceGhs) : null}
+      />
+      <AdminVehicleListPriceField
+        key={`sup-${supplierCostKey}`}
+        amountName="supplierCostAmount"
+        currencyName="supplierCostCurrency"
+        label="Supplier / distributor cost (optional)"
+        description="Your landed or invoice cost — stored as RMB for margin; not shown to customers."
+        defaultAmount={supplierSeed?.amount ?? part?.supplierDisplayAmount ?? undefined}
+        defaultCurrency={supplierSeed?.currency ?? part?.supplierCostCurrency ?? "GHS"}
+        required={false}
+        previewVariant="supplier"
+      />
+
       <p className="sm:col-span-2 text-xs text-zinc-500">
-        Checkout and Paystack charge in GHS; the saved reference amount tracks your last submitted conversion.
+        Checkout and Paystack charge in GHS; reference GHS on the part row is updated whenever you save.
       </p>
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Storefront options</p>
       <p className="sm:col-span-2 text-xs text-zinc-500">
@@ -381,10 +472,35 @@ export function PartForm({
           defaultValue={optionLines(optionDefaults.sizes)}
         />
       </div>
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Inventory &amp; sourcing</p>
+      <div>
+        <Label htmlFor="condition">Condition (optional)</Label>
+        <Input id="condition" name="condition" className="mt-1" placeholder="e.g. New, Used, Reman" defaultValue={part?.condition ?? ""} />
+      </div>
+      <div>
+        <Label htmlFor="warehouseLocation">Location / warehouse (optional)</Label>
+        <Input id="warehouseLocation" name="warehouseLocation" className="mt-1" defaultValue={part?.warehouseLocation ?? ""} />
+      </div>
+      <div>
+        <Label htmlFor="countryOfOrigin">Country of origin (optional)</Label>
+        <Input id="countryOfOrigin" name="countryOfOrigin" className="mt-1" defaultValue={part?.countryOfOrigin ?? ""} />
+      </div>
+      <div className="sm:col-span-2">
+        <Label htmlFor="internalNotes">Internal notes (optional)</Label>
+        <Textarea
+          id="internalNotes"
+          name="internalNotes"
+          rows={3}
+          className="mt-1"
+          placeholder="Admin-only — not on the storefront"
+          defaultValue={part?.internalNotes ?? ""}
+        />
+      </div>
+
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Internal — supplier / distributor</p>
       <p className="sm:col-span-2 text-xs text-zinc-500">
-        Admin-only — not shown on the storefront (same as supplier cost above). Use to record where you sourced the
-        product and a contact number for your own follow-up.
+        Admin-only — not shown on the storefront. Use to record where you sourced the product and a contact number for your
+        own follow-up.
       </p>
       <div className="sm:col-span-2">
         <Label htmlFor="supplierDistributorRef">Reference / source note</Label>

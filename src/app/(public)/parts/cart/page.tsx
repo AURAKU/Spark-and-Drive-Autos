@@ -3,7 +3,8 @@ import Link from "next/link";
 import { PartsCartClient } from "@/components/parts/parts-cart-client";
 import { PageHeading } from "@/components/typography/page-headings";
 import { getGlobalCurrencySettings } from "@/lib/currency";
-import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
+import { getCheckoutLegalVersions, POLICY_KEYS } from "@/lib/legal-enforcement";
+import { getActivePolicy, hasUserAccepted } from "@/lib/legal-versioning";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
 import { getPartDisplayPrice } from "@/lib/parts-pricing";
@@ -40,7 +41,7 @@ export default async function PartsCartPage() {
     );
   }
 
-  const [cart, user, fx, legal, favoriteRows] = await Promise.all([
+  const [cart, user, fx, legal, favoriteRows, payNoticePolicy] = await Promise.all([
     prisma.partCart.findUnique({
       where: { userId: session.user.id },
       include: {
@@ -80,6 +81,7 @@ export default async function PartsCartPage() {
       where: { userId: session.user.id },
       select: { partId: true },
     }),
+    getActivePolicy(POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE),
   ]);
   const favoritePartIds = new Set(favoriteRows.map((r) => r.partId));
 
@@ -92,6 +94,14 @@ export default async function PartsCartPage() {
   ];
   const chinaQuotes =
     billableChinaPartIds.length > 0 ? await computeChinaQuotesForPartIds(billableChinaPartIds, true) : null;
+
+  const [checkoutAgreementOk, paymentNoticeOk] = await Promise.all([
+    hasUserAccepted(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT, legal.agreementVersion),
+    payNoticePolicy?.version
+      ? hasUserAccepted(session.user.id, POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE, payNoticePolicy.version)
+      : Promise.resolve(true),
+  ]);
+  const legalCheckoutReady = checkoutAgreementOk && paymentNoticeOk;
 
   return (
     <div className="parts-theme relative [--brand:#ef4444]">
@@ -142,6 +152,7 @@ export default async function PartsCartPage() {
             walletBalance={Number(user?.walletBalance ?? 0)}
             addresses={user?.addresses ?? []}
             agreementVersion={legal.agreementVersion}
+            legalCheckoutReady={legalCheckoutReady}
           />
         </div>
       </div>

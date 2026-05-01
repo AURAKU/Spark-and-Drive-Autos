@@ -10,10 +10,10 @@ import {
   parseCarOpsStateFilter,
 } from "@/lib/admin-car-ops-state";
 import {
-  convertGhsToDisplay,
   formatConverted,
   formatVehiclePriceFromRmb,
   getGlobalCurrencySettings,
+  parseDisplayCurrency,
 } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
@@ -194,12 +194,13 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
       </p>
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
               <th className="px-4 py-3">Vehicle</th>
               <th className="px-4 py-3">Stock</th>
-              <th className="px-4 py-3">Base</th>
+              <th className="px-4 py-3">List (admin)</th>
+              <th className="px-4 py-3">RMB (book)</th>
               <th className="px-4 py-3">GHS (saved)</th>
               <th className="px-4 py-3">GHS (live)</th>
               <th className="px-4 py-3">USD (live)</th>
@@ -209,24 +210,20 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
           <tbody>
             {cars.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
                   No vehicles match. Adjust filters or add a listing.
                 </td>
               </tr>
             ) : (
               cars.map((c) => {
                 const base = Number(c.basePriceRmb);
-                const ghana = c.sourceType === "IN_GHANA";
-                const baseGhsRounded = Math.round(base);
-                const baseDisplay = ghana
-                  ? formatConverted(baseGhsRounded, "GHS")
-                  : formatConverted(base, "CNY");
-                const ghsLive = ghana
-                  ? formatConverted(baseGhsRounded, "GHS")
-                  : formatVehiclePriceFromRmb(base, "GHS", fx);
-                const usdLive = ghana
-                  ? formatConverted(convertGhsToDisplay(baseGhsRounded, "USD", fx), "USD")
-                  : formatVehiclePriceFromRmb(base, "USD", fx);
+                const adminList = formatConverted(
+                  Number(c.basePriceAmount),
+                  parseDisplayCurrency(c.basePriceCurrency),
+                );
+                const rmbBook = formatConverted(base, "CNY");
+                const ghsLive = formatVehiclePriceFromRmb(base, "GHS", fx);
+                const usdLive = formatVehiclePriceFromRmb(base, "USD", fx);
                 return (
                   <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                     <td className="px-4 py-3">
@@ -237,7 +234,8 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
                       </p>
                     </td>
                     <td className="px-4 py-3 text-zinc-400">{c.availabilityStatus.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-3 tabular-nums text-zinc-200">{baseDisplay}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-200">{adminList}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-400">{rmbBook}</td>
                     <td className="px-4 py-3 text-zinc-300">{formatConverted(Number(c.price), "GHS")}</td>
                     <td className="px-4 py-3 text-[var(--brand)]">{ghsLive}</td>
                     <td className="px-4 py-3 text-zinc-300">{usdLive}</td>

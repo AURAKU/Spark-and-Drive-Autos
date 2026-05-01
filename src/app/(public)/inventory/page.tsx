@@ -94,15 +94,28 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
   }
 
   const where: Prisma.CarWhereInput = { AND: andClauses };
-  const total = await prisma.car.count({ where });
-  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
-  const page = Math.min(Math.max(1, pageReq), totalPages);
-  const cars = await prisma.car.findMany({
-    where,
-    orderBy: [{ featured: "desc" }, { listingState: "asc" }, { updatedAt: "desc" }],
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
+
+  let total = 0;
+  let totalPages = 1;
+  let page = 1;
+  let cars: Awaited<ReturnType<typeof prisma.car.findMany>> = [];
+  let inventoryError: string | null = null;
+
+  try {
+    total = await prisma.car.count({ where });
+    totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+    page = Math.min(Math.max(1, pageReq), totalPages);
+    cars = await prisma.car.findMany({
+      where,
+      orderBy: [{ featured: "desc" }, { listingState: "asc" }, { updatedAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+  } catch (e) {
+    console.error("[inventory] database query failed", e);
+    inventoryError =
+      "We could not load inventory right now. If you are an operator, run database migrations on the server (npx prisma migrate deploy) and ensure DATABASE_URL matches the migrated database.";
+  }
   const pageHref = (nextPage: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -201,20 +214,26 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
         here, and in-transit stock status is excluded.
       </p>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {cars.length === 0 ? (
-          <p className="text-sm text-zinc-500">No vehicles match your filters yet.</p>
-        ) : (
-          cars.map((car) => (
-            <CarCard
-              key={car.id}
-              car={car}
-              displayAmount={getCarDisplayPrice(Number(car.basePriceRmb), displayCurrency, fx)}
-              displayCurrency={displayCurrency}
-            />
-          ))
-        )}
-      </div>
+      {inventoryError ? (
+        <div className="mt-8 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
+          {inventoryError}
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {cars.length === 0 ? (
+            <p className="text-sm text-zinc-500">No vehicles match your filters yet.</p>
+          ) : (
+            cars.map((car) => (
+              <CarCard
+                key={car.id}
+                car={car}
+                displayAmount={getCarDisplayPrice(Number(car.basePriceRmb ?? 0), displayCurrency, fx)}
+                displayCurrency={displayCurrency}
+              />
+            ))
+          )}
+        </div>
+      )}
       {total > 0 ? (
         <ListPaginationFooter
           className="mt-10"

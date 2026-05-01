@@ -1,119 +1,104 @@
 #!/usr/bin/env node
 /**
- * Crawl same-origin links from BASE_URL and report broken pages.
- * Usage: BASE_URL=http://localhost:5173 node scripts/audit-links.mjs
+ * Scans src for internal href="/..." patterns and flags targets that have no matching page.tsx route.
+ * Heuristic only: dynamic segments and template literals are skipped.
  */
-const BASE_URL = (process.env.BASE_URL || "http://localhost:5173").replace(/\/$/, "");
-const origin = new URL(BASE_URL).origin;
-const MAX_PAGES = Number(process.env.MAX_PAGES || 250);
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 20000);
-const RETRIES = Number(process.env.RETRIES || 2);
-const MAX_AUDIT_MS = Number(process.env.MAX_AUDIT_MS || 900000);
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-function extractHrefs(html) {
-  const hrefs = [];
-  const re = /href\s*=\s*"([^"]+)"/gi;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(__dirname, "..");
+const appDir = path.join(root, "src", "app");
+
+function walk(dir) {
+  /** @type {string[]} */
+  const out = [];
+  for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, name.name);
+    if (name.isDirectory()) walk(p).forEach((x) => out.push(x));
+    else if (name.isFile() && name.name === "page.tsx") out.push(p);
+  }
+  return out;
+}
+
+function toRoutePattern(filePath) {
+  const rel = path.relative(appDir, filePath);
+  const parts = rel.split(path.sep).slice(0, -1);
+  const segs = [];
+  for (const part of parts) {
+    if (part.startsWith("(") && part.endsWith(")")) continue;
+    segs.push(part);
+  }
+  return "/" + segs.join("/").replace(/\/+/g, "/").replace(/^\//, "") || "";
+}
+
+const routeFiles = walk(appDir);
+/** @type {Set<string>} */
+const staticPrefixes = new Set();
+for (const f of routeFiles) {
+  const r = toRoutePattern(f);
+  staticPrefixes.add(r === "" ? "/" : r);
+  const parts = r.split("/").filter(Boolean);
+  let acc = "";
+  for (const p of parts) {
+    if (p.startsWith("[")) break;
+    acc += "/" + p;
+    staticPrefixes.add(acc);
+  }
+}
+
+function scanFiles(dir, exts, acc = []) {
+  for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, name.name);
+    if (name.isDirectory()) {
+      if (name.name === "node_modules" || name.name === ".next") continue;
+      scanFiles(p, exts, acc);
+    } else if (exts.some((e) => name.name.endsWith(e))) acc.push(p);
+  }
+  return acc;
+}
+
+const sources = scanFiles(path.join(root, "src"), [".tsx", ".ts", ".jsx", ".js"]);
+const hrefRe = /href=\{?["'](\/[a-zA-Z0-9/_-]*)["']\}?/g;
+/** @type {Map<string, string[]>} */
+const hrefs = new Map();
+for (const file of sources) {
+  const txt = fs.readFileSync(file, "utf8");
   let m;
-  while ((m = re.exec(html)) !== null) hrefs.push(m[1]);
-  return hrefs;
-}
-
-function normalize(urlLike, fromUrl) {
-  try {
-    const u = new URL(urlLike, fromUrl);
-    if (u.origin !== origin) return null;
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    if (
-      u.pathname.startsWith("/_next") ||
-      u.pathname.startsWith("/api/") ||
-      u.pathname.startsWith("/favicon") ||
-      u.pathname.startsWith("/assets/")
-    ) {
-      return null;
-    }
-    u.hash = "";
-    return u.toString();
-  } catch {
-    return null;
+  while ((m = hrefRe.exec(txt)) !== null) {
+    const h = m[1];
+    if (h.includes("${") || h.includes("`")) continue;
+    if (!hrefs.has(h)) hrefs.set(h, []);
+    hrefs.get(h).push(path.relative(root, file));
   }
 }
 
-async function request(url) {
-  /** @type {unknown} */
-  let lastError;
-  for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
-    try {
-      const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      return {
-        status: res.status,
-        location: res.headers.get("location"),
-        body: res.status === 200 ? await res.text() : "",
-      };
-    } catch (e) {
-      lastError = e;
-      if (attempt < RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
-      }
-    }
+/** @param {string} href */
+function mightExist(href) {
+  if (href.startsWith("/api/")) return true;
+  if (staticPrefixes.has(href)) return true;
+  const parts = href.split("/").filter(Boolean);
+  let acc = "";
+  for (const p of parts) {
+    acc += "/" + p;
+    if (staticPrefixes.has(acc)) continue;
+    if (routeFiles.some((f) => toRoutePattern(f).startsWith(acc + "/["))) return true;
+    return false;
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  return staticPrefixes.has(acc) || acc === "";
 }
 
-async function main() {
-  const startedAt = Date.now();
-  const queue = [BASE_URL + "/"];
-  const seen = new Set();
-  const failures = [];
-  const summary = [];
-
-  while (queue.length > 0 && seen.size < MAX_PAGES) {
-    if (Date.now() - startedAt > MAX_AUDIT_MS) {
-      failures.push({
-        url: "__audit_timeout__",
-        status: 0,
-        kind: "timeout",
-        error: `Audit exceeded MAX_AUDIT_MS=${MAX_AUDIT_MS}`,
-      });
-      break;
-    }
-    const url = queue.shift();
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    try {
-      const { status, location, body } = await request(url);
-      summary.push({ url, status });
-      if (status >= 500 || status === 404 || status === 0) {
-        failures.push({ url, status, kind: "http" });
-      }
-      if (status === 200 && body) {
-        const hrefs = extractHrefs(body);
-        for (const h of hrefs) {
-          const next = normalize(h, url);
-          if (next && !seen.has(next)) queue.push(next);
-        }
-      } else if ((status === 302 || status === 307 || status === 303) && location) {
-        const next = normalize(location, url);
-        if (next && !seen.has(next)) queue.push(next);
-      }
-    } catch (e) {
-      failures.push({ url, status: 0, kind: "fetch", error: String(e?.message || e) });
-    }
-  }
-
-  console.log(
-    JSON.stringify(
-      {
-        crawled: seen.size,
-        failures,
-        sampleStatuses: summary.slice(0, 80),
-      },
-      null,
-      2,
-    ),
-  );
+const suspects = [...hrefs.keys()].filter((h) => !mightExist(h));
+console.log("Internal href audit (static paths only)\n");
+console.log(`Unique hrefs: ${hrefs.size}`);
+if (suspects.length === 0) {
+  console.log("No obvious missing static routes.\n");
+  process.exit(0);
 }
-
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+console.log("\nPossibly missing (verify dynamic routes manually):\n");
+for (const h of suspects.sort()) {
+  console.log(h);
+  for (const f of hrefs.get(h) ?? []) console.log(`  ${f}`);
+}
+process.exit(suspects.length > 0 ? 1 : 0);

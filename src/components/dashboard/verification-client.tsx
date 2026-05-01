@@ -136,9 +136,28 @@ export function VerificationClient({
   }, [ghanaCardVerificationStatus, ghanaCardRejectedReason, ghanaCardExpiresAt]);
 
   async function uploadGhanaCard(file: File) {
-    const sigRes = await fetch("/api/upload/profile-id-signature", { method: "POST" });
-    if (!sigRes.ok) throw new Error("Could not sign upload");
-    const sig = (await sigRes.json()) as {
+    const allowedMime = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"]);
+    const mime = (file.type || "").toLowerCase() || "application/octet-stream";
+    if (!allowedMime.has(mime)) {
+      throw new Error("Use a JPG, PNG, WebP, or PDF file for your Ghana Card.");
+    }
+
+    const sigRes = await fetch("/api/uploads/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: "ghana-card", mimeType: mime }),
+    });
+    let sigBody: Record<string, unknown> = {};
+    try {
+      sigBody = (await sigRes.json()) as Record<string, unknown>;
+    } catch {
+      sigBody = {};
+    }
+    if (!sigRes.ok) {
+      const err = sigBody.error;
+      throw new Error(typeof err === "string" ? err : "Could not sign upload");
+    }
+    const sig = sigBody as {
       timestamp: number;
       signature: string;
       apiKey: string;
@@ -154,7 +173,10 @@ export function VerificationClient({
     fd.append("folder", sig.folder);
 
     const up = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-    if (!up.ok) throw new Error("Upload failed");
+    if (!up.ok) {
+      const detail = await up.text();
+      throw new Error(detail?.slice(0, 240) || "Upload to storage failed");
+    }
     const json = (await up.json()) as { secure_url: string; public_id: string };
 
     if (!ghanaCardId.trim()) throw new Error("Ghana Card ID number is required.");
@@ -272,7 +294,7 @@ export function VerificationClient({
               <label className={`inline-flex h-9 cursor-pointer items-center rounded-md border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10 ${cardUploading ? "pointer-events-none opacity-50" : ""}`}>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf,.pdf"
                   className="hidden"
                   disabled={cardUploading}
                   onChange={(e) => void onUploadCard(e.target.files?.[0] ?? null)}
@@ -282,7 +304,7 @@ export function VerificationClient({
               <label className={`inline-flex h-9 cursor-pointer items-center rounded-md border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10 ${cardUploading ? "pointer-events-none opacity-50" : ""}`}>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
                   capture="environment"
                   className="hidden"
                   disabled={cardUploading}

@@ -5,7 +5,7 @@ import { ReceiptStatus } from "@prisma/client";
 import { isAdminRole } from "@/auth";
 import { getRequestIp } from "@/lib/client-ip";
 import { prisma } from "@/lib/prisma";
-import { readReceiptPdfFromPublicStore, sanitizeReceiptDownloadFilename } from "@/lib/receipt-pdf-files";
+import { resolveReceiptPdfBytes, sanitizeReceiptDownloadFilename } from "@/lib/receipt-pdf-files";
 import { safeAuth } from "@/lib/safe-auth";
 
 type Ctx = { params: Promise<{ orderId: string }> };
@@ -63,15 +63,19 @@ export async function GET(req: Request, ctx: Ctx) {
     },
   });
 
-  const bytes = await readReceiptPdfFromPublicStore(pdfUrl);
-  if (!bytes) {
-    return NextResponse.redirect(new URL(pdfUrl, req.url));
+  const bytes = await resolveReceiptPdfBytes(pdfUrl);
+  if (bytes) {
+    return new NextResponse(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
   }
 
-  return new NextResponse(new Uint8Array(bytes), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+  const target = pdfUrl.trim();
+  if (target.startsWith("/") || /^https?:\/\//i.test(target)) {
+    return NextResponse.redirect(new URL(target, req.url));
+  }
+  return NextResponse.json({ error: "Receipt file not available" }, { status: 404 });
 }

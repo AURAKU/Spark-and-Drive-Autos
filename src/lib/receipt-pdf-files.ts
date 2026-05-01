@@ -36,6 +36,31 @@ export async function readReceiptPdfFromPublicStore(pdfUrl: string): Promise<Buf
   }
 }
 
+const REMOTE_RECEIPT_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Local `public/receipts/*.pdf` first, then HTTPS (e.g. Cloudinary) for legacy or mirrored URLs.
+ */
+export async function resolveReceiptPdfBytes(pdfUrl: string): Promise<Buffer | null> {
+  const local = await readReceiptPdfFromPublicStore(pdfUrl);
+  if (local) return local;
+  const s = pdfUrl.trim();
+  if (!/^https:\/\//i.test(s)) return null;
+  try {
+    const res = await fetch(s, { redirect: "follow", signal: AbortSignal.timeout(45_000) });
+    if (!res.ok) return null;
+    const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+    if (!ct.includes("pdf") && !ct.includes("octet-stream") && !ct.includes("application/x-download")) {
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > REMOTE_RECEIPT_MAX_BYTES) return null;
+    return buf;
+  } catch {
+    return null;
+  }
+}
+
 export function sanitizeReceiptDownloadFilename(base: string): string {
   const cleaned = base.replace(/[^\w.\-]+/g, "_");
   return cleaned.endsWith(".pdf") ? cleaned : `${cleaned}.pdf`;

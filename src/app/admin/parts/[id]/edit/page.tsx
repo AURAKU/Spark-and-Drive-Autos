@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { deletePart } from "@/actions/parts";
 import { PageHeading } from "@/components/typography/page-headings";
 import { PartGalleryPanel } from "@/components/admin/part-gallery-panel";
+import { canonicalRmbToAdminAmount, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 
 import { PartForm } from "../../part-form";
@@ -26,6 +27,17 @@ export default async function AdminEditPartPage(props: Props) {
     select: { id: true, name: true },
   });
   if (!part) notFound();
+  const settings = await getGlobalCurrencySettings();
+  const fx = {
+    usdToRmb: Number(settings.usdToRmb),
+    rmbToGhs: Number(settings.rmbToGhs),
+    usdToGhs: Number(settings.usdToGhs),
+  };
+  const sellCur = parseDisplayCurrency(part.sellingPriceCurrency);
+  const supCur = parseDisplayCurrency(part.supplierCostCurrency);
+  const sellingDisplayAmount = canonicalRmbToAdminAmount(Number(part.basePriceRmb), sellCur, fx);
+  const supplierDisplayAmount =
+    part.supplierCostRmb != null ? canonicalRmbToAdminAmount(Number(part.supplierCostRmb), supCur, fx) : null;
   const partForForm = {
     id: part.id,
     slug: part.slug,
@@ -36,9 +48,23 @@ export default async function AdminEditPartPage(props: Props) {
     categoryId: part.categoryId,
     origin: part.origin,
     sku: part.sku,
+    partNumber: part.partNumber,
+    oemNumber: part.oemNumber,
+    compatibleMake: part.compatibleMake,
+    compatibleModel: part.compatibleModel,
+    compatibleYearNote: part.compatibleYearNote,
+    brand: part.brand,
+    condition: part.condition,
+    warehouseLocation: part.warehouseLocation,
+    countryOfOrigin: part.countryOfOrigin,
+    internalNotes: part.internalNotes,
     basePriceRmb: Number(part.basePriceRmb),
     supplierCostRmb: part.supplierCostRmb != null ? Number(part.supplierCostRmb) : null,
     priceGhs: Number(part.priceGhs),
+    sellingPriceCurrency: sellCur,
+    supplierCostCurrency: supCur,
+    sellingDisplayAmount,
+    supplierDisplayAmount,
     stockQty: part.stockQty,
     stockStatus: part.stockStatus,
     stockStatusLocked: part.stockStatusLocked,

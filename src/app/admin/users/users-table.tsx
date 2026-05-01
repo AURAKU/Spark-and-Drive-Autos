@@ -314,6 +314,26 @@ export function UsersTable({
                                 {u.partsFinderMembershipStatus === "ACTIVE" ? "PF off" : "PF on"}
                               </Button>
                             </form>
+                            {(u.role === UserRole.CUSTOMER || canManagePrivileged) ? (
+                              <form
+                                action={deleteAction}
+                                className="inline-flex"
+                                onSubmit={(e) => {
+                                  if (
+                                    !window.confirm(
+                                      "Permanently delete this user? Their login, profile, wallet, chats, receipts, and other user-scoped data will be removed. This cannot be undone.",
+                                    )
+                                  ) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                              >
+                                <input type="hidden" name="userId" value={u.id} />
+                                <Button type="submit" size="sm" variant="destructive" className="h-8 text-xs">
+                                  Delete account
+                                </Button>
+                              </form>
+                            ) : null}
                           </div>
                         ) : (
                           <p className="text-[10px] text-muted-foreground">Super admin — limited actions.</p>
@@ -346,12 +366,6 @@ export function UsersTable({
                               />
                               <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
                                 Wallet
-                              </Button>
-                            </form>
-                            <form action={deleteAction} className="inline-flex justify-end">
-                              <input type="hidden" name="userId" value={u.id} />
-                              <Button type="submit" size="sm" variant="destructive" className="h-8 text-xs">
-                                Delete
                               </Button>
                             </form>
                           </div>

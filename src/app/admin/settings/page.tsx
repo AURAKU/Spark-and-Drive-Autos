@@ -634,6 +634,9 @@ export default async function AdminApiProvidersPage() {
           <a className="text-[var(--brand)] hover:underline" href="/api/admin/providers/paystack/readiness" target="_blank" rel="noreferrer">
             Paystack readiness JSON →
           </a>
+          <a className="block text-[var(--brand)] hover:underline" href="/admin/health">
+            System health dashboard →
+          </a>
           <a className="block text-[var(--brand)] hover:underline" href="/api/admin/health/readiness" target="_blank" rel="noreferrer">
             Full deployment readiness health JSON →
           </a>

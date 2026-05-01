@@ -90,8 +90,18 @@ export async function GET() {
     lastBackupType: lastBackup?.type ?? null,
   };
 
+  /** Core launch path: DB + Paystack + storage + legal. Optional integrations (Redis, Serper, etc.) are reported but do not fail `ok`. */
+  const criticalOk =
+    checks.databaseConnection &&
+    checks.paystackReady &&
+    checks.storageProviderPresent &&
+    checks.activeLegalPolicyExists;
+  const fullStackReady = Object.values(checks).every(Boolean);
+
   return NextResponse.json({
-    ok: Object.values(checks).every(Boolean),
+    ok: criticalOk,
+    criticalOk,
+    fullStackReady,
     checks,
   });
 }

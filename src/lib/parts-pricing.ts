@@ -1,6 +1,6 @@
 import type { GlobalCurrencySettings, PartOrigin } from "@prisma/client";
 import type { DisplayCurrency, FxRatesInput } from "@/lib/currency";
-import { convertRmbTo, getCarDisplayPrice } from "@/lib/currency";
+import { adminAmountToCanonicalRmb, convertRmbTo, getCarDisplayPrice } from "@/lib/currency";
 
 export function allowedPartCurrencies(origin: PartOrigin): DisplayCurrency[] {
   if (origin === "GHANA") return ["GHS"];
@@ -36,6 +36,20 @@ export function resolvePartListPricingFromForm(
   }
   const rmb = input.basePriceRmb ?? 0;
   return { basePriceRmb: rmb, priceGhs: getCarDisplayPrice(rmb, "GHS", fx) };
+}
+
+/** Admin list price: any of GHS / USD / CNY → canonical `basePriceRmb` + integer reference `priceGhs`. */
+export function resolvePartListPriceFromAdminInput(
+  input: { sellingPriceAmount: number; sellingPriceCurrency: DisplayCurrency },
+  settings: Pick<GlobalCurrencySettings, "usdToRmb" | "rmbToGhs" | "usdToGhs">,
+): { basePriceRmb: number; priceGhs: number } {
+  const fx: FxRatesInput = {
+    usdToRmb: Number(settings.usdToRmb),
+    rmbToGhs: Number(settings.rmbToGhs),
+    usdToGhs: Number(settings.usdToGhs),
+  };
+  const basePriceRmb = adminAmountToCanonicalRmb(input.sellingPriceAmount, input.sellingPriceCurrency, fx);
+  return { basePriceRmb, priceGhs: Math.round(getCarDisplayPrice(basePriceRmb, "GHS", fx)) };
 }
 
 /**

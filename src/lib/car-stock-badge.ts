@@ -19,8 +19,9 @@ export function getVehicleStockBadgeForDisplay(
   if (car.availabilityStatus === AvailabilityStatus.AVAILABLE) {
     return { label: "Available", variant: "available" };
   }
+  const raw = car.availabilityStatus;
   return {
-    label: car.availabilityStatus.replaceAll("_", " "),
+    label: (raw != null ? String(raw) : "Unknown").replaceAll("_", " "),
     variant: "other",
   };
 }

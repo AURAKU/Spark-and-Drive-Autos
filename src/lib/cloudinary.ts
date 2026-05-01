@@ -7,6 +7,8 @@ const ALLOWED_FOLDER_PREFIXES = [
   "sda/profile/",
   "sda/admin/",
   "sda/verification/",
+  /** Per-user Ghana Card and profile uploads (see profile-id-signature, uploads/sign). */
+  "sda/users/",
 ] as const;
 
 function assertSafeFolder(folder: string) {
@@ -55,6 +57,52 @@ export type PaymentProofUploadKind = "image" | "pdf";
  * Signed direct upload for payment proof: images (with on-upload optimization) or raw PDF.
  * Client must POST the same params to Cloudinary that were included in the signature.
  */
+const GHANA_CARD_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+/**
+ * Ghana Card / ID upload from customer dashboard: image or PDF scan.
+ * Client must POST the same signed params (folder, timestamp, signature, api_key, file) to `uploadUrl`.
+ */
+export async function createGhanaCardClientUploadSignature(params: { folder: string; mimeType: string }) {
+  assertSafeFolder(params.folder);
+  if (!configureCloudinary()) throw new Error("Cloudinary is not configured");
+  const mime = params.mimeType.trim().toLowerCase();
+  const isPdf = mime === "application/pdf";
+  const isImage = GHANA_CARD_IMAGE_MIMES.has(mime);
+  if (!isPdf && !isImage) {
+    throw new Error("Unsupported file type for Ghana Card upload.");
+  }
+  const timestamp = Math.round(Date.now() / 1000);
+  const folder = params.folder;
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME!;
+
+  if (isPdf) {
+    const toSign: Record<string, string | number> = { folder, timestamp };
+    const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
+    return {
+      timestamp,
+      signature,
+      cloudName: cloud,
+      apiKey: process.env.CLOUDINARY_API_KEY!,
+      folder,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/raw/upload`,
+      resourceType: "raw" as const,
+    };
+  }
+
+  const toSign: Record<string, string | number> = { folder, timestamp };
+  const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
+  return {
+    timestamp,
+    signature,
+    cloudName: cloud,
+    apiKey: process.env.CLOUDINARY_API_KEY!,
+    folder,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/image/upload`,
+    resourceType: "image" as const,
+  };
+}
+
 export async function createPaymentProofUploadSignature(params: {
   folder: string;
   kind: PaymentProofUploadKind;

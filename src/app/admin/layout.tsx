@@ -10,6 +10,7 @@ import { safeAuth } from "@/lib/safe-auth";
 
 const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin", label: "Command Center" },
+  { href: "/admin/health", label: "System health" },
   { href: "/admin/users", label: "All Users" },
   { href: "/admin/cars", label: "Cars Inventory" },
   { href: "/admin/parts", label: "Parts Management" },

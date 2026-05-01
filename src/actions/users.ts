@@ -66,6 +66,33 @@ function isPrivilegedRole(role: UserRole) {
   return role !== UserRole.CUSTOMER;
 }
 
+/** Clears rows that block `User` delete (Restrict FKs) and strongly user-scoped data before removing the account. */
+async function purgeUserRelatedRecordsBeforeDelete(tx: Prisma.TransactionClient, userId: string) {
+  await tx.paymentDispute.deleteMany({ where: { flaggedById: userId } });
+
+  const disputeCases = await tx.disputeCase.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+  const disputeCaseIds = disputeCases.map((c) => c.id);
+  if (disputeCaseIds.length > 0) {
+    await tx.disputeEvidence.deleteMany({ where: { disputeId: { in: disputeCaseIds } } });
+    await tx.disputeTimelineEvent.deleteMany({ where: { disputeId: { in: disputeCaseIds } } });
+    await tx.disputeActionLog.deleteMany({ where: { disputeId: { in: disputeCaseIds } } });
+    await tx.disputeCase.deleteMany({ where: { id: { in: disputeCaseIds } } });
+  }
+
+  await tx.generatedReceipt.deleteMany({ where: { userId } });
+
+  await tx.chatThread.deleteMany({ where: { customerId: userId } });
+
+  await tx.securityObservation.deleteMany({ where: { userId } });
+  await tx.auditLog.deleteMany({ where: { actorId: userId } });
+  await tx.legalAuditLog.deleteMany({
+    where: { OR: [{ actorId: userId }, { targetUserId: userId }] },
+  });
+}
+
 export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormData): Promise<UpdateUserRoleState> {
   try {
     const session = await requireAdmin();
@@ -285,23 +312,42 @@ export async function createUserAdmin(_prev: AdminUserActionState, formData: For
 
 export async function deleteUserAdmin(_prev: AdminUserActionState, formData: FormData): Promise<AdminUserActionState> {
   try {
-    const session = await requireSuperAdmin();
+    const session = await requireAdmin();
     const parsed = deleteUserSchema.safeParse({ userId: formData.get("userId") });
     if (!parsed.success) return { error: "Invalid user id." };
     if (parsed.data.userId === session.user.id) return { error: "You cannot delete your own account." };
 
     const target = await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { role: true } });
     if (!target) return { error: "User not found." };
-    if (target.role === "SUPER_ADMIN") return { error: "SUPER_ADMIN accounts are permanent and cannot be deleted." };
+    if (target.role === UserRole.SUPER_ADMIN) return { error: "SUPER_ADMIN accounts are permanent and cannot be deleted." };
+    if (isPrivilegedRole(target.role) && !isSuperAdminSession(session.user.role)) {
+      return { error: "Only super admins can delete privileged staff accounts." };
+    }
 
-    await prisma.user.delete({ where: { id: parsed.data.userId } });
-    await auditLog(session.user.id, "user.delete", "User", parsed.data.userId, {});
+    const deletedId = parsed.data.userId;
+    await prisma.$transaction(async (tx) => {
+      await purgeUserRelatedRecordsBeforeDelete(tx, deletedId);
+      await tx.user.delete({ where: { id: deletedId } });
+    });
+
+    await auditLog(session.user.id, "user.delete", "User", deletedId, {});
+    await recordSecurityObservation({
+      severity: "HIGH",
+      channel: "ADMIN",
+      title: "Administrator deleted user account",
+      detail: `Removed account ${deletedId}`,
+      metadataJson: { actorId: session.user.id, deletedUserId: deletedId },
+    });
     revalidateAdminUsersSurface();
+    revalidatePath("/admin/comms", "page");
     return { ok: true };
   } catch (e) {
-    if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Super admin only" };
+    if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Admin access required" };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
-      return { error: "Cannot delete this user yet because related records still exist. Deactivate/suspend instead." };
+      return {
+        error:
+          "Cannot delete this user because related records still reference this account. Contact engineering with the user id.",
+      };
     }
     return { error: e instanceof Error ? e.message : "Could not delete user." };
   }

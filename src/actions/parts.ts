@@ -9,8 +9,8 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { linesToList, mergePartMetaWithOptions } from "@/lib/part-variant-options";
 import { detectLikelyPartDuplicates } from "@/lib/duplicate-detection";
-import { getGlobalCurrencySettings } from "@/lib/currency";
-import { resolvePartListPricingFromForm } from "@/lib/parts-pricing";
+import { adminAmountToCanonicalRmb, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
+import { resolvePartListPriceFromAdminInput } from "@/lib/parts-pricing";
 import { auditLog } from "@/lib/leads";
 import { ensureChinaPreOrderDeliveryOptions } from "@/lib/part-china-preorder-delivery";
 import { maybeNotifyAdminsGhanaLowStock } from "@/lib/ghana-low-stock";
@@ -46,21 +46,34 @@ const partBaseSchema = z.object({
   categoryId: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().cuid().optional()),
   origin: z.nativeEnum(PartOrigin).default(PartOrigin.GHANA),
   sku: optionalStr(120),
-  basePriceRmb: z.preprocess((v) => {
+  partNumber: optionalStr(120),
+  oemNumber: optionalStr(120),
+  compatibleMake: optionalStr(80),
+  compatibleModel: optionalStr(80),
+  compatibleYearNote: optionalStr(80),
+  brand: optionalStr(80),
+  condition: optionalStr(120),
+  warehouseLocation: optionalStr(200),
+  countryOfOrigin: optionalStr(80),
+  internalNotes: optionalStr(20000),
+  sellingPriceAmount: z.preprocess((v) => {
+    if (v === "" || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.number().nonnegative()),
+  sellingPriceCurrency: z.preprocess(
+    (v) => parseDisplayCurrency(v === "" || v == null ? undefined : typeof v === "string" ? v : undefined),
+    z.enum(["GHS", "USD", "CNY"]),
+  ),
+  supplierCostAmount: z.preprocess((v) => {
     if (v === "" || v === undefined) return undefined;
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   }, z.number().nonnegative().optional()),
-  basePriceGhs: z.preprocess((v) => {
-    if (v === "" || v === undefined) return undefined;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
-  }, z.number().nonnegative().optional()),
-  supplierCostRmb: z.preprocess((v) => {
-    if (v === "" || v === undefined) return undefined;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
-  }, z.number().nonnegative().optional()),
+  supplierCostCurrency: z.preprocess(
+    (v) => parseDisplayCurrency(v === "" || v == null ? undefined : typeof v === "string" ? v : undefined),
+    z.enum(["GHS", "USD", "CNY"]),
+  ),
   stockQty: z.coerce.number().int().min(0),
   stockStatus: z.nativeEnum(PartStockStatus),
   stockStatusLocked: z.preprocess((v) => v === "on" || v === "true", z.boolean()).optional().default(false),
@@ -80,22 +93,12 @@ const partBaseSchema = z.object({
 });
 
 const partBaseSchemaWithOriginPricing = partBaseSchema.superRefine((data, ctx) => {
-  if (data.origin === PartOrigin.GHANA) {
-    if (data.basePriceGhs === undefined || data.basePriceGhs === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Base selling price (GHS) is required",
-        path: ["basePriceGhs"],
-      });
-    }
-  } else if (data.origin === PartOrigin.CHINA) {
-    if (data.basePriceRmb === undefined || data.basePriceRmb === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Base selling price (RMB) is required",
-        path: ["basePriceRmb"],
-      });
-    }
+  if (data.sellingPriceAmount === undefined || data.sellingPriceAmount === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Selling price amount is required",
+      path: ["sellingPriceAmount"],
+    });
   }
 });
 
@@ -133,13 +136,9 @@ function enhancePartPricingIssues(flat: {
     fieldErrors: { ...flat.fieldErrors },
     formErrors: [...flat.formErrors],
   };
-  const missingGhs = next.fieldErrors.basePriceGhs?.some((m: string) => m.includes("required")) ?? false;
-  const missingRmb = next.fieldErrors.basePriceRmb?.some((m: string) => m.includes("required")) ?? false;
-  if (missingGhs) {
-    next.formErrors.push("For Ghana-origin parts, fill Base selling price (GHS / cedis).");
-  }
-  if (missingRmb) {
-    next.formErrors.push("For China-origin parts, fill Base selling price (RMB only).");
+  const missingList = next.fieldErrors.sellingPriceAmount?.some((m: string) => m.includes("required")) ?? false;
+  if (missingList) {
+    next.formErrors.push("Enter a selling price amount and currency.");
   }
   return next;
 }
@@ -162,11 +161,19 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
     };
     const nextMeta = mergePartMetaWithOptions(null, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
-    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPricingFromForm(
-      d.origin,
-      { basePriceRmb: d.basePriceRmb, basePriceGhs: d.basePriceGhs },
+    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPriceFromAdminInput(
+      { sellingPriceAmount: d.sellingPriceAmount, sellingPriceCurrency: d.sellingPriceCurrency },
       settings,
     );
+    const fx = {
+      usdToRmb: Number(settings.usdToRmb),
+      rmbToGhs: Number(settings.rmbToGhs),
+      usdToGhs: Number(settings.usdToGhs),
+    };
+    const supplierCostRmbNum =
+      d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+        ? adminAmountToCanonicalRmb(d.supplierCostAmount, d.supplierCostCurrency, fx)
+        : null;
     const categoryRef =
       d.categoryId != null
         ? await prisma.partCategory.findUnique({ where: { id: d.categoryId }, select: { id: true, name: true } })
@@ -192,10 +199,22 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
         categoryId: categoryRef?.id ?? null,
         origin: d.origin,
         sku: d.sku ?? null,
+        partNumber: d.partNumber?.trim() || null,
+        oemNumber: d.oemNumber?.trim() || null,
+        compatibleMake: d.compatibleMake?.trim() || null,
+        compatibleModel: d.compatibleModel?.trim() || null,
+        compatibleYearNote: d.compatibleYearNote?.trim() || null,
+        brand: d.brand?.trim() || null,
+        condition: d.condition?.trim() || null,
+        warehouseLocation: d.warehouseLocation?.trim() || null,
+        countryOfOrigin: d.countryOfOrigin?.trim() || null,
+        internalNotes: d.internalNotes?.trim() || null,
+        sellingPriceCurrency: d.sellingPriceCurrency,
+        supplierCostCurrency: d.supplierCostCurrency,
         basePriceRmb: new Prisma.Decimal(basePriceRmbNum),
         supplierCostRmb:
-          d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
-            ? new Prisma.Decimal(d.supplierCostRmb)
+          supplierCostRmbNum != null && Number.isFinite(supplierCostRmbNum)
+            ? new Prisma.Decimal(supplierCostRmbNum)
             : null,
         priceGhs: new Prisma.Decimal(priceGhsNum),
         stockQty: d.stockQty,
@@ -285,11 +304,19 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
     };
     const nextMeta = mergePartMetaWithOptions(existing.metaJson, optionLists) as object;
     const settings = await getGlobalCurrencySettings();
-    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPricingFromForm(
-      d.origin,
-      { basePriceRmb: d.basePriceRmb, basePriceGhs: d.basePriceGhs },
+    const { basePriceRmb: basePriceRmbNum, priceGhs: priceGhsNum } = resolvePartListPriceFromAdminInput(
+      { sellingPriceAmount: d.sellingPriceAmount, sellingPriceCurrency: d.sellingPriceCurrency },
       settings,
     );
+    const fx = {
+      usdToRmb: Number(settings.usdToRmb),
+      rmbToGhs: Number(settings.rmbToGhs),
+      usdToGhs: Number(settings.usdToGhs),
+    };
+    const supplierCostRmbNum =
+      d.supplierCostAmount != null && Number.isFinite(d.supplierCostAmount) && d.supplierCostAmount > 0
+        ? adminAmountToCanonicalRmb(d.supplierCostAmount, d.supplierCostCurrency, fx)
+        : null;
     const categoryRef =
       d.categoryId != null
         ? await prisma.partCategory.findUnique({ where: { id: d.categoryId }, select: { id: true, name: true } })
@@ -314,10 +341,22 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
         categoryId: categoryRef?.id ?? null,
         origin: d.origin,
         sku: d.sku ?? null,
+        partNumber: d.partNumber?.trim() || null,
+        oemNumber: d.oemNumber?.trim() || null,
+        compatibleMake: d.compatibleMake?.trim() || null,
+        compatibleModel: d.compatibleModel?.trim() || null,
+        compatibleYearNote: d.compatibleYearNote?.trim() || null,
+        brand: d.brand?.trim() || null,
+        condition: d.condition?.trim() || null,
+        warehouseLocation: d.warehouseLocation?.trim() || null,
+        countryOfOrigin: d.countryOfOrigin?.trim() || null,
+        internalNotes: d.internalNotes?.trim() || null,
+        sellingPriceCurrency: d.sellingPriceCurrency,
+        supplierCostCurrency: d.supplierCostCurrency,
         basePriceRmb: new Prisma.Decimal(basePriceRmbNum),
         supplierCostRmb:
-          d.supplierCostRmb != null && Number.isFinite(d.supplierCostRmb)
-            ? new Prisma.Decimal(d.supplierCostRmb)
+          supplierCostRmbNum != null && Number.isFinite(supplierCostRmbNum)
+            ? new Prisma.Decimal(supplierCostRmbNum)
             : null,
         priceGhs: new Prisma.Decimal(priceGhsNum),
         stockQty: d.stockQty,

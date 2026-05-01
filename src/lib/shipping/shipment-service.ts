@@ -23,6 +23,13 @@ export type ChinaShipmentLeg = {
   chinaDeliveryMode?: DeliveryMode;
   /** "Pre-order (China)" when deferred; "China stock" when paid with order */
   legLabel: string;
+  /**
+   * China in-stock MVP: customer pays parts subtotal only at checkout; intl fee quoted for ops and collected later.
+   * `deliveryMode` + `chinaShippingChoice` must still be set (recorded on shipment).
+   */
+  pendingIntlFeeAtCheckout?: boolean;
+  /** Reference quote (GHS) stored on shipment internal notes for admin — not charged at checkout. */
+  quotedIntlFeeGhs?: number;
 };
 
 /** Do not create vehicle shipment rows for unpaid / cancelled orders (avoids fake tracking). */
@@ -197,6 +204,12 @@ export async function createShipmentsForPaidPartsOrder(
   })();
   for (const leg of resolvedLegs) {
     if (leg.deferred) continue;
+    if (leg.pendingIntlFeeAtCheckout) {
+      if (leg.chinaShippingChoice == null || leg.chinaDeliveryMode == null) {
+        throw new Error("CHINA_SHIPPING_REQUIRED");
+      }
+      continue;
+    }
     if (
       leg.chinaShippingChoice == null ||
       leg.chinaFeeGhs == null ||
@@ -253,6 +266,35 @@ export async function createShipmentsForPaidPartsOrder(
           stage: "PENDING_SHIPPING_SETUP",
           title: "International shipping — payment pending",
           description: `(${leg.legLabel}) Pay this leg separately: sea, express air, or standard air—rates from admin. Not included in the parts subtotal.`,
+          visibleToCustomer: true,
+        },
+      });
+    } else if (leg.pendingIntlFeeAtCheckout) {
+      const modeLabel = leg.chinaShippingChoice === "SEA" ? "Sea" : "Air";
+      const quoted =
+        leg.quotedIntlFeeGhs != null && Number.isFinite(leg.quotedIntlFeeGhs)
+          ? ` Reference quote (not charged at checkout): GHS ${leg.quotedIntlFeeGhs.toFixed(2)}.`
+          : "";
+      const s = await tx.shipment.create({
+        data: {
+          orderId: params.orderId,
+          kind: "PARTS_CHINA",
+          trackingNumber: buildTrackingNumber("PARTS_CHINA"),
+          deliveryMode: leg.chinaDeliveryMode!,
+          feeAmount: null,
+          feeCurrency: "GHS",
+          deferredChinaShipping: true,
+          estimatedDuration: leg.chinaEta ?? "International shipping fee pending — team will confirm.",
+          internalNotes: `Checkout-selected ${modeLabel} (${leg.chinaShippingChoice}). Product cost paid only.${quoted}`,
+          currentStage: "PENDING_SHIPPING_SETUP",
+        },
+      });
+      await tx.shipmentStatusEvent.create({
+        data: {
+          shipmentId: s.id,
+          stage: "PENDING_SHIPPING_SETUP",
+          title: "International shipping — fee pending",
+          description: `(${leg.legLabel}) You chose ${modeLabel} freight. The international leg is not included in your parts payment — operations will confirm the shipping fee for separate payment.`,
           visibleToCustomer: true,
         },
       });

@@ -58,7 +58,7 @@ export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
             {car.brand} · {car.year}
           </p>
           <h3 className="line-clamp-2 text-base font-semibold text-foreground dark:text-white">{car.title}</h3>
-          <p className="text-sm text-muted-foreground">{car.location}</p>
+          <p className="text-sm text-muted-foreground">{car.location?.trim() ? car.location : "—"}</p>
           <p className="text-lg font-semibold text-[var(--brand)]">
             {formatConverted(displayAmount, displayCurrency)}
           </p>

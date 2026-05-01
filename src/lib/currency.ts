@@ -124,6 +124,43 @@ export function getCarDisplayPrice(basePriceRmb: number, target: DisplayCurrency
   return convertRmbTo(basePriceRmb, target, settings);
 }
 
+/**
+ * Convert an admin-entered vehicle list price or supplier cost into canonical RMB
+ * using the same rules as `ghsAmountToCanonicalRmb` / `usdAmountToCanonicalRmb` in admin autofill.
+ */
+export function adminAmountToCanonicalRmb(amount: number, currency: DisplayCurrency, s: FxRatesInput): number {
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  if (currency === "CNY") return amount;
+  const rmbToGhs = Number(s.rmbToGhs);
+  if (currency === "GHS") {
+    if (!Number.isFinite(rmbToGhs) || rmbToGhs <= 0) return 0;
+    return amount * rmbToGhs;
+  }
+  const usdToRmb = Number(s.usdToRmb);
+  if (currency === "USD") {
+    if (!Number.isFinite(usdToRmb) || usdToRmb <= 0) return 0;
+    return amount * usdToRmb;
+  }
+  return 0;
+}
+
+/** Inverse of `adminAmountToCanonicalRmb` for edit forms (approximate for display inputs). */
+export function canonicalRmbToAdminAmount(rmb: number, currency: DisplayCurrency, s: FxRatesInput): number {
+  if (!Number.isFinite(rmb) || rmb < 0) return 0;
+  if (currency === "CNY") return rmb;
+  const rmbToGhs = Number(s.rmbToGhs);
+  if (currency === "GHS") {
+    if (!Number.isFinite(rmbToGhs) || rmbToGhs <= 0) return Math.round(rmb / DEFAULT_SETTINGS.rmbToGhs);
+    return rmb / rmbToGhs;
+  }
+  const usdToRmb = Number(s.usdToRmb);
+  if (currency === "USD") {
+    if (!Number.isFinite(usdToRmb) || usdToRmb <= 0) return rmb / DEFAULT_SETTINGS.usdToRmb;
+    return rmb / usdToRmb;
+  }
+  return rmb;
+}
+
 export function formatConverted(amount: number, currency: DisplayCurrency): string {
   const code = currency === "CNY" ? "CNY" : currency;
   try {

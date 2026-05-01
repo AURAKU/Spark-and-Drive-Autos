@@ -23,6 +23,8 @@ function carSelect() {
     sourceType: true,
     availabilityStatus: true,
     basePriceRmb: true,
+    basePriceAmount: true,
+    basePriceCurrency: true,
     price: true,
     currency: true,
     listingState: true,
@@ -33,6 +35,8 @@ function carSelect() {
     shortDescription: true,
     seaShippingFeeGhs: true,
     supplierCostRmb: true,
+    supplierCostAmount: true,
+    supplierCostCurrency: true,
     coverImageUrl: true,
   } satisfies Prisma.CarSelect;
 }
