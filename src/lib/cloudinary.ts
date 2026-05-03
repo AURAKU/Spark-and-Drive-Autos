@@ -75,21 +75,7 @@ export async function createGhanaCardClientUploadSignature(params: { folder: str
   const timestamp = Math.round(Date.now() / 1000);
   const folder = params.folder;
   const cloud = process.env.CLOUDINARY_CLOUD_NAME!;
-
-  if (isPdf) {
-    const toSign: Record<string, string | number> = { folder, timestamp };
-    const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
-    return {
-      timestamp,
-      signature,
-      cloudName: cloud,
-      apiKey: process.env.CLOUDINARY_API_KEY!,
-      folder,
-      uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/raw/upload`,
-      resourceType: "raw" as const,
-    };
-  }
-
+  /** `resource_type` is in the URL only — do not include it in `api_sign_request` (Cloudinary auth rules). */
   const toSign: Record<string, string | number> = { folder, timestamp };
   const signature = cloudinary.utils.api_sign_request(toSign, process.env.CLOUDINARY_API_SECRET!);
   return {
@@ -98,8 +84,7 @@ export async function createGhanaCardClientUploadSignature(params: { folder: str
     cloudName: cloud,
     apiKey: process.env.CLOUDINARY_API_KEY!,
     folder,
-    uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/image/upload`,
-    resourceType: "image" as const,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${cloud}/auto/upload`,
   };
 }
 

@@ -3,9 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ACCEPTANCE_CONTEXT, recordUserContractAcceptance, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
-import { createUserLegalAcceptanceGuard } from "@/lib/legal-acceptance-guard";
-import { requireContract, requirePolicy } from "@/lib/legal/guards";
-import { assertSourcingRequestLegal, getActiveRiskPolicyRow, getActiveSourcingContractRow, POLICY_KEYS } from "@/lib/legal-enforcement";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
+import { assertSourcingRequestLegal, getActiveRiskPolicyRow, getActiveSourcingContractRow } from "@/lib/legal-enforcement";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
 import { getUserRiskTags } from "@/lib/legal-risk-controls";
 import { logRiskEvent } from "@/lib/risk-engine";
@@ -15,7 +14,6 @@ import { prisma } from "@/lib/prisma";
 import { rateLimitForm } from "@/lib/rate-limit";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { requireVerification } from "@/lib/identity-verification";
-import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   guestName: z.string().min(2).max(120),
@@ -70,14 +68,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id || !session.user.email) {
     return NextResponse.json({ error: "Sign in to submit a vehicle request." }, { status: 401 });
   }
-  const legalGuard = await createUserLegalAcceptanceGuard(session.user.id);
-  const hasPlatformTerms = await legalGuard.hasAccepted(POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
-  if (!hasPlatformTerms) {
-    return NextResponse.json(
-      { error: "Accept the latest platform terms and privacy policy before submitting sourcing requests." },
-      { status: 409 },
-    );
-  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
   const risk = await getUserRiskTags(session.user.id);
   if (risk.includes("FRAUD_RISK_REVIEW") || risk.includes("MANUAL_REVIEW_REQUIRED")) {
     await logRiskEvent({
@@ -114,59 +106,6 @@ export async function POST(req: Request) {
 
   const d = parsed.data;
   const email = session.user.email.toLowerCase();
-
-  if (!d.sourcingRiskAccepted || !d.sourcingContractAccepted) {
-    return NextResponse.json(
-      { error: "Accept the sourcing risk acknowledgement and sourcing contract to submit a request." },
-      { status: 400 },
-    );
-  }
-  try {
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
-      context: "SOURCING",
-      ipAddress: ip === "unknown" ? null : ip,
-      userAgent,
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.VEHICLE_SOURCING_CONTRACT,
-      context: "SOURCING",
-      ipAddress: ip === "unknown" ? null : ip,
-      userAgent,
-    });
-  } catch (error) {
-    if (error instanceof PolicyAcceptanceRequiredError) {
-      return NextResponse.json(
-        {
-          error: "You need to review and accept our updated terms before continuing.",
-          code: "REQUIRE_ACCEPTANCE",
-          policyKey: error.policyKey,
-          version: error.version,
-          title: error.title,
-          effectiveDate: error.effectiveDate,
-          context: error.context,
-        },
-        { status: 409 },
-      );
-    }
-    throw error;
-  }
-
-  try {
-    await requirePolicy(session.user.id, POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT);
-    await requireContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "";
-    if (msg === "POLICY_NOT_ACCEPTED") {
-      return NextResponse.json({ error: "Sourcing risk acknowledgement must be accepted before submission." }, { status: 409 });
-    }
-    if (msg === "CONTRACT_NOT_ACCEPTED") {
-      return NextResponse.json({ error: "Sourcing agreement must be accepted before submission." }, { status: 409 });
-    }
-    return NextResponse.json({ error: "Required legal acceptance is missing." }, { status: 409 });
-  }
 
   const legalOk = await assertSourcingRequestLegal({
     riskAckVersion: d.sourcingRiskVersion,

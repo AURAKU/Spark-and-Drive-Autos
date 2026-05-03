@@ -12,7 +12,7 @@ const bodySchema = z.object({
 /**
  * Signed Cloudinary upload for authenticated users (Ghana Card / ID).
  * POST JSON: { purpose?: "ghana-card", mimeType?: string }
- * Returns: timestamp, signature, apiKey, cloudName, folder, uploadUrl, resourceType
+ * Returns: timestamp, signature, apiKey, cloudName, folder, uploadUrl (…/auto/upload for JPG/PNG/WebP/PDF)
  *
  * Client must POST multipart to uploadUrl with: file, api_key, timestamp, signature, folder
  * (same fields that were included in the signature — see Cloudinary unsigned/signed upload docs).

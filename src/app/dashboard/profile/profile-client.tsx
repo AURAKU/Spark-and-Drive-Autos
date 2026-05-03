@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +36,17 @@ type LegalStatusRow = {
   accepted: boolean;
 };
 
+const PUBLIC_LEGAL_LINKS = [
+  { href: "/terms", label: "Terms of Service" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/reservation-policy", label: "Reservation Policy" },
+  { href: "/refund-policy", label: "Refund Policy" },
+  { href: "/payment-dispute-policy", label: "Payment Dispute Policy" },
+  { href: "/sourcing-policy", label: "Sourcing Policy" },
+  { href: "/legal/sourcing-agreement", label: "Car purchase / sourcing agreement" },
+  { href: "/legal/parts-finder", label: "Parts Finder & storefront legal" },
+] as const;
+
 export function ProfileClient({
   userId,
   email,
@@ -43,6 +55,7 @@ export function ProfileClient({
   walletBalance,
   addresses,
   legalRows,
+  legalFocus = false,
 }: {
   userId: string | null;
   email: string | null | undefined;
@@ -51,6 +64,7 @@ export function ProfileClient({
   walletBalance: number;
   addresses: AddressRow[];
   legalRows: LegalStatusRow[];
+  legalFocus?: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -72,6 +86,16 @@ export function ProfileClient({
     isDefault: addresses.length === 0,
   });
   const pendingLegalCount = legalRows.filter((r) => !r.accepted).length;
+  const [legalConfirm, setLegalConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!legalFocus) return;
+    const t = window.setTimeout(() => {
+      document.getElementById("legal-requirements")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => window.clearTimeout(t);
+  }, [legalFocus]);
+
   useEffect(() => {
     if (!walletRef) return;
     let done = false;
@@ -168,6 +192,10 @@ export function ProfileClient({
   }
 
   async function acceptAllLegal() {
+    if (pendingLegalCount > 0 && !legalConfirm) {
+      toast.error('Confirm that you have read the policies and check "I accept all legal requirements" first.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/legal/profile/accept-all", { method: "POST" });
@@ -177,6 +205,7 @@ export function ProfileClient({
       }
       const acceptedPolicies = Number(data.acceptedPolicies ?? 0);
       const acceptedContracts = Number(data.acceptedContracts ?? 0);
+      setLegalConfirm(false);
       toast.success(
         acceptedPolicies + acceptedContracts > 0
           ? `Accepted ${acceptedPolicies} policy update(s) and ${acceptedContracts} contract update(s).`
@@ -214,19 +243,53 @@ export function ProfileClient({
         <p className="mt-1 text-xs text-zinc-500">Email and phone are fixed to this account and cannot be changed here.</p>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="text-lg font-semibold text-white">Legal acceptances</h2>
+      <div id="legal-requirements" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-lg font-semibold text-white">Legal requirements</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Accept legal updates once here. After acceptance, checkout and payment flows continue without repeated checkboxes.
-          If admins publish a new version, it appears here as pending.
+          Review the documents below, then accept once here. Vehicle checkout, reservation deposits, online and offline
+          payments, and other protected flows stay unlocked until administrators publish new versions (shown as pending).
         </p>
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Reference documents</p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm text-[var(--brand)]">
+            {PUBLIC_LEGAL_LINKS.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="hover:underline" target="_blank" rel="noreferrer">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pendingLegalCount === 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-200"}`}>
             {pendingLegalCount === 0 ? "All legal requirements accepted" : `${pendingLegalCount} pending update${pendingLegalCount > 1 ? "s" : ""}`}
           </span>
-          <Button type="button" onClick={() => void acceptAllLegal()} disabled={loading || pendingLegalCount === 0}>
-            {loading ? "Saving..." : "Accept all pending legal updates"}
+        </div>
+        {pendingLegalCount > 0 ? (
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              checked={legalConfirm}
+              onChange={(e) => setLegalConfirm(e.target.checked)}
+              className="mt-1 size-4 shrink-0 rounded border-white/20 accent-[var(--brand)]"
+            />
+            <span>I have read the applicable policies and contracts and accept all legal requirements for my account.</span>
+          </label>
+        ) : null}
+        <div className="mt-4">
+          <Button
+            type="button"
+            onClick={() => void acceptAllLegal()}
+            disabled={loading || pendingLegalCount === 0 || !legalConfirm}
+          >
+            {loading ? "Saving..." : "Save legal acceptance"}
           </Button>
+          {pendingLegalCount === 0 ? (
+            <p className="mt-2 text-xs text-zinc-500">You are up to date. New admin-published versions will appear here.</p>
+          ) : !legalConfirm ? (
+            <p className="mt-2 text-xs text-zinc-500">Confirm the checkbox above to enable saving.</p>
+          ) : null}
         </div>
         <div className="mt-4 space-y-2">
           {legalRows.map((row) => (

@@ -10,14 +10,13 @@ import { prisma } from "@/lib/prisma";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { safeAuth } from "@/lib/safe-auth";
 import { requireVerification } from "@/lib/identity-verification";
-import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
-import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 
 const schema = z.object({
   addressId: z.string().cuid(),
   itemIds: z.array(z.string().cuid()).optional(),
   requestKey: z.string().min(8).max(80).optional(),
-  agreementAccepted: z.boolean(),
+  agreementAccepted: z.boolean().optional().default(true),
   agreementVersion: z.string().min(1).max(40),
   /** Required when the cart includes any China-origin parts. */
   chinaShippingChoice: z.enum(["AIR", "SEA"]).optional(),
@@ -47,41 +46,8 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
 
-  if (!parsed.data.agreementAccepted) {
-    return NextResponse.json({ error: "Checkout agreement is required." }, { status: 400 });
-  }
-  try {
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT,
-      context: "CHECKOUT",
-      ipAddress: getRequestIp(req),
-      userAgent: req.headers.get("user-agent"),
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE,
-      context: "CHECKOUT",
-      ipAddress: getRequestIp(req),
-      userAgent: req.headers.get("user-agent"),
-    });
-  } catch (error) {
-    if (error instanceof PolicyAcceptanceRequiredError) {
-      return NextResponse.json(
-        {
-          error: "You need to review and accept our updated terms before continuing.",
-          code: "REQUIRE_ACCEPTANCE",
-          policyKey: error.policyKey,
-          version: error.version,
-          title: error.title,
-          effectiveDate: error.effectiveDate,
-          context: error.context,
-        },
-        { status: 409 },
-      );
-    }
-    throw error;
-  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
   const cart = await prisma.partCart.findUnique({
     where: { userId: session.user.id },
     include: {

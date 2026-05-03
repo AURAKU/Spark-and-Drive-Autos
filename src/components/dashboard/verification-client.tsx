@@ -20,14 +20,32 @@ import {
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"];
 
-type UploadSig = {
+/** Sign APIs may return camelCase or snake_case — normalize for Cloudinary FormData (always `api_key`). */
+function pickClientUploadSign(data: Record<string, unknown>): {
+  apiKey: string;
+  cloudName: string;
   timestamp: number;
   signature: string;
-  apiKey: string;
   folder: string;
   uploadUrl: string;
   eager: string | null;
-};
+} {
+  const apiKey = String(data.apiKey ?? data.api_key ?? "");
+  const cloudName = String(data.cloudName ?? data.cloud_name ?? "");
+  const signature = String(data.signature ?? "");
+  const folder = String(data.folder ?? "");
+  const timestamp = Number(data.timestamp);
+  let uploadUrl = typeof data.uploadUrl === "string" ? data.uploadUrl.trim() : "";
+  if (!uploadUrl && cloudName) {
+    uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
+  }
+  const eagerRaw = data.eager;
+  const eager =
+    eagerRaw === null || eagerRaw === undefined || eagerRaw === ""
+      ? null
+      : String(eagerRaw);
+  return { apiKey, cloudName, timestamp, signature, folder, uploadUrl, eager };
+}
 
 type VerificationSnapshot = {
   id: string;
@@ -46,9 +64,22 @@ async function uploadOne(file: File, kind: "front" | "back" | "selfie"): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, mimeType: file.type, sizeBytes: file.size }),
   });
-  if (!sigRes.ok) throw new Error("Could not initialize upload.");
+  let sigRaw: Record<string, unknown> = {};
+  try {
+    sigRaw = (await sigRes.json()) as Record<string, unknown>;
+  } catch {
+    sigRaw = {};
+  }
+  console.log("SIGN RESPONSE:", sigRaw);
+  if (!sigRes.ok) {
+    throw new Error("Signing request failed");
+  }
 
-  const sig = (await sigRes.json()) as UploadSig;
+  const sig = pickClientUploadSign(sigRaw);
+  if (!sig.apiKey || !sig.signature || !Number.isFinite(sig.timestamp) || !sig.folder || !sig.uploadUrl) {
+    throw new Error("Signing request failed");
+  }
+
   const fd = new FormData();
   fd.append("file", file);
   fd.append("api_key", sig.apiKey);
@@ -57,9 +88,23 @@ async function uploadOne(file: File, kind: "front" | "back" | "selfie"): Promise
   fd.append("folder", sig.folder);
   if (sig.eager) fd.append("eager", sig.eager);
 
-  const upRes = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-  if (!upRes.ok) throw new Error("Document upload failed.");
-  const upData = (await upRes.json()) as { secure_url: string };
+  const cloudinaryResponse = await fetch(sig.uploadUrl, { method: "POST", body: fd });
+  console.log("UPLOAD STATUS:", cloudinaryResponse.status);
+  let cloudinaryResponseData: unknown;
+  try {
+    cloudinaryResponseData = await cloudinaryResponse.json();
+  } catch {
+    cloudinaryResponseData = null;
+  }
+  console.log("UPLOAD RESULT:", cloudinaryResponseData);
+
+  if (!cloudinaryResponse.ok) {
+    throw new Error("Cloudinary upload failed");
+  }
+  const upData = cloudinaryResponseData as { secure_url?: string };
+  if (!upData?.secure_url) {
+    throw new Error("Cloudinary upload failed");
+  }
   return upData.secure_url;
 }
 
@@ -153,17 +198,15 @@ export function VerificationClient({
     } catch {
       sigBody = {};
     }
+    console.log("SIGN RESPONSE:", sigBody);
     if (!sigRes.ok) {
-      const err = sigBody.error;
-      throw new Error(typeof err === "string" ? err : "Could not sign upload");
+      throw new Error("Signing request failed");
     }
-    const sig = sigBody as {
-      timestamp: number;
-      signature: string;
-      apiKey: string;
-      folder: string;
-      uploadUrl: string;
-    };
+
+    const sig = pickClientUploadSign(sigBody);
+    if (!sig.apiKey || !sig.signature || !Number.isFinite(sig.timestamp) || !sig.folder || !sig.uploadUrl) {
+      throw new Error("Signing request failed");
+    }
 
     const fd = new FormData();
     fd.append("file", file);
@@ -172,28 +215,46 @@ export function VerificationClient({
     fd.append("signature", sig.signature);
     fd.append("folder", sig.folder);
 
-    const up = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-    if (!up.ok) {
-      const detail = await up.text();
-      throw new Error(detail?.slice(0, 240) || "Upload to storage failed");
+    const cloudinaryResponse = await fetch(sig.uploadUrl, { method: "POST", body: fd });
+    console.log("UPLOAD STATUS:", cloudinaryResponse.status);
+    let cloudinaryResponseData: unknown;
+    try {
+      cloudinaryResponseData = await cloudinaryResponse.json();
+    } catch {
+      cloudinaryResponseData = null;
     }
-    const json = (await up.json()) as { secure_url: string; public_id: string };
+    console.log("UPLOAD RESULT:", cloudinaryResponseData);
+
+    if (!cloudinaryResponse.ok) {
+      throw new Error("Cloudinary upload failed");
+    }
+    const json = cloudinaryResponseData as { secure_url?: string; public_id?: string };
+    if (!json?.secure_url) {
+      throw new Error("Cloudinary upload failed");
+    }
+    const publicId = json.public_id?.trim() || "";
+    if (!publicId) {
+      throw new Error("Cloudinary upload failed");
+    }
 
     if (!ghanaCardId.trim()) throw new Error("Ghana Card ID number is required.");
     if (!expiryDate) throw new Error("ID expiry date is required.");
 
-    const save = await fetch("/api/profile/ghana-card", {
+    const saveResponse = await fetch("/api/profile/ghana-card", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ghanaCardIdNumber: ghanaCardId,
         imageUrl: json.secure_url,
-        imagePublicId: json.public_id,
+        imagePublicId: publicId,
         expiryDate,
       }),
     });
-    const data = (await save.json().catch(() => ({}))) as { error?: string; aiSuggested?: string | null };
-    if (!save.ok) throw new Error(data.error ?? "Could not save Ghana Card details");
+    console.log("SAVE STATUS:", saveResponse.status);
+    const data = (await saveResponse.json().catch(() => ({}))) as { error?: string; aiSuggested?: string | null };
+    if (!saveResponse.ok) {
+      throw new Error("Verification save failed");
+    }
     return data;
   }
 

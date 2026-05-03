@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-type ProfileView = "profile" | "verification";
+type ProfileView = "profile" | "verification" | "legal";
 
 function firstQueryValue(sp: Record<string, string | string[] | undefined>, key: string): string | undefined {
   const v = sp[key];
@@ -25,6 +25,7 @@ function firstQueryValue(sp: Record<string, string | string[] | undefined>, key:
 
 function parseProfileView(raw: string | undefined): ProfileView {
   if (raw === "verification") return "verification";
+  if (raw === "legal") return "legal";
   return "profile";
 }
 
@@ -140,13 +141,17 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
   return (
     <div>
       <PageHeading variant="dashboard">Profile</PageHeading>
-      {view === "profile" ? (
+      {view === "profile" || view === "legal" ? (
         <p className="mt-2 text-sm text-zinc-400">
           Manage your Ghana delivery addresses and parts storefront wallet. Use{" "}
           <Link href="/dashboard/profile?view=verification" className="text-[var(--brand)] hover:underline">
             Identity verification
           </Link>{" "}
-          for Ghana Card photo and ID number used at checkout and delivery.
+          for Ghana Card photo and ID number used at checkout and delivery.{" "}
+          <Link href="/dashboard/profile?view=legal" className="text-[var(--brand)] hover:underline">
+            Legal requirements
+          </Link>{" "}
+          unlock vehicle checkout and payments.
         </p>
       ) : (
         <p className="mt-2 text-sm text-zinc-400">
@@ -154,27 +159,30 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
         </p>
       )}
 
-      <div className="mt-5 inline-flex rounded-xl border border-border bg-muted/40 p-1 dark:border-white/10 dark:bg-white/[0.03]">
-        {[{ key: "profile" as const, label: "Profile" }, { key: "verification" as const, label: "Identity verification" }].map(
-          (item) => {
-            const active = item.key === view;
-            const href = item.key === "profile" ? "/dashboard/profile" : "/dashboard/profile?view=verification";
-            return (
-              <Link
-                key={item.key}
-                href={href}
-                className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                  active ? "bg-[var(--brand)] text-black font-semibold" : "text-muted-foreground hover:bg-background hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          },
-        )}
+      <div className="mt-5 inline-flex flex-wrap gap-1 rounded-xl border border-border bg-muted/40 p-1 dark:border-white/10 dark:bg-white/[0.03]">
+        {(
+          [
+            { key: "profile" as const, label: "Profile", href: "/dashboard/profile" },
+            { key: "legal" as const, label: "Legal", href: "/dashboard/profile?view=legal" },
+            { key: "verification" as const, label: "Identity verification", href: "/dashboard/profile?view=verification" },
+          ] as const
+        ).map((item) => {
+          const active = item.key === view;
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                active ? "bg-[var(--brand)] text-black font-semibold" : "text-muted-foreground hover:bg-background hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
 
-      {view === "profile" ? (
+      {view === "profile" || view === "legal" ? (
         <>
           <div className="mt-5">
             <Link
@@ -202,6 +210,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
                 walletBalance={Number(user?.walletBalance ?? 0)}
                 addresses={user?.addresses ?? []}
                 legalRows={legalRows}
+                legalFocus={view === "legal"}
               />
             </div>
           )}

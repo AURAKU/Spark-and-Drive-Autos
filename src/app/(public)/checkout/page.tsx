@@ -14,6 +14,7 @@ import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
 import { getCheckoutLegalVersions, requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
 import { hasUserAccepted } from "@/lib/legal-versioning";
+import { getUserLegalStatusRows } from "@/lib/legal-profile";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -31,6 +32,7 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
   let checkoutSummary: VehiclePricePreview | null = null;
   let checkoutBlock: { message: string; title: string } | null = null;
   const legalVersions = await getCheckoutLegalVersions();
+  let profileLegalComplete = false;
   let agreementAccepted = false;
   let contractAccepted = false;
   let riskAccepted = false;
@@ -68,20 +70,28 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         requiresContract = requiresSourcingContract(car.sourceType);
         requiresRisk = requiresRiskAcknowledgement(car.sourceType);
         if (session?.user?.id) {
-          agreementAccepted = await hasUserAccepted(
-            session.user.id,
-            POLICY_KEYS.CHECKOUT_AGREEMENT,
-            legalVersions.agreementVersion,
-          );
-          if (requiresContract) {
-            contractAccepted = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
-          }
-          if (requiresRisk) {
-            riskAccepted = await hasUserAccepted(
+          const legalRows = await getUserLegalStatusRows(session.user.id);
+          profileLegalComplete = legalRows.length === 0 || legalRows.every((r) => r.accepted);
+          if (profileLegalComplete) {
+            agreementAccepted = true;
+            contractAccepted = true;
+            riskAccepted = true;
+          } else {
+            agreementAccepted = await hasUserAccepted(
               session.user.id,
-              POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
-              legalVersions.riskVersion,
+              POLICY_KEYS.CHECKOUT_AGREEMENT,
+              legalVersions.agreementVersion,
             );
+            if (requiresContract) {
+              contractAccepted = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
+            }
+            if (requiresRisk) {
+              riskAccepted = await hasUserAccepted(
+                session.user.id,
+                POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
+                legalVersions.riskVersion,
+              );
+            }
           }
         }
         checkoutSummary = {
@@ -111,6 +121,7 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
         riskVersion: legalVersions.riskVersion,
         requiresContract,
         requiresRisk,
+        profileLegalComplete,
         agreementAccepted,
         contractAccepted,
         riskAccepted,

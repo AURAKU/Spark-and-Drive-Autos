@@ -103,3 +103,31 @@ export async function getUserLegalStatusRows(userId: string): Promise<UserLegalS
   rows.sort((a, b) => Number(a.accepted) - Number(b.accepted) || a.key.localeCompare(b.key));
   return rows;
 }
+
+/** Stable fingerprint of active catalog rows (latest version per policy key + per sourcing contract type). */
+export async function getActiveLegalCatalogFingerprint(): Promise<string> {
+  const activePolicies = await prisma.policyVersion.findMany({
+    where: { isActive: true },
+    orderBy: [{ policyKey: "asc" }, { effectiveAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, policyKey: true },
+  });
+  const latestPolicyByKey = new Map<string, string>();
+  for (const row of activePolicies) {
+    if (!latestPolicyByKey.has(row.policyKey)) latestPolicyByKey.set(row.policyKey, row.id);
+  }
+  const activeContracts = await prisma.contract.findMany({
+    where: { isActive: true, type: { in: [...SOURCING_CONTRACT_TYPES] } },
+    orderBy: [{ type: "asc" }, { createdAt: "desc" }],
+    select: { id: true, type: true },
+  });
+  const latestContractByType = new Map<string, string>();
+  for (const row of activeContracts) {
+    if (!latestContractByType.has(row.type)) latestContractByType.set(row.type, row.id);
+  }
+  const parts = [
+    ...[...latestPolicyByKey.values()].map((id) => `p:${id}`),
+    ...[...latestContractByType.values()].map((id) => `c:${id}`),
+  ];
+  parts.sort();
+  return parts.join("|");
+}

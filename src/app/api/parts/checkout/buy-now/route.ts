@@ -4,8 +4,7 @@ import { z } from "zod";
 import { createPartsWalletOrder } from "@/lib/parts-checkout";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { isPartsStockError } from "@/lib/parts-stock-customer";
-import { POLICY_KEYS } from "@/lib/legal-enforcement";
-import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -35,29 +34,8 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
 
-  try {
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT,
-      context: "CHECKOUT",
-    });
-  } catch (error) {
-    if (error instanceof PolicyAcceptanceRequiredError) {
-      return NextResponse.json(
-        {
-          error: "Accept pending legal updates in your profile before parts checkout.",
-          code: "REQUIRE_ACCEPTANCE",
-          policyKey: error.policyKey,
-          version: error.version,
-          title: error.title,
-          effectiveDate: error.effectiveDate,
-          context: error.context,
-        },
-        { status: 409 },
-      );
-    }
-    throw error;
-  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
   const part = await prisma.part.findUnique({
     where: { id: parsed.data.partId },
     select: { origin: true, stockStatus: true },

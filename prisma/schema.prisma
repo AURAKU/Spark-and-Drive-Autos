@@ -590,6 +590,12 @@ model User {
   accountBlocked         Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
+  /// Snapshot when the user last completed “accept all” for every active catalog policy + sourcing contract.
+  legalAcceptedAt        DateTime?
+  /// Fingerprint of active legal catalog rows at `legalAcceptedAt` (see `getActiveLegalCatalogFingerprint`).
+  legalAcceptedVersion   String?   @db.VarChar(512)
+  legalAcceptedIp        String?   @db.VarChar(64)
+  legalAcceptedUserAgent String?   @db.VarChar(512)
 
   favorites                    Favorite[]
   inquiries                    Inquiry[]

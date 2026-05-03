@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getPaystackCallbackOrigin, getPaystackSecrets } from "@/lib/payment-provider-registry";
 import { paystackInitialize } from "@/lib/paystack";
-import { POLICY_KEYS } from "@/lib/legal-enforcement";
-import { requirePolicy } from "@/lib/legal/guards";
+import { assertProfileLegalCompleteOrResponse, PROFILE_LEGAL_URL } from "@/lib/legal-compliance-central";
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 
@@ -22,27 +21,17 @@ export async function POST(_req: Request, context: { params: Promise<{ id: strin
     if (requestRow.status !== "AWAITING_PAYMENT") {
       return NextResponse.json({ ok: false, error: "Request is not awaiting payment." }, { status: 409 });
     }
-    const requiredPolicies = [
-      POLICY_KEYS.PLATFORM_TERMS_PRIVACY,
-      POLICY_KEYS.CHECKOUT_AGREEMENT,
-      POLICY_KEYS.PARTS_FINDER_DISCLAIMER,
-      POLICY_KEYS.VERIFIED_PART_REQUEST_TERMS,
-    ] as const;
-    for (const key of requiredPolicies) {
-      try {
-        await requirePolicy(session.user.id, key);
-      } catch {
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "LEGAL_ACCEPTANCE_REQUIRED",
-            policyKey: key,
-            error: "Please accept required legal terms before payment.",
-            redirectTo: "/dashboard",
-          },
-          { status: 409 },
-        );
-      }
+    const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+    if (legalBlock) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "LEGAL_ACCEPTANCE_REQUIRED",
+          error: "Please accept legal requirements on your Profile before payment.",
+          redirectTo: PROFILE_LEGAL_URL,
+        },
+        { status: 409 },
+      );
     }
 
     const reference = `SDA-VPR-${nanoid(10).toUpperCase()}`;

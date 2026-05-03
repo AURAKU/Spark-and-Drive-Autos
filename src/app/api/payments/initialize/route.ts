@@ -12,8 +12,7 @@ import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "
 import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
 import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
-import { createUserLegalAcceptanceGuard } from "@/lib/legal-acceptance-guard";
-import { requirePolicy } from "@/lib/legal/guards";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
 import { ACCEPTANCE_CONTEXT, recordUserContractAcceptance, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
 import {
@@ -35,7 +34,6 @@ import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
 import { requireVerification } from "@/lib/identity-verification";
-import { PolicyAcceptanceRequiredError, hasUserAccepted, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -95,58 +93,8 @@ export async function POST(req: Request) {
   if (!email) {
     return NextResponse.json({ error: "Account email missing" }, { status: 400 });
   }
-  try {
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PLATFORM_TERMS,
-      context: "CHECKOUT",
-      ipAddress: ip,
-      userAgent,
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PRIVACY_POLICY,
-      context: "CHECKOUT",
-      ipAddress: ip,
-      userAgent,
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT,
-      context: "CHECKOUT",
-      ipAddress: ip,
-      userAgent,
-    });
-  } catch (error) {
-    if (error instanceof PolicyAcceptanceRequiredError) {
-      return NextResponse.json(
-        {
-          error: "You need to review and accept our updated terms before continuing.",
-          code: "REQUIRE_ACCEPTANCE",
-          policyKey: error.policyKey,
-          version: error.version,
-          title: error.title,
-          effectiveDate: error.effectiveDate,
-          context: error.context,
-        },
-        { status: 409 },
-      );
-    }
-    throw error;
-  }
-  try {
-    await requirePolicy(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT);
-  } catch {
-    return NextResponse.json({ error: "You must accept checkout agreement before payment.", code: "CHECKOUT_AGREEMENT_REQUIRED" }, { status: 409 });
-  }
-  const legalGuard = await createUserLegalAcceptanceGuard(session.user.id);
-  const hasPlatformTerms = await legalGuard.hasAccepted(POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
-  if (!hasPlatformTerms) {
-    return NextResponse.json(
-      { error: "Accept the latest platform terms and privacy policy before checkout.", code: "PLATFORM_TERMS_REQUIRED" },
-      { status: 409 },
-    );
-  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
   const risk = await getUserRiskTags(session.user.id);
   if (risk.includes("FRAUD_RISK_REVIEW") || risk.includes("MANUAL_REVIEW_REQUIRED")) {
     await logRiskEvent({
@@ -187,25 +135,6 @@ export async function POST(req: Request) {
       await logRiskEvent({
         userId: session.user.id,
         type: "missing_contract_acceptance_attempt",
-        severity: "medium",
-        meta: { sourceType: car.sourceType, carId: car.id },
-      });
-      return NextResponse.json(
-        { error: "Accept pending legal updates in your profile before payment.", code: "REQUIRE_ACCEPTANCE" },
-        { status: 409 },
-      );
-    }
-  }
-  if (requiresRiskAcknowledgement(car.sourceType)) {
-    const acceptedRisk = await hasUserAccepted(
-      session.user.id,
-      POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
-      parsed.data.riskVersion ?? "",
-    );
-    if (!acceptedRisk) {
-      await logRiskEvent({
-        userId: session.user.id,
-        type: "missing_risk_acknowledgement_attempt",
         severity: "medium",
         meta: { sourceType: car.sourceType, carId: car.id },
       });

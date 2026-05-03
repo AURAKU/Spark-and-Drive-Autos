@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getRequestIp } from "@/lib/client-ip";
-import { ACCEPTANCE_CONTEXT, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
+import { acceptAllPendingLegalDocuments } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
-import { getMissingRequiredPolicies } from "@/lib/legal-reacceptance";
 import { safeAuth } from "@/lib/safe-auth";
 
+/** @deprecated Prefer Profile → legal or POST /api/profile/legal-acceptance — kept for older clients. */
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {
@@ -16,35 +16,21 @@ export async function POST(req: Request) {
   const ipAddress = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");
 
-  const missing = await getMissingRequiredPolicies(userId);
-  if (missing.length === 0) {
-    return NextResponse.json({ ok: true, accepted: 0 });
-  }
+  const { acceptedPolicies, acceptedContracts } = await acceptAllPendingLegalDocuments(userId, ipAddress, userAgent);
+  const accepted = acceptedPolicies + acceptedContracts;
 
-  for (const policy of missing) {
-    await recordUserPolicyAcceptance({
-      userId,
-      policyVersionId: policy.id,
-      context: ACCEPTANCE_CONTEXT.LOGIN_REACCEPTANCE,
-      ipAddress,
-      userAgent,
-    });
-
+  if (accepted > 0) {
     await writeLegalAuditLog({
       actorId: userId,
       targetUserId: userId,
-      action: "POLICY_ACCEPTED",
-      entityType: "PolicyVersion",
-      entityId: policy.id,
-      metadata: {
-        context: "LOGIN_REACCEPTANCE",
-        policyKey: policy.policyKey,
-        version: policy.version,
-      },
+      action: "USER_ACCEPTED_LEGAL_BULK",
+      entityType: "User",
+      entityId: userId,
+      metadata: { acceptedPolicies, acceptedContracts, source: "api.legal.reaccept-required" },
       ipAddress,
       userAgent,
     });
   }
 
-  return NextResponse.json({ ok: true, accepted: missing.length });
+  return NextResponse.json({ ok: true, accepted });
 }

@@ -60,6 +60,7 @@ export default async function AdminUsersPage(props: { searchParams: SearchParams
             createdAt: true,
             messagingBlocked: true,
             accountBlocked: true,
+            legalAcceptedAt: true,
             partsFinderMemberships: {
               orderBy: { endsAt: "desc" },
               take: 1,
@@ -90,6 +91,7 @@ export default async function AdminUsersPage(props: { searchParams: SearchParams
     partsFinderMembershipStatus: u.partsFinderMemberships[0]?.status ?? null,
     partsFinderMembershipEndsAt: u.partsFinderMemberships[0]?.endsAt.toISOString() ?? null,
     supportChatThreadId: u.chats[0]?.id ?? null,
+    legalAcceptedAt: u.legalAcceptedAt?.toISOString() ?? null,
   }));
 
   const canManagePrivileged = isSuperAdminRole(session.user.role);

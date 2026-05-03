@@ -32,9 +32,17 @@ type Props = {
   vehicleTitle: string;
   amountGhs: number;
   currency: string;
+  profileLegalComplete: boolean;
 };
 
-export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountGhs, currency }: Props) {
+export function ManualCheckoutClient({
+  carId,
+  paymentType,
+  vehicleTitle,
+  amountGhs,
+  currency,
+  profileLegalComplete,
+}: Props) {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [method, setMethod] = useState<ManualMethod>("BANK_GHS_COMPANY");
@@ -56,6 +64,11 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
       setAuthOpen(true);
       return;
     }
+    if (!profileLegalComplete) {
+      toast.error("Please accept legal requirements on your Profile before offline payment.");
+      router.push("/dashboard/profile?view=legal");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/payments/create-manual", {
@@ -66,6 +79,15 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
       const data = (await res.json()) as { error?: string; redirectTo?: string };
       if (res.status === 401) {
         setAuthOpen(true);
+        return;
+      }
+      if (res.status === 409 && (data as { code?: string }).code === "PROFILE_LEGAL_REQUIRED") {
+        toast.error(data.error ?? "Complete legal acceptance on your profile first.");
+        router.push(
+          typeof (data as { profileUrl?: string }).profileUrl === "string"
+            ? (data as { profileUrl: string }).profileUrl
+            : "/dashboard/profile?view=legal",
+        );
         return;
       }
       if (!res.ok) throw new Error(data.error ?? "Could not create payment");
@@ -130,7 +152,25 @@ export function ManualCheckoutClient({ carId, paymentType, vehicleTitle, amountG
         </ul>
       </div>
 
-      <Button className="mt-8 min-h-11 w-full sm:w-auto" type="button" disabled={loading || status === "loading"} onClick={() => void submit()}>
+      {status === "authenticated" && !profileLegalComplete ? (
+        <div className="mt-6 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm text-amber-50/95">
+          <p className="font-medium text-amber-100">Legal acceptance required</p>
+          <p className="mt-2 text-amber-50/90">
+            Accept all current legal documents on your{" "}
+            <Link href="/dashboard/profile?view=legal" className="font-semibold text-[var(--brand)] underline-offset-2 hover:underline">
+              Profile
+            </Link>{" "}
+            before creating an offline payment record.
+          </p>
+        </div>
+      ) : null}
+
+      <Button
+        className="mt-8 min-h-11 w-full sm:w-auto"
+        type="button"
+        disabled={loading || status === "loading" || (status === "authenticated" && !profileLegalComplete)}
+        onClick={() => void submit()}
+      >
         {loading ? "Creating…" : "Create payment & go to dashboard"}
       </Button>
 

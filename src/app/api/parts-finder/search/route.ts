@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { requirePolicy } from "@/lib/legal/guards";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
-import { prisma } from "@/lib/prisma";
 import { PartsFinderAccessError, requirePartsFinderMembership } from "@/lib/parts-finder/access";
 import { checkPartsFinderRateLimit } from "@/lib/parts-finder/rate-limit";
 import { submitPartsFinderSearch } from "@/lib/parts-finder/route-orchestration";
@@ -11,39 +10,17 @@ import { partsFinderInputSchema } from "@/lib/parts-finder/schemas";
 export async function POST(request: Request) {
   try {
     const { session, snapshot } = await requirePartsFinderMembership("SEARCH");
-    try {
-      await requirePolicy(session.user.id, POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
-    } catch {
+    const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+    if (legalBlock) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Accept the active platform terms and privacy policy before running search.",
+          error: "Please accept legal requirements on your Profile before running search.",
           code: "LEGAL_ACCEPTANCE_REQUIRED",
           policyKey: POLICY_KEYS.PLATFORM_TERMS_PRIVACY,
         },
         { status: 409 },
       );
-    }
-    try {
-      await requirePolicy(session.user.id, POLICY_KEYS.PARTS_FINDER_DISCLAIMER);
-    } catch {
-      const hasActivePartsFinderDisclaimer = await prisma.policyVersion.findFirst({
-        where: { policyKey: POLICY_KEYS.PARTS_FINDER_DISCLAIMER, isActive: true },
-        select: { id: true },
-      });
-      if (!hasActivePartsFinderDisclaimer) {
-        console.warn("[legal] No active required legal policy found; skipping re-acceptance gate.");
-      } else {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Accept the active Parts Finder disclaimer before running search.",
-            code: "LEGAL_ACCEPTANCE_REQUIRED",
-            policyKey: POLICY_KEYS.PARTS_FINDER_DISCLAIMER,
-          },
-          { status: 409 },
-        );
-      }
     }
     const limit = checkPartsFinderRateLimit({
       key: `parts-finder:search:${session.user.id}`,

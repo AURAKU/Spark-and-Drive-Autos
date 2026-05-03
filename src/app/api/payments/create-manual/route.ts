@@ -13,11 +13,9 @@ import { rateLimitPayment } from "@/lib/rate-limit";
 import { safeAuth } from "@/lib/safe-auth";
 import { recordSecurityObservation } from "@/lib/security-observation";
 import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
-import { requirePolicy } from "@/lib/legal/guards";
-import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
 import { requireVerification } from "@/lib/identity-verification";
-import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
 const schema = z.object({
   carId: z.string().cuid(),
@@ -51,50 +49,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Sign in required", code: "AUTH_REQUIRED" }, { status: 401 });
   }
-  try {
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PLATFORM_TERMS,
-      context: "PAYMENT",
-      ipAddress: ip,
-      userAgent,
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PRIVACY_POLICY,
-      context: "PAYMENT",
-      ipAddress: ip,
-      userAgent,
-    });
-    await requirePolicyAcceptance({
-      userId: session.user.id,
-      policyKey: POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE,
-      context: "PAYMENT",
-      ipAddress: ip,
-      userAgent,
-    });
-    await requirePolicy(session.user.id, POLICY_KEYS.PLATFORM_TERMS_PRIVACY);
-    await requirePolicy(session.user.id, POLICY_KEYS.CHECKOUT_AGREEMENT);
-  } catch (error) {
-    if (error instanceof PolicyAcceptanceRequiredError) {
-      return NextResponse.json(
-        {
-          error: "You need to review and accept our updated terms before continuing.",
-          code: "REQUIRE_ACCEPTANCE",
-          policyKey: error.policyKey,
-          version: error.version,
-          title: error.title,
-          effectiveDate: error.effectiveDate,
-          context: error.context,
-        },
-        { status: 409 },
-      );
-    }
-    return NextResponse.json(
-      { error: "Accept active platform terms and checkout agreement before payment.", code: "LEGAL_ACCEPTANCE_REQUIRED" },
-      { status: 409 },
-    );
-  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
 
   let body: unknown;
   try {

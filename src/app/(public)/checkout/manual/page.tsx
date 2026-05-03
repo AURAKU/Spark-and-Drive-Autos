@@ -8,7 +8,9 @@ import { ManualCheckoutClient } from "./manual-checkout-client";
 import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { getGlobalCurrencySettings } from "@/lib/currency";
+import { getUserLegalStatusRows } from "@/lib/legal-profile";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
 
 import type { PaymentType } from "@prisma/client";
 
@@ -68,6 +70,13 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
   const pct = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
   const amountGhs = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), paymentType, fx, pct);
 
+  const session = await safeAuth();
+  let profileLegalComplete = false;
+  if (session?.user?.id) {
+    const legalRows = await getUserLegalStatusRows(session.user.id);
+    profileLegalComplete = legalRows.length === 0 || legalRows.every((r) => r.accepted);
+  }
+
   return (
     <ManualCheckoutClient
       carId={car.id}
@@ -75,6 +84,7 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
       vehicleTitle={car.title}
       amountGhs={amountGhs}
       currency={car.currency}
+      profileLegalComplete={profileLegalComplete}
     />
   );
 }

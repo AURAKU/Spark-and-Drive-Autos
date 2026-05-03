@@ -29,6 +29,7 @@ type PaystackInitResponse = {
   /** Same value stored on the payment and sent to Paystack (e.g. SDA-XXXXXXXXXXXX). */
   reference?: string;
   message?: string;
+  profileUrl?: string;
 };
 
 /** Safe parse — API must always return JSON, but empty/HTML bodies avoid `Unexpected end of JSON input`. */
@@ -78,6 +79,7 @@ export function CheckoutClient({
     riskVersion: string;
     requiresContract: boolean;
     requiresRisk: boolean;
+    profileLegalComplete: boolean;
     agreementAccepted: boolean;
     contractAccepted: boolean;
     riskAccepted: boolean;
@@ -91,9 +93,15 @@ export function CheckoutClient({
     sp.get("type") === "RESERVATION_DEPOSIT" ? "RESERVATION_DEPOSIT" : "FULL";
   const [loading, setLoading] = useState(false);
   const [authGateOpen, setAuthGateOpen] = useState(false);
-  const [agreementAccepted, setAgreementAccepted] = useState(legalRequirements.agreementAccepted);
-  const [contractAccepted, setContractAccepted] = useState(legalRequirements.contractAccepted);
-  const [riskAccepted, setRiskAccepted] = useState(legalRequirements.riskAccepted);
+  const [agreementAccepted, setAgreementAccepted] = useState(
+    legalRequirements.profileLegalComplete || legalRequirements.agreementAccepted,
+  );
+  const [contractAccepted, setContractAccepted] = useState(
+    legalRequirements.profileLegalComplete || legalRequirements.contractAccepted,
+  );
+  const [riskAccepted, setRiskAccepted] = useState(
+    legalRequirements.profileLegalComplete || legalRequirements.riskAccepted,
+  );
   const [acceptingLegal, setAcceptingLegal] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
   const [riskOpen, setRiskOpen] = useState(false);
@@ -118,9 +126,17 @@ export function CheckoutClient({
   const registerHref = `/register?callbackUrl=${encodeURIComponent(returnToCheckoutResume)}`;
 
   const allAgreementsAccepted =
-    agreementAccepted &&
-    (!legalRequirements.requiresContract || contractAccepted) &&
-    (!legalRequirements.requiresRisk || riskAccepted);
+    legalRequirements.profileLegalComplete ||
+    (agreementAccepted &&
+      (!legalRequirements.requiresContract || contractAccepted) &&
+      (!legalRequirements.requiresRisk || riskAccepted));
+
+  useEffect(() => {
+    if (!legalRequirements.profileLegalComplete) return;
+    setAgreementAccepted(true);
+    setContractAccepted(true);
+    setRiskAccepted(true);
+  }, [legalRequirements.profileLegalComplete]);
 
   async function autoAcceptPendingLegal() {
     if (acceptingLegal) return false;
@@ -182,6 +198,12 @@ export function CheckoutClient({
         return;
       }
       if (res.status === 409) {
+        if (data.code === "PROFILE_LEGAL_REQUIRED") {
+          const href = typeof data.profileUrl === "string" && data.profileUrl.startsWith("/") ? data.profileUrl : "/dashboard/profile?view=legal";
+          toast.error(data.error ?? "Please complete legal acceptance on your profile first.");
+          router.push(href);
+          return;
+        }
         setApiConflict({
           title: titleForCheckoutConflict(data.code, checkoutSummary?.title),
           message: data.error ?? "This vehicle is no longer available for this checkout. Please choose another or contact us.",
@@ -220,6 +242,7 @@ export function CheckoutClient({
     riskAccepted,
     type,
     checkoutSummary?.title,
+    router,
   ]);
 
   /** Restore /checkout from sessionStorage when the URL lost query params (refresh edge cases). */
@@ -247,17 +270,19 @@ export function CheckoutClient({
       setAuthGateOpen(true);
       return;
     }
-    if (!agreementAccepted) {
-      toast.error("You must agree to the checkout terms before payment.");
-      return;
-    }
-    if (legalRequirements.requiresContract && !contractAccepted) {
-      toast.error("You must accept the sourcing contract to proceed.");
-      return;
-    }
-    if (legalRequirements.requiresRisk && !riskAccepted) {
-      toast.error("You must accept the risk acknowledgement to proceed.");
-      return;
+    if (!legalRequirements.profileLegalComplete) {
+      if (!agreementAccepted) {
+        toast.error("You must agree to the checkout terms before payment.");
+        return;
+      }
+      if (legalRequirements.requiresContract && !contractAccepted) {
+        toast.error("You must accept the sourcing contract to proceed.");
+        return;
+      }
+      if (legalRequirements.requiresRisk && !riskAccepted) {
+        toast.error("You must accept the risk acknowledgement to proceed.");
+        return;
+      }
     }
     await initiatePayment();
   }
@@ -280,9 +305,10 @@ export function CheckoutClient({
     router.replace(`/checkout?${next.toString()}`, { scroll: false });
     toast.success("Welcome back", { description: "Continuing to secure checkout…" });
     if (
-      !agreementAccepted ||
-      (legalRequirements.requiresContract && !contractAccepted) ||
-      (legalRequirements.requiresRisk && !riskAccepted)
+      !legalRequirements.profileLegalComplete &&
+      (!agreementAccepted ||
+        (legalRequirements.requiresContract && !contractAccepted) ||
+        (legalRequirements.requiresRisk && !riskAccepted))
     ) {
       toast.message("Complete agreements", {
         description: "Select every required checkbox, then tap Proceed to Payment.",
@@ -304,6 +330,7 @@ export function CheckoutClient({
     riskAccepted,
     legalRequirements.requiresContract,
     legalRequirements.requiresRisk,
+    legalRequirements.profileLegalComplete,
   ]);
 
   if (!carId) {
@@ -447,6 +474,20 @@ export function CheckoutClient({
                   <li>Certain transactions may be non-refundable.</li>
                 </ul>
               </div>
+              {legalRequirements.profileLegalComplete ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm leading-relaxed text-emerald-50/95">
+                  <p className="font-medium text-emerald-100">Profile legal acceptance complete</p>
+                  <p className="mt-2 text-emerald-50/90">
+                    All current legal documents are accepted on your{" "}
+                    <Link href="/dashboard/profile?view=legal" className="font-semibold text-[var(--brand)] underline-offset-2 hover:underline">
+                      Profile
+                    </Link>
+                    . No duplicate checkboxes are required on this page.
+                  </p>
+                </div>
+              ) : null}
+              {!legalRequirements.profileLegalComplete ? (
+                <>
               <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 sm:p-5 dark:border-white/15 dark:bg-white/[0.05]">
                 <input
                   id="checkout-agreement"
@@ -533,6 +574,8 @@ export function CheckoutClient({
                     </button>
                   </span>
                 </label>
+              ) : null}
+                </>
               ) : null}
             </div>
           </div>

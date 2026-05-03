@@ -5,11 +5,11 @@ import { CurrencySwitcher } from "@/components/layout/currency-switcher";
 import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
 import { DashboardSidebarNav } from "@/components/layout/dashboard-sidebar-nav";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
-import { LegalReacceptanceGate } from "@/components/legal/legal-reacceptance-gate";
+import { DashboardLegalPendingBanner } from "@/components/legal/dashboard-legal-pending-banner";
 import { StaffDashboardBar } from "@/components/layout/staff-dashboard-bar";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { parseDisplayCurrency } from "@/lib/currency";
-import { getMissingRequiredPolicies } from "@/lib/legal-reacceptance";
+import { getUserLegalStatusRows } from "@/lib/legal-profile";
 import { prisma } from "@/lib/prisma";
 import { getStaffOperationsHref, isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { parseViewMode, VIEW_MODE_COOKIE } from "@/lib/view-mode";
@@ -32,23 +32,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await requireActiveSessionOrRedirect("/dashboard");
   const role = session.user.role;
   const isStaff = Boolean(role && (isAdminRole(role) || isSupportStaffRole(role)));
+  let pendingLegal: Awaited<ReturnType<typeof getUserLegalStatusRows>> = [];
   if (!isStaff) {
-    const missingPolicies = await getMissingRequiredPolicies(session.user.id);
-    if (missingPolicies.length > 0) {
-      return (
-        <LegalReacceptanceGate
-          policies={missingPolicies.map((policy) => ({
-            id: policy.id,
-            policyKey: policy.policyKey,
-            title: policy.title,
-            version: policy.version,
-            effectiveAt: policy.effectiveAt.toISOString(),
-            content: policy.content,
-          }))}
-          defaultRedirectTo="/dashboard"
-        />
-      );
-    }
+    const legalRows = await getUserLegalStatusRows(session.user.id);
+    pendingLegal = legalRows.filter((r) => !r.accepted);
   }
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
@@ -157,7 +144,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <CurrencySwitcher initial={displayCurrency} compact />
             </div>
           </div>
-          <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
+          <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+            {!isStaff ? <DashboardLegalPendingBanner pending={pendingLegal} /> : null}
+            {children}
+          </div>
         </div>
       </div>
     </div>

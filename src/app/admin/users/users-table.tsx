@@ -42,6 +42,8 @@ export type UserRow = {
   partsFinderMembershipEndsAt: string | null;
   /** Latest customer chat thread, if any — deep-link from message action. */
   supportChatThreadId: string | null;
+  /** Last bulk legal acceptance snapshot (Profile); row-level acceptances may exist earlier. */
+  legalAcceptedAt: string | null;
 };
 
 function userRowMatchesQuery(u: UserRow, q: string): boolean {
@@ -156,6 +158,7 @@ export function UsersTable({
               <th className="px-3 py-3">User</th>
               <th className="px-3 py-3">Role</th>
               <th className="px-3 py-3">Account</th>
+              <th className="px-3 py-3 whitespace-nowrap">Legal OK</th>
               <th className="px-3 py-3">Parts Finder</th>
               <th className="px-3 py-3 whitespace-nowrap">Wallet</th>
               <th className="px-3 py-3">Phone</th>
@@ -166,13 +169,13 @@ export function UsersTable({
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                   No users found.
                 </td>
               </tr>
             ) : visibleUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                   No users match this search.{" "}
                   <Link href="/admin/users" className="text-[var(--brand)] hover:underline">
                     Clear filter
@@ -215,6 +218,13 @@ export function UsersTable({
                       >
                         {u.accountBlocked ? "Suspended" : "OK"}
                       </span>
+                    </td>
+                    <td className="px-3 py-3 align-top text-xs text-muted-foreground whitespace-nowrap">
+                      {u.legalAcceptedAt ? (
+                        <span title="Last profile bulk legal acceptance recorded">{u.legalAcceptedAt.slice(0, 10)}</span>
+                      ) : (
+                        <span title="No bulk acceptance timestamp yet (may still have row-level acceptances)">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-3 align-top text-xs">
                       {u.partsFinderMembershipStatus ? (
