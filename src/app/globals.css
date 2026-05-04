@@ -49,7 +49,8 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  /* Lifted from ~0.708 for WCAG-friendly secondary text on near-black surfaces */
+  --muted-foreground: oklch(0.78 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
@@ -188,14 +189,15 @@
     background-color: rgba(15, 23, 42, 0.06) !important;
   }
 
-  /* Dark-only explicit hex backgrounds get softened for light mode. */
-  .light [class*="bg-[#0"],
-  .light [class*="bg-[#03"],
-  .light [class*="bg-[#05"],
-  .light [class*="bg-[#07"],
-  .light [class*="bg-[#12"] {
-    background-color: rgba(255, 255, 255, 0.86) !important;
+  /*
+   * Dark-dialog shells in light mode — explicit opt-in only.
+   * Avoid substring selectors like [class*="bg-[#0"]: they matched unrelated utilities (e.g. bg-[#0b1016]
+   * on the streaming header fallback) and forced huge semi-transparent white panels on Safari.
+   */
+  .light .sda-dark-dialog-surface {
+    background-color: rgba(255, 255, 255, 0.94) !important;
     backdrop-filter: blur(12px);
+    color: #0f172a;
   }
 
   /* Gradient text tuned for dark backgrounds should fall back to readable solid text in light mode. */
@@ -349,23 +351,6 @@
       0 8px 24px -14px color-mix(in srgb, var(--brand) 60%, transparent);
   }
 
-  body.ui-page-nav-pulse::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 70;
-    animation: ui-nav-pulse 320ms ease-out;
-  }
-
-  .dark body.ui-page-nav-pulse::before {
-    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 16%, transparent), transparent 70%);
-  }
-
-  .light body.ui-page-nav-pulse::before {
-    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 20%, transparent), transparent 70%);
-  }
-
   .dark .ui-highlight-chip {
     background-color: color-mix(in srgb, var(--brand) 22%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
@@ -386,14 +371,10 @@
 }
 
 @media (max-width: 768px) {
-  /* Generic data-table fallback for small screens. */
-  table {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-  }
+  /*
+   * Do not force `display:block` on all tables — it breaks layout/accessibility.
+   * Use `.sda-table-scroll` on a wrapper around wide tables instead.
+   */
 
   /* Keep nested flex/grid children from forcing horizontal overflow. */
   [class*="flex"] > *,
@@ -413,7 +394,56 @@
   }
 }
 
+@layer components {
+  /**
+   * Spark & Drive — reusable readability / layout helpers (dark premium + light parity).
+   * Prefer these over ad-hoc zinc opacity stacks on cards.
+   */
+  .sda-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-color: color-mix(in srgb, var(--brand) 35%, transparent) transparent;
+  }
+
+  .sda-table-scroll table {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .sda-main-safe {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .sda-readable-muted {
+    @apply text-zinc-600 dark:text-zinc-400;
+  }
+
+  .sda-readable-subtle {
+    @apply text-zinc-500 dark:text-zinc-400;
+  }
+}
+
 @layer utilities {
+  /*
+   * Dark UI: many screens hard-code text-zinc-500/600 on black/near-black panels (~3:1 contrast).
+   * Normalize to zinc-400-equivalent for body/supporting text without touching business markup.
+   */
+  .dark .text-zinc-500 {
+    color: rgb(161 161 170);
+  }
+
+  .dark .text-zinc-600 {
+    color: rgb(161 161 170);
+  }
+
+  /* Form placeholders on dark inputs often use zinc-500 — keep legible */
+  .dark input::placeholder,
+  .dark textarea::placeholder,
+  .dark select::placeholder {
+    color: rgb(161 161 170);
+  }
+
   .text-\[10px\] {
     font-size: 0.78rem;
     line-height: 1.35;
@@ -477,15 +507,6 @@
     text-shadow:
       0 0 16px rgba(249, 115, 22, 0.52),
       0 0 10px rgba(20, 184, 166, 0.38);
-  }
-}
-
-@keyframes ui-nav-pulse {
-  0% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
   }
 }
 

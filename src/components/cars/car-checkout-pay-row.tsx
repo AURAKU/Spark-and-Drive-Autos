@@ -36,7 +36,7 @@ export function CarCheckoutPayRow({
       <div className="flex w-full max-w-xl flex-col gap-2">
         <div className="flex flex-wrap gap-3">
           <Link href={`/checkout?carId=${carId}&type=FULL`} className={payClass}>
-            Pay now
+            Pay full
           </Link>
           <Link href={`/checkout?carId=${carId}&type=RESERVATION_DEPOSIT`} className={reserveClass}>
             Reserve with deposit
@@ -44,9 +44,8 @@ export function CarCheckoutPayRow({
         </div>
         {reservationDepositGhs != null && reservationDepositPercentLabel != null ? (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground/90">Reserve with deposit:</span>{" "}
-            {formatMoney(reservationDepositGhs, "GHS")} ({reservationDepositPercentLabel}% of list price in GHS; minimum
-            deposit rules apply).
+            Reserve this car with {reservationDepositPercentLabel}% deposit ({formatMoney(reservationDepositGhs, "GHS")}).
+            Minimum deposit rules may apply.
           </p>
         ) : null}
       </div>
@@ -56,7 +55,7 @@ export function CarCheckoutPayRow({
   return (
     <>
       <button type="button" className={payClass} onClick={() => setBlockedDialogOpen(true)}>
-        Pay now
+        Pay full
       </button>
       <button type="button" className={reserveClass} onClick={() => setBlockedDialogOpen(true)}>
         Reserve with deposit

@@ -1,4 +1,13 @@
-import { NotificationType, PaymentProvider, PaymentStatus, PaymentType, ReceiptType, type Prisma } from "@prisma/client";
+import {
+  NotificationType,
+  OrderBalanceStatus,
+  OrderStatus,
+  PaymentProvider,
+  PaymentStatus,
+  PaymentType,
+  ReceiptType,
+  type Prisma,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
@@ -11,6 +20,12 @@ import { canUploadPaymentProof } from "@/lib/payment-status-utils";
 import { syncDutyWorkflowAfterDutyPaymentSuccessInTx } from "@/lib/duty/sync-from-payment";
 import { ensureCarSeaShipmentInTx } from "@/lib/shipping/shipment-service";
 import { syncCarInventoryAfterSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
+import {
+  addDays,
+  BALANCE_DUE_WINDOW_DAYS,
+  deriveBalanceStatus,
+  shouldFlagFollowUpForOverdue,
+} from "@/lib/deposit-balance-logic";
 
 export { canUploadPaymentProof, PAYMENT_FINAL_STATUSES } from "@/lib/payment-status-utils";
 
@@ -45,6 +60,8 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
           kind: true,
           reference: true,
           receiptReference: true,
+          amount: true,
+          remainingBalance: true,
           car: { select: { seaShippingFeeGhs: true, estimatedDelivery: true, title: true, slug: true } },
         },
       },
@@ -98,22 +115,55 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
       },
     });
     if (opts.toStatus === "SUCCESS" && payment.orderId) {
-      await tx.order.update({
-        where: { id: payment.orderId },
-        data: {
-          orderStatus: "PAID",
-          receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
-        },
-      });
       const ord = payment.order;
-      if (ord?.kind === "CAR" && payment.userId) {
-        await ensureCarSeaShipmentInTx(tx, {
-          orderId: ord.id,
-          userId: payment.userId,
-          orderReference: ord.reference,
-          feeGhs: ord.car?.seaShippingFeeGhs != null ? Number(ord.car.seaShippingFeeGhs) : null,
-          estimatedDuration: ord.car?.estimatedDelivery ?? null,
+      const isCarDeposit =
+        payment.paymentType === PaymentType.RESERVATION_DEPOSIT && ord?.kind === "CAR";
+      const isCarFull = payment.paymentType === PaymentType.FULL && ord?.kind === "CAR";
+
+      if (isCarDeposit) {
+        const paidAt = paidAtResolved ?? new Date();
+        const balanceDueAt = addDays(paidAt, BALANCE_DUE_WINDOW_DAYS);
+        const rem = ord?.remainingBalance != null ? Number(ord.remainingBalance) : 0;
+        const bs = deriveBalanceStatus(rem, balanceDueAt, paidAt);
+        await tx.order.update({
+          where: { id: payment.orderId },
+          data: {
+            orderStatus: OrderStatus.RESERVED_WITH_DEPOSIT,
+            receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
+            depositAmount: Number(payment.amount),
+            balanceDueAt,
+            balanceStatus: bs,
+            followUpRequired: shouldFlagFollowUpForOverdue(bs, rem),
+          },
         });
+      } else {
+        const carFullBalancePatch =
+          ord?.kind === "CAR" && payment.paymentType === PaymentType.FULL
+            ? {
+                remainingBalance: 0,
+                balanceStatus: OrderBalanceStatus.PAID,
+                balanceDueAt: null,
+                followUpRequired: false,
+                vehicleListPriceGhs: ord.amount != null ? Number(ord.amount) : undefined,
+              }
+            : {};
+        await tx.order.update({
+          where: { id: payment.orderId },
+          data: {
+            orderStatus: OrderStatus.PAID,
+            receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
+            ...carFullBalancePatch,
+          },
+        });
+        if (isCarFull && payment.userId && ord) {
+          await ensureCarSeaShipmentInTx(tx, {
+            orderId: ord.id,
+            userId: payment.userId,
+            orderReference: ord.reference,
+            feeGhs: ord.car?.seaShippingFeeGhs != null ? Number(ord.car.seaShippingFeeGhs) : null,
+            estimatedDuration: ord.car?.estimatedDelivery ?? null,
+          });
+        }
       }
       if (payment.paymentType === "DUTY" && payment.orderId && payment.order?.kind === "CAR") {
         await syncDutyWorkflowAfterDutyPaymentSuccessInTx(tx, payment.orderId);

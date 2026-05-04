@@ -186,7 +186,7 @@ export function AdminOrdersInteractive({ rows, emptyHint }: Props) {
         </DropdownMenu>
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-border bg-card/50 shadow-sm ring-1 ring-border/40">
+      <div className="mt-8 sda-table-scroll rounded-2xl border border-border bg-card/50 shadow-sm ring-1 ring-border/40">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-border bg-muted/50 text-xs font-medium tracking-wide text-muted-foreground">
             <tr>

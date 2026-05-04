@@ -18,7 +18,8 @@ import {
   getGlobalCurrencySettings,
   parseDisplayCurrency,
 } from "@/lib/currency";
-import { depositAmountGhsFromFull, resolveReservationDepositPercent } from "@/lib/checkout-amount";
+import { BALANCE_DUE_WINDOW_DAYS } from "@/lib/deposit-balance-logic";
+import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { buildCarGalleryImages } from "@/lib/car-gallery";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
@@ -76,9 +77,11 @@ export default async function CarDetailPage(props: Props) {
   const fx = await getGlobalCurrencySettings();
   const priceLabel = formatVehiclePriceFromRmb(Number(car.basePriceRmb), displayCurrency, fx);
   const listPriceAsCifHintGhs = getCarDisplayPrice(Number(car.basePriceRmb), "GHS", fx);
-  const depositPctStored = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  const reservationDepositGhs = depositAmountGhsFromFull(listPriceAsCifHintGhs, depositPctStored);
-  const reservationDepositPercentLabel = resolveReservationDepositPercent(depositPctStored);
+  const depositPctForCheckout =
+    car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+  const depositSnap = computeDepositCheckoutSnapshot(car, fx, depositPctForCheckout);
+  const reservationDepositGhs = depositSnap.depositGhs;
+  const reservationDepositPercentLabel = depositSnap.depositPercentApplied;
 
   const galleryImages = buildCarGalleryImages(car);
   const stockBadge = getVehicleStockBadgeForDisplay(car);
@@ -247,6 +250,26 @@ export default async function CarDetailPage(props: Props) {
               </ul>
             </div>
           )}
+
+          {canPayOnline ? (
+            <div className="mt-6 rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+              <p className="font-medium text-foreground">Online checkout</p>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>
+                  Deposit: <span className="font-semibold text-foreground">{reservationDepositPercentLabel}%</span> ·{" "}
+                  <span className="font-semibold text-[var(--brand)]">{formatMoney(reservationDepositGhs, "GHS")}</span>
+                </li>
+                <li>
+                  Est. remaining balance:{" "}
+                  <span className="font-medium text-foreground">{formatMoney(depositSnap.remainingBalance, "GHS")}</span>
+                </li>
+                <li className="text-xs">
+                  After you pay the deposit, the remaining balance is due within {BALANCE_DUE_WINDOW_DAYS} days. Our team
+                  will contact you to arrange payment.
+                </li>
+              </ul>
+            </div>
+          ) : null}
 
           <div className="mt-10 flex flex-wrap gap-3">
             <CarCheckoutPayRow

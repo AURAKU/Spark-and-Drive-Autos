@@ -10,7 +10,7 @@ import {
 } from "@/lib/payment-provider-registry";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
-import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
+import { depositAmountGhsFromFull } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
@@ -32,7 +32,12 @@ import { prisma } from "@/lib/prisma";
 import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
-import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
+import { carHasSuccessfulFullVehiclePayment } from "@/lib/sold-vehicle";
+import {
+  computeDepositCheckoutSnapshot,
+  resolveOrderStorageAnchors,
+  resolveVehicleListPriceGhs,
+} from "@/lib/vehicle-deposit-pricing";
 import { requireVerification } from "@/lib/identity-verification";
 
 const schema = z.object({
@@ -123,7 +128,7 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
-  if (await carHasSuccessfulVehiclePayment(car.id)) {
+  if (await carHasSuccessfulFullVehiclePayment(car.id)) {
     return NextResponse.json(
       { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
       { status: 409 },
@@ -163,12 +168,12 @@ export async function POST(req: Request) {
   const settings = await getGlobalCurrencySettings();
   const depositPctStored =
     car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  const previewAmount = getVehicleCheckoutAmountGhs(
-    Number(car.basePriceRmb),
-    parsed.data.paymentType,
-    settings,
-    depositPctStored,
-  );
+  /** Single list-price resolution (GHS + currencyBase + FX) for both deposit and full pay — matches deposit math. */
+  const listResolution = resolveVehicleListPriceGhs(car, settings);
+  const previewAmount =
+    parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT
+      ? depositAmountGhsFromFull(listResolution.fullListGhs, depositPctStored)
+      : Math.round(Math.max(0, listResolution.fullListGhs) * 100) / 100;
   try {
     await requireVerification({
       userId: session.user.id,
@@ -220,32 +225,80 @@ export async function POST(req: Request) {
         if (!carFresh) throwCheckoutConflict("CAR_NOT_FOUND");
         const block = getCarCheckoutIneligibleReason(carFresh);
         if (block) throwCheckoutConflict("INELIGIBLE", block);
-        const dup = await tx.payment.findFirst({
+        const paidRows = await tx.payment.findMany({
           where: {
             status: "SUCCESS",
             order: { carId: carFresh.id, kind: OrderKind.CAR },
           },
-          select: { id: true },
+          select: { paymentType: true },
         });
-        if (dup) throwCheckoutConflict("ALREADY_PURCHASED");
+        const hasFullPaid = paidRows.some((p) => p.paymentType === PaymentType.FULL);
+        const hasDepositPaid = paidRows.some((p) => p.paymentType === PaymentType.RESERVATION_DEPOSIT);
+        if (hasFullPaid) throwCheckoutConflict("ALREADY_PURCHASED");
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT && hasDepositPaid) {
+          throwCheckoutConflict("DEPOSIT_ALREADY_PAID");
+        }
+        if (parsed.data.paymentType === PaymentType.FULL && hasDepositPaid) {
+          throwCheckoutConflict("BALANCE_PAYMENT_ONLINE_UNAVAILABLE");
+        }
         const depPct =
           carFresh.reservationDepositPercent != null ? Number(carFresh.reservationDepositPercent) : null;
-        const amountTx = getVehicleCheckoutAmountGhs(
-          Number(carFresh.basePriceRmb),
-          parsed.data.paymentType,
-          settings,
-          depPct,
-        );
+        let amountTx: number;
+        const baseOrderData = {
+          reference,
+          userId: session.user.id,
+          carId: carFresh.id,
+          kind: OrderKind.CAR,
+          orderStatus: "PENDING_PAYMENT" as const,
+          paymentType: parsed.data.paymentType,
+        };
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+          const snap = computeDepositCheckoutSnapshot(carFresh, settings, depPct);
+          const anchors = resolveOrderStorageAnchors(carFresh, snap.resolution);
+          amountTx = snap.depositGhs;
+          const ord = await tx.order.create({
+            data: {
+              ...baseOrderData,
+              currency: "GHS",
+              amount: amountTx,
+              depositAmount: snap.depositGhs,
+              remainingBalance: snap.remainingBalance,
+              orderDepositPercentSnapshot: snap.depositPercentApplied,
+              currencyBase: snap.resolution.currencyBase,
+              exchangeRateUsed: snap.resolution.exchangeRateUsed,
+              vehicleListPriceGhs: anchors.vehicleListPriceGhs,
+              baseAmount: anchors.baseAmount ?? undefined,
+              reservedAt: new Date(),
+            },
+          });
+          const pay = await tx.payment.create({
+            data: {
+              orderId: ord.id,
+              userId: session.user.id,
+              provider: "PAYSTACK",
+              settlementMethod: "PAYSTACK",
+              providerReference: reference,
+              amount: amountTx,
+              currency: "GHS",
+              status: "PENDING",
+              paymentType: parsed.data.paymentType,
+              idempotencyKey: reference,
+            },
+          });
+          return { order: ord, payment: pay, amount: amountTx };
+        }
+        const fullResolution = resolveVehicleListPriceGhs(carFresh, settings);
+        const anchorsFull = resolveOrderStorageAnchors(carFresh, fullResolution);
+        amountTx = Math.round(Math.max(0, fullResolution.fullListGhs) * 100) / 100;
         const ord = await tx.order.create({
           data: {
-            reference,
-            userId: session.user.id,
-            carId: carFresh.id,
-            kind: OrderKind.CAR,
-            orderStatus: "PENDING_PAYMENT",
-            paymentType: parsed.data.paymentType,
+            ...baseOrderData,
+            currency: "GHS",
             amount: amountTx,
-            currency: carFresh.currency,
+            currencyBase: fullResolution.currencyBase,
+            exchangeRateUsed: fullResolution.exchangeRateUsed ?? undefined,
+            vehicleListPriceGhs: anchorsFull.vehicleListPriceGhs,
+            baseAmount: anchorsFull.baseAmount ?? undefined,
           },
         });
         const pay = await tx.payment.create({
@@ -256,7 +309,7 @@ export async function POST(req: Request) {
             settlementMethod: "PAYSTACK",
             providerReference: reference,
             amount: amountTx,
-            currency: carFresh.currency,
+            currency: "GHS",
             status: "PENDING",
             paymentType: parsed.data.paymentType,
             idempotencyKey: reference,
@@ -296,6 +349,26 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
+      if (e.checkoutCode === "DEPOSIT_ALREADY_PAID") {
+        return NextResponse.json(
+          {
+            error:
+              "A reservation deposit for this vehicle is already on file. Open your orders or contact support to complete the remaining balance.",
+            code: "DEPOSIT_ALREADY_PAID",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "BALANCE_PAYMENT_ONLINE_UNAVAILABLE") {
+        return NextResponse.json(
+          {
+            error:
+              "This vehicle has an active reservation deposit. Complete the remaining balance with our team — online full payment cannot replace that flow yet.",
+            code: "BALANCE_PAYMENT_ONLINE_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
     }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unable to start payment", code: "SERVER_ERROR" },
@@ -309,7 +382,7 @@ export async function POST(req: Request) {
       email,
       amountMinorUnits: Math.round(amount * 100),
       reference,
-      currency: order.currency,
+      currency: "GHS",
       metadata: {
         orderId: order.id,
         paymentId: payment.id,

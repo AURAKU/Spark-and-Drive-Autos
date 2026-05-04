@@ -75,6 +75,9 @@ const EXCLUDED_ORDER: OrderStatus[] = [
   OrderStatus.DRAFT,
   OrderStatus.PENDING_PAYMENT,
   OrderStatus.CANCELLED,
+  /// Deposit-only vehicle orders should not count as completed “sales” in rotation mix
+  OrderStatus.RESERVED_WITH_DEPOSIT,
+  OrderStatus.AWAITING_BALANCE,
 ];
 
 export async function getHomeSpotlight(): Promise<{

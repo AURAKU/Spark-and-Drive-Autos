@@ -52,7 +52,7 @@ export function AddPartDialog({ categories, initialOpen = false }: Props) {
       </DialogTrigger>
       <DialogContent
         showCloseButton
-        className="max-h-[min(90vh,920px)] overflow-y-auto border border-white/10 bg-[#0a0c10] text-white sm:max-w-3xl"
+        className="sda-dark-dialog-surface max-h-[min(90vh,920px)] overflow-y-auto border border-white/10 bg-[#0a0c10] text-white sm:max-w-3xl"
       >
         <DialogHeader>
           <DialogTitle className="text-white">New part / accessory</DialogTitle>

@@ -174,7 +174,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Includes Secured Payment wallet top-ups and wallet debits used for parts checkout. {pageSize} entries per page.
         </p>
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.02] dark:ring-white/[0.06]">
+        <div className="mt-5 sda-table-scroll rounded-2xl border border-border bg-card shadow-sm ring-1 ring-border/40 dark:border-white/10 dark:bg-white/[0.02] dark:ring-white/[0.06]">
           <table className="w-full min-w-[min(100%,36rem)] table-fixed border-separate border-spacing-0 text-left text-[10px] leading-snug text-foreground sm:min-w-[36rem] sm:text-[11px]">
             <colgroup>
               <col className="w-[10%] sm:w-[9%]" />

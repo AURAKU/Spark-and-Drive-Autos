@@ -4,6 +4,8 @@ import { VerificationDocumentType, VerificationStatus } from "@prisma/client";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
+
 type Row = {
   id: string;
   userId: string;
@@ -73,15 +75,35 @@ export function AdminVerificationsHub({ rows }: { rows: Row[] }) {
             </div>
             <div className="flex flex-wrap gap-2">
               <a className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10" href={`/api/admin/verifications/${row.id}/document?kind=front`} target="_blank" rel="noreferrer">
-                View front
+                View front (tab)
               </a>
               <a className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10" href={`/api/admin/verifications/${row.id}/document?kind=back`} target="_blank" rel="noreferrer">
-                View back
+                View back (tab)
               </a>
               <a className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10" href={`/api/admin/verifications/${row.id}/document?kind=selfie`} target="_blank" rel="noreferrer">
-                View selfie
+                View selfie (tab)
               </a>
             </div>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <UploadedFilePreview
+              url={`/api/admin/verifications/${row.id}/document?kind=front`}
+              label="Document front"
+              variant="admin"
+              allowCopyUrl
+            />
+            <UploadedFilePreview
+              url={`/api/admin/verifications/${row.id}/document?kind=back`}
+              label="Document back"
+              variant="admin"
+              allowCopyUrl
+            />
+            <UploadedFilePreview
+              url={`/api/admin/verifications/${row.id}/document?kind=selfie`}
+              label="Selfie with document"
+              variant="admin"
+              allowCopyUrl
+            />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button disabled={busyId === row.id} onClick={() => void review(row.id, "approve")} className="rounded-md bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">Approve</button>

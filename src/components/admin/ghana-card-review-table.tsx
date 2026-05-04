@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { Input } from "@/components/ui/input";
 
 export type GhanaCardPendingRow = {
@@ -50,11 +50,19 @@ function PendingCard({
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30 sm:h-40 lg:h-32 lg:w-52">
+        <div className="w-full max-w-xl shrink-0 lg:max-w-[420px]">
           {row.ghanaCardImageUrl ? (
-            <Image src={row.ghanaCardImageUrl} alt="Pending Ghana Card" fill className="object-cover" unoptimized />
+            <UploadedFilePreview
+              url={row.ghanaCardImageUrl}
+              label="Pending Ghana Card upload"
+              uploadedAt={row.updatedAt}
+              statusLabel="Pending review"
+              variant="admin"
+            />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-zinc-500">No image</div>
+            <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-white/10 bg-black/30 text-xs text-zinc-500">
+              No upload
+            </div>
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-2">

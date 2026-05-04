@@ -3,9 +3,9 @@
  */
 export default function PartsFinderPublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="parts-theme relative min-h-[calc(100dvh-4.5rem)] [--brand:#ef4444]">
+    <div className="parts-theme relative isolate min-h-[calc(100dvh-4.5rem)] [--brand:#ef4444]">
       <div
-        className="parts-theme-bg pointer-events-none absolute inset-0 -z-10 opacity-[0.88]"
+        className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-[0.88]"
         style={{
           backgroundImage: [
             "radial-gradient(920px 500px at 8% 12%, rgba(239,68,68,0.28), transparent)",
@@ -19,7 +19,7 @@ export default function PartsFinderPublicLayout({ children }: { children: React.
         }}
         aria-hidden
       />
-      {children}
+      <div className="relative z-[1] min-w-0">{children}</div>
     </div>
   );
 }

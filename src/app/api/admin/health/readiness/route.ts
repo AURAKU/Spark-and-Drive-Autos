@@ -39,6 +39,13 @@ export async function GET() {
     }
   }
 
+  /** Singleton row — idempotent; confirms backup metadata table is initialized (distinct from a successful backup run). */
+  const backupMetadataRow = await prisma.systemBackupMetadata.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
+
   const [activePolicy, activeReceiptTemplates, superAdminExists, lastBackup] = await Promise.all([
     prisma.policyVersion.findFirst({
       where: {
@@ -83,7 +90,10 @@ export async function GET() {
     activeLegalPolicyExists: Boolean(activePolicy),
     activeReceiptTemplatesExist: activeReceiptTemplates > 0,
     superAdminExists: Boolean(superAdminExists),
-    backupMetadataExists: Boolean(lastBackup),
+    /** `SystemBackupMetadata` singleton present (upserted above when migration applied). */
+    backupMetadataExists: Boolean(backupMetadataRow),
+    /** At least one successful entry in `SystemBackupLog` (actual backup run). */
+    successfulBackupLogged: Boolean(lastBackup),
     lastBackupCompletedAt: lastBackup?.completedAt?.toISOString() ?? null,
     lastBackupCreatedAt: lastBackup?.createdAt?.toISOString() ?? null,
     lastBackupFileName: lastBackup?.fileName ?? null,
@@ -96,7 +106,22 @@ export async function GET() {
     checks.paystackReady &&
     checks.storageProviderPresent &&
     checks.activeLegalPolicyExists;
-  const fullStackReady = Object.values(checks).every(Boolean);
+  const fullStackBooleanChecks: (keyof typeof checks)[] = [
+    "databaseConnection",
+    "redisConnection",
+    "cloudinaryReady",
+    "storageProviderPresent",
+    "paystackReady",
+    "resendReady",
+    "serperReady",
+    "pusherReady",
+    "activeLegalPolicyExists",
+    "activeReceiptTemplatesExist",
+    "superAdminExists",
+    "backupMetadataExists",
+    "successfulBackupLogged",
+  ];
+  const fullStackReady = fullStackBooleanChecks.every((k) => checks[k] === true);
 
   return NextResponse.json({
     ok: criticalOk,

@@ -193,7 +193,7 @@ export default async function AdminDisputesPage(props: { searchParams: SearchPar
         </form>
       </details>
 
-      <section className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]">
+      <section className="sda-table-scroll rounded-2xl border border-white/10 bg-white/[0.03]">
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-wide text-zinc-400">
             <tr>

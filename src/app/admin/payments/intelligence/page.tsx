@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { IntelActionProofPeek } from "@/components/admin/intel-action-proof-peek";
 import { AdminPaymentIntelligenceCharts } from "@/components/admin/admin-payment-intelligence-charts";
 import { PageHeading } from "@/components/typography/page-headings";
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
@@ -649,7 +650,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
             </Link>
           </div>
         </div>
-        <div className="mt-4 -mx-1 overflow-x-auto rounded-2xl border border-white/10 sm:mx-0">
+        <div className="mt-4 -mx-1 sda-table-scroll rounded-2xl border border-white/10 sm:mx-0">
           <table className="w-full min-w-[1080px] text-left text-sm">
             <caption className="border-b border-white/10 bg-white/[0.02] px-4 py-2 text-left text-xs text-zinc-500">
               Payments matching current filters · {listMeta.pageSize} per page · scroll horizontally on small screens
@@ -748,7 +749,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
         <p className="mt-1 text-sm text-zinc-500">
           Unified wallet inflow/outflow ledger to audit top-ups, parts purchase debits, and pending wallet outcomes.
         </p>
-        <div className="mt-4 -mx-1 overflow-x-auto rounded-2xl border border-white/10 sm:mx-0">
+        <div className="mt-4 -mx-1 sda-table-scroll rounded-2xl border border-white/10 sm:mx-0">
           <table className="w-full min-w-[1080px] text-left text-sm">
             <caption className="border-b border-white/10 bg-white/[0.02] px-4 py-2 text-left text-xs text-zinc-500">
               Wallet ledger rows in the same date window as payments · {listMeta.pageSize} per page
@@ -844,8 +845,8 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
         <p className="mt-1 text-sm text-zinc-500">
           Failed, awaiting proof, and pending-proof uploads that need immediate operations follow-up.
         </p>
-        <div className="mt-4 -mx-1 overflow-x-auto rounded-2xl border border-white/10 sm:mx-0">
-          <table className="w-full min-w-[960px] text-left text-sm">
+        <div className="mt-4 -mx-1 sda-table-scroll rounded-2xl border border-white/10 sm:mx-0">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <caption className="border-b border-white/10 bg-amber-500/5 px-4 py-2 text-left text-xs text-amber-200/80">
               Items requiring staff review · {listMeta.pageSize} per page
             </caption>
@@ -864,6 +865,9 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                   Proofs
                 </th>
                 <th scope="col" className="px-4 py-3">
+                  Latest proof
+                </th>
+                <th scope="col" className="px-4 py-3">
                   Customer
                 </th>
                 <th scope="col" className="px-4 py-3">
@@ -877,7 +881,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
             <tbody>
               {listMeta.actionTotal === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
                     Nothing in action queue.
                   </td>
                 </tr>
@@ -893,6 +897,9 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                     </td>
                     <td className="px-4 py-3 text-zinc-400">
                       {p.proofs.length} ({p.proofs.filter((x) => x.status === "PENDING").length} pending)
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <IntelActionProofPeek proofs={p.proofs} />
                     </td>
                     <td className="px-4 py-3 text-zinc-400">{p.user?.email ?? "—"}</td>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-500">{p.providerReference ?? p.order?.reference ?? p.id}</td>

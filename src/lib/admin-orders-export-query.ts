@@ -1,4 +1,11 @@
-import { PaymentStatus, type OrderKind, type Prisma } from "@prisma/client";
+import {
+  OrderBalanceStatus,
+  OrderStatus,
+  PaymentStatus,
+  type DeliveryMode,
+  type OrderKind,
+  type Prisma,
+} from "@prisma/client";
 
 import type { AdminPartsLineage } from "@/lib/admin-orders-parts-filter";
 import { wherePartsLineageForAdminList } from "@/lib/admin-orders-parts-filter";
@@ -21,6 +28,18 @@ export const adminOrderRichSelect = {
   amount: true,
   currency: true,
   notes: true,
+  partsIntlShippingFeeStatus: true,
+  shippingFeeChargedAtCheckout: true,
+  partsCustomerQuotedDeliveryLabel: true,
+  partsCustomerQuotedDeliveryMode: true,
+  depositAmount: true,
+  remainingBalance: true,
+  orderDepositPercentSnapshot: true,
+  reservedAt: true,
+  balanceDueAt: true,
+  balanceStatus: true,
+  followUpRequired: true,
+  vehicleListPriceGhs: true,
   createdAt: true,
   updatedAt: true,
   receiptData: true,
@@ -95,11 +114,20 @@ export function localTodayRange(): { gte: Date; lt: Date } {
   return { gte, lt };
 }
 
+/** Vehicle (CAR) admin lane filters for deposit reservations */
+export type AdminCarOrderLaneFilter =
+  | null
+  | "reserved_deposit"
+  | "awaiting_balance"
+  | "followup_required";
+
 export function buildAdminOrdersBaseWhere(
   kindFilter: OrdersExportKindFilter,
   dateRange: { gte: Date; lt: Date } | null | undefined,
   partsLineage: AdminPartsLineage,
   searchWhere: Prisma.OrderWhereInput | null,
+  partsDeliveryMode?: DeliveryMode | null,
+  carOrderLane?: AdminCarOrderLaneFilter,
 ): Prisma.OrderWhereInput {
   const lineageWhere =
     !kindFilter || kindFilter === "PARTS" ? wherePartsLineageForAdminList(partsLineage) : undefined;
@@ -108,6 +136,46 @@ export function buildAdminOrdersBaseWhere(
   if (dateRange) w.push({ createdAt: { gte: dateRange.gte, lt: dateRange.lt } });
   if (lineageWhere) w.push(lineageWhere);
   if (searchWhere) w.push(searchWhere);
+  if (partsDeliveryMode && kindFilter === "PARTS") {
+    w.push({
+      OR: [
+        { partsCustomerQuotedDeliveryMode: partsDeliveryMode },
+        { shipments: { some: { deliveryMode: partsDeliveryMode } } },
+      ],
+    });
+  }
+  if (carOrderLane && kindFilter === "CAR") {
+    if (carOrderLane === "reserved_deposit") {
+      w.push({ orderStatus: OrderStatus.RESERVED_WITH_DEPOSIT });
+    } else if (carOrderLane === "awaiting_balance") {
+      w.push({
+        OR: [
+          { orderStatus: OrderStatus.AWAITING_BALANCE },
+          {
+            orderStatus: OrderStatus.RESERVED_WITH_DEPOSIT,
+            remainingBalance: { gt: 0 },
+          },
+        ],
+      });
+    } else if (carOrderLane === "followup_required") {
+      const now = new Date();
+      w.push({
+        kind: "CAR",
+        OR: [
+          { followUpRequired: true },
+          {
+            balanceStatus: OrderBalanceStatus.OVERDUE,
+            remainingBalance: { gt: 0 },
+          },
+          {
+            balanceDueAt: { not: null, lt: now },
+            remainingBalance: { gt: 0 },
+            orderStatus: { in: [OrderStatus.RESERVED_WITH_DEPOSIT, OrderStatus.AWAITING_BALANCE] },
+          },
+        ],
+      });
+    }
+  }
   return w.length > 0 ? { AND: w } : {};
 }
 
@@ -158,8 +226,12 @@ export function fullCarListGhs(order: AdminOrderRich, settings: Pick<GlobalCurre
 }
 
 export function shippingSummary(order: AdminOrderRich): string {
+  const quoted =
+    order.kind === "PARTS" ? order.partsCustomerQuotedDeliveryLabel?.trim() : "";
   const s = order.shipments[0];
-  if (!s) return "—";
+  if (!s) {
+    return quoted ? quoted : "—";
+  }
   const mode = s.deliveryMode ? s.deliveryMode.replaceAll("_", " ") : "";
   const fee =
     s.feeAmount != null && Number(s.feeAmount) > 0
@@ -167,10 +239,19 @@ export function shippingSummary(order: AdminOrderRich): string {
       : s.deferredChinaShipping
         ? "Intl. deferred"
         : "";
-  return [s.kind.replaceAll("_", " "), mode, fee].filter(Boolean).join(" · ") || "—";
+  const base = [s.kind.replaceAll("_", " "), mode, fee].filter(Boolean).join(" · ") || "—";
+  if (quoted) return `${quoted} · ${base}`;
+  return base;
 }
 
 export function shippingFeeStatus(order: AdminOrderRich): string {
+  if (
+    order.kind === "PARTS" &&
+    order.partsIntlShippingFeeStatus === "MANUAL_PENDING" &&
+    order.shippingFeeChargedAtCheckout === false
+  ) {
+    return "Intl. shipping manual / not charged at checkout";
+  }
   const s = order.shipments[0];
   if (!s) return "—";
   if (s.deferredChinaShipping) return "International leg deferred";

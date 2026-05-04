@@ -1,4 +1,5 @@
 import type { GlobalCurrencySettings } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
@@ -55,6 +56,18 @@ const DEFAULT_SETTINGS = {
   rmbToGhs: 0.586,
   usdToGhs: 11.65,
 };
+
+/** Safe defaults when GlobalCurrencySettings cannot be read (offline DB / migration mismatch). */
+export function fallbackGlobalCurrencySettings(): GlobalCurrencySettings {
+  return {
+    id: "default",
+    usdToRmb: new Prisma.Decimal(DEFAULT_SETTINGS.usdToRmb),
+    rmbToGhs: new Prisma.Decimal(DEFAULT_SETTINGS.rmbToGhs),
+    usdToGhs: new Prisma.Decimal(DEFAULT_SETTINGS.usdToGhs),
+    updatedAt: new Date(),
+    updatedById: null,
+  };
+}
 
 /** Load singleton FX settings; creates defaults if missing. */
 export async function getGlobalCurrencySettings(): Promise<GlobalCurrencySettings> {

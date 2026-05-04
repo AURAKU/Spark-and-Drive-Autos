@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { AdminPartsDeliveryTemplatesSection } from "@/components/admin/admin-parts-delivery-templates-section";
 import { ShippingHubClient, type AdminShipmentRow } from "@/components/admin/shipping-hub-client";
 import { GhanaPartsTrackingInfoButton } from "@/components/shipping/ghana-parts-tracking-info-button";
 import { PageHeading } from "@/components/typography/page-headings";
@@ -56,6 +57,7 @@ function mapRow(s: Awaited<ReturnType<typeof listShipmentsForAdminDashboard>>[nu
     kind: s.kind,
     currentStage: s.currentStage,
     deliveryMode: s.deliveryMode,
+    customerQuotedPartsDelivery: o.partsCustomerQuotedDeliveryLabel?.trim() || null,
     feeAmount: s.feeAmount != null ? Number(s.feeAmount) : null,
     estimatedDuration: s.estimatedDuration,
     trackingNumber: s.trackingNumber,
@@ -170,6 +172,14 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
           </form>
         </div>
       </div>
+
+      <Suspense
+        fallback={
+          <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/[0.02]" />
+        }
+      >
+        <AdminPartsDeliveryTemplatesSection context="shipping" />
+      </Suspense>
 
       <ShippingHubClient rows={rows} paymentsIntelHref={paymentsIntelHref} segmentNav={segmentNav} />
     </div>

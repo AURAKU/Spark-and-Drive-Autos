@@ -387,6 +387,14 @@ export function PartsCartClient({
 
       <aside className="h-fit rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <h2 className="text-sm font-semibold text-white">Checkout summary</h2>
+        {hasChinaSelected ? (
+          <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.07] p-3 text-[11px] leading-relaxed text-cyan-50/95">
+            Shipping and delivery fees for China stock, available-in-China, or preorder parts are{" "}
+            <strong className="font-semibold text-white">not charged at checkout</strong>. Our support team will confirm
+            weight/CBM and contact you when the item arrives or is ready for collection. Delivery fees are settled manually
+            upon collection or delivery.
+          </div>
+        ) : null}
         <p className="mt-3 text-sm text-zinc-300">
           Selected items: <span className="text-white">{selectedRows.length}</span>
         </p>

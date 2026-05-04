@@ -10,6 +10,7 @@ import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { type AdminPartsLineage } from "@/lib/admin-orders-parts-filter";
 import {
   ADMIN_ORDERS_PAGE_SIZE,
+  type AdminCarOrderLaneFilter,
   buildAdminOrdersBaseWhere,
   fetchAdminOrdersRich,
 } from "@/lib/admin-orders-export-query";
@@ -18,7 +19,7 @@ import { getGlobalCurrencySettings } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
-import type { OrderKind, Prisma } from "@prisma/client";
+import type { DeliveryMode, OrderKind, Prisma } from "@prisma/client";
 
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 import { buildOrderListSearchWhere, normalizeOrderListSearchQuery } from "@/lib/admin-orders-search";
@@ -27,6 +28,18 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const PAGE_SIZE = ADMIN_ORDERS_PAGE_SIZE;
+
+function parsePartsDeliveryModeFromSearch(sp: Record<string, string | string[] | undefined>): DeliveryMode | null {
+  const raw = typeof sp.partsDeliveryMode === "string" ? sp.partsDeliveryMode : "";
+  if (raw === "AIR_EXPRESS" || raw === "AIR_STANDARD" || raw === "SEA") return raw;
+  return null;
+}
+
+function parseCarOrderLaneFromSearch(sp: Record<string, string | string[] | undefined>): AdminCarOrderLaneFilter {
+  const raw = typeof sp.carOrderLane === "string" ? sp.carOrderLane : "";
+  if (raw === "reserved_deposit" || raw === "awaiting_balance" || raw === "followup_required") return raw;
+  return null;
+}
 
 function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
   const v = sp[key];
@@ -62,15 +75,42 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
   const pageReq = readPage(sp, "page");
   const searchQ = normalizeOrderListSearchQuery(sp.q);
   const searchWhere = buildOrderListSearchWhere(searchQ);
+  const partsDeliveryMode = parsePartsDeliveryModeFromSearch(sp);
+  const carOrderLane = parseCarOrderLaneFromSearch(sp);
 
-  const where = buildAdminOrdersBaseWhere(kindFilter, ops.range, partsLineage, searchWhere);
+  const where = buildAdminOrdersBaseWhere(
+    kindFilter,
+    ops.range,
+    partsLineage,
+    searchWhere,
+    partsDeliveryMode,
+    carOrderLane,
+  );
   const { total, totalPages, page, rows } = await loadAdminOrdersPageData(where, pageReq);
 
-  const buildHref = (kind: "" | "CAR" | "PARTS", nextPage = 1, pl: AdminPartsLineage = null) => {
+  const buildHref = (
+    kind: "" | "CAR" | "PARTS",
+    nextPage = 1,
+    pl: AdminPartsLineage = null,
+    dm: DeliveryMode | null | undefined = undefined,
+    lane: AdminCarOrderLaneFilter | null | undefined = undefined,
+  ) => {
     const p = new URLSearchParams();
     if (kind) p.set("kind", kind);
     if (nextPage > 1) p.set("page", String(nextPage));
     if (pl === "ghana" || pl === "china_preorder") p.set("partsLineage", pl);
+    const resolvedDm = dm === undefined ? partsDeliveryMode : dm;
+    if (resolvedDm === "AIR_EXPRESS" || resolvedDm === "AIR_STANDARD" || resolvedDm === "SEA") {
+      p.set("partsDeliveryMode", resolvedDm);
+    }
+    const resolvedLane = lane === undefined ? carOrderLane : lane;
+    if (
+      resolvedLane === "reserved_deposit" ||
+      resolvedLane === "awaiting_balance" ||
+      resolvedLane === "followup_required"
+    ) {
+      p.set("carOrderLane", resolvedLane);
+    }
     appendOpsDateParams(p, sp);
     if (searchQ) p.set("q", searchQ);
     const qs = p.toString();
@@ -114,7 +154,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
 
       <div className="mt-6 flex flex-wrap gap-2">
         <Link
-          href={buildHref("", 1)}
+          href={buildHref("", 1, null, null, null)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             !kindFilter && !partsLineage
               ? "bg-[var(--brand)] text-black"
@@ -124,7 +164,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           All
         </Link>
         <Link
-          href={buildHref("CAR", 1)}
+          href={buildHref("CAR", 1, null, null, null)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             kindFilter === "CAR"
               ? "bg-[var(--brand)] text-black"
@@ -134,7 +174,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           Cars Inventory
         </Link>
         <Link
-          href={buildHref("PARTS", 1)}
+          href={buildHref("PARTS", 1, null, null, null)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
             kindFilter === "PARTS" || partsLineage != null
               ? "bg-[var(--brand)] text-black"
@@ -149,7 +189,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
         <div className="mt-3 flex flex-wrap items-center gap-2 pl-0 text-xs text-muted-foreground">
           <span className="w-full sm:w-auto">Parts origin:</span>
           <Link
-            href={buildHref(kindFilter ?? "PARTS", 1, null)}
+            href={buildHref(kindFilter ?? "PARTS", 1, null, null, null)}
             className={`rounded-md px-2.5 py-1 font-medium ${
               !partsLineage ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
@@ -157,7 +197,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
             All parts
           </Link>
           <Link
-            href={buildHref("PARTS", 1, "ghana")}
+            href={buildHref("PARTS", 1, "ghana", null, null)}
             className={`rounded-md px-2.5 py-1 font-medium ${
               partsLineage === "ghana"
                 ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
@@ -167,7 +207,7 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
             Ghana listed only
           </Link>
           <Link
-            href={buildHref("PARTS", 1, "china_preorder")}
+            href={buildHref("PARTS", 1, "china_preorder", null, null)}
             className={`rounded-md px-2.5 py-1 font-medium ${
               partsLineage === "china_preorder"
                 ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
@@ -175,6 +215,94 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
             }`}
           >
             China pre-orders
+          </Link>
+        </div>
+      )}
+
+      {kindFilter === "CAR" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-0 text-xs text-muted-foreground">
+          <span className="w-full sm:w-auto">Vehicle deposit / balance:</span>
+          <Link
+            href={buildHref("CAR", 1, null, null, null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              !carOrderLane ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All cars
+          </Link>
+          <Link
+            href={buildHref("CAR", 1, null, null, "reserved_deposit")}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              carOrderLane === "reserved_deposit"
+                ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Reserved (deposit)
+          </Link>
+          <Link
+            href={buildHref("CAR", 1, null, null, "awaiting_balance")}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              carOrderLane === "awaiting_balance"
+                ? "bg-sky-500/15 text-sky-900 dark:text-sky-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Awaiting balance
+          </Link>
+          <Link
+            href={buildHref("CAR", 1, null, null, "followup_required")}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              carOrderLane === "followup_required"
+                ? "bg-rose-500/15 text-rose-900 dark:text-rose-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Follow-up required
+          </Link>
+        </div>
+      )}
+
+      {kindFilter === "PARTS" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-0 text-xs text-muted-foreground">
+          <span className="w-full sm:w-auto">Parts China lane (order / shipment mode):</span>
+          <Link
+            href={buildHref(kindFilter ?? "PARTS", 1, partsLineage, null, null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              !partsDeliveryMode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Any mode
+          </Link>
+          <Link
+            href={buildHref(kindFilter ?? "PARTS", 1, partsLineage, "AIR_EXPRESS", null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              partsDeliveryMode === "AIR_EXPRESS"
+                ? "bg-cyan-500/15 text-cyan-900 dark:text-cyan-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Air express
+          </Link>
+          <Link
+            href={buildHref(kindFilter ?? "PARTS", 1, partsLineage, "AIR_STANDARD", null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              partsDeliveryMode === "AIR_STANDARD"
+                ? "bg-cyan-500/15 text-cyan-900 dark:text-cyan-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Air standard
+          </Link>
+          <Link
+            href={buildHref(kindFilter ?? "PARTS", 1, partsLineage, "SEA", null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${
+              partsDeliveryMode === "SEA"
+                ? "bg-cyan-500/15 text-cyan-900 dark:text-cyan-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Sea
           </Link>
         </div>
       )}
@@ -202,11 +330,13 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           totalItems={total}
           pageSize={PAGE_SIZE}
           itemLabel="Orders"
-          prevHref={page > 1 ? buildHref(kindFilter ?? "", page - 1, partsLineage) : null}
-          nextHref={page < totalPages ? buildHref(kindFilter ?? "", page + 1, partsLineage) : null}
+          prevHref={page > 1 ? buildHref(kindFilter ?? "", page - 1, partsLineage, undefined, undefined) : null}
+          nextHref={page < totalPages ? buildHref(kindFilter ?? "", page + 1, partsLineage, undefined, undefined) : null}
           pageHrefs={
             totalPages > 1
-              ? Array.from({ length: totalPages }, (_, i) => buildHref(kindFilter ?? "", i + 1, partsLineage))
+              ? Array.from({ length: totalPages }, (_, i) =>
+                  buildHref(kindFilter ?? "", i + 1, partsLineage, undefined, undefined),
+                )
               : undefined
           }
         />

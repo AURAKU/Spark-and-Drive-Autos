@@ -17,7 +17,10 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function PublicPartsFinderActivatePage(props: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/parts-finder/activate");
-  await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
+  const ensured = await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
+  if (!ensured.ok) {
+    console.warn("[parts-finder/activate] policy ensure non-fatal:", ensured.reason, ensured.code ?? "");
+  }
   const isAdmin = Boolean(session.user.role && isAdminRole(session.user.role));
   const sp = await props.searchParams;
   const statusHint =

@@ -104,9 +104,9 @@ export default async function PartDetailPage(props: Props) {
   const shareUrl = `${getPublicAppUrl()}/parts/${part.slug}`;
 
   return (
-    <div className="parts-theme relative [--brand:#ef4444]">
+    <div className="parts-theme relative isolate [--brand:#ef4444]">
       <div
-        className="parts-theme-bg pointer-events-none absolute inset-0 -z-10 opacity-80"
+        className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-80"
         style={{
           backgroundImage:
             "radial-gradient(860px 430px at 10% 10%, rgba(239,68,68,0.2), transparent), radial-gradient(720px 380px at 90% 18%, rgba(255,255,255,0.08), transparent), linear-gradient(180deg, rgba(5,5,6,0.95), rgba(9,10,12,0.9)), url('/brand/gear-storefront-theme.png')",
@@ -114,7 +114,7 @@ export default async function PartDetailPage(props: Props) {
           backgroundSize: "auto,auto,auto,cover",
         }}
       />
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+      <div className="relative z-[1] mx-auto min-w-0 max-w-5xl px-4 py-12 sm:px-6">
       <Link href="/parts" className="inline-flex items-center text-sm font-medium text-[var(--brand)] hover:underline">
         ← Back to catalog
       </Link>

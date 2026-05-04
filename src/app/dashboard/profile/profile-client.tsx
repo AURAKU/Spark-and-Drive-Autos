@@ -71,7 +71,10 @@ export function ProfileClient({
   const walletRef = params.get("walletRef");
 
   const [loading, setLoading] = useState(false);
+  const [phoneSaving, setPhoneSaving] = useState(false);
   const [accountName, setAccountName] = useState(name ?? "");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const hasAccountPhone = Boolean(phone?.trim());
   const [address, setAddress] = useState({
     fullName: name ?? "",
     phone: "",
@@ -87,6 +90,10 @@ export function ProfileClient({
   });
   const pendingLegalCount = legalRows.filter((r) => !r.accepted).length;
   const [legalConfirm, setLegalConfirm] = useState(false);
+
+  useEffect(() => {
+    setAccountName(name ?? "");
+  }, [name]);
 
   useEffect(() => {
     if (!legalFocus) return;
@@ -156,6 +163,27 @@ export function ProfileClient({
       toast.error(e instanceof Error ? e.message : "Could not update name.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function savePhone(e: React.FormEvent) {
+    e.preventDefault();
+    setPhoneSaving(true);
+    try {
+      const res = await fetch("/api/profile/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: phoneDraft.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not save phone.");
+      toast.success("Phone number saved.");
+      setPhoneDraft("");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save phone.");
+    } finally {
+      setPhoneSaving(false);
     }
   }
 
@@ -238,9 +266,37 @@ export function ProfileClient({
             <Button type="submit" disabled={loading}>{loading ? "Saving…" : "Update username"}</Button>
           </div>
         </form>
-        <p className="mt-3"><span className="text-zinc-500">Phone:</span> {phone ?? "—"}</p>
-        <p className="mt-1"><span className="text-zinc-500">Email:</span> {email ?? "—"}</p>
-        <p className="mt-1 text-xs text-zinc-500">Email and phone are fixed to this account and cannot be changed here.</p>
+        {hasAccountPhone ? (
+          <p className="mt-3">
+            <span className="text-zinc-500">Phone:</span> <span className="text-zinc-200">{phone}</span>
+          </p>
+        ) : (
+          <form className="mt-3 flex max-w-md flex-col gap-2" onSubmit={(e) => void savePhone(e)}>
+            <Label htmlFor="account-phone">Phone number</Label>
+            <Input
+              id="account-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="e.g. +233XXXXXXXXX"
+              value={phoneDraft}
+              onChange={(e) => setPhoneDraft(e.target.value)}
+              maxLength={40}
+            />
+            <div className="pt-1">
+              <Button type="submit" disabled={phoneSaving || loading}>
+                {phoneSaving ? "Saving…" : "Save phone"}
+              </Button>
+            </div>
+          </form>
+        )}
+        <p className="mt-3">
+          <span className="text-zinc-500">Email:</span> {email ?? "—"}
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+          Email cannot be changed here. Phone number is saved permanently to this account and cannot be changed here once
+          it has been added.
+        </p>
       </div>
 
       <div id="legal-requirements" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.03] p-6">

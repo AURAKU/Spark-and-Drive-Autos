@@ -5,13 +5,13 @@ import {
   VerificationDocumentType,
   VerificationStatus,
 } from "@prisma/client";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import {
   ALLOWED_VERIFICATION_DOCUMENT_TYPES,
   ID_VERIFICATION_CONSENT_TEXT,
@@ -253,7 +253,11 @@ export function VerificationClient({
     console.log("SAVE STATUS:", saveResponse.status);
     const data = (await saveResponse.json().catch(() => ({}))) as { error?: string; aiSuggested?: string | null };
     if (!saveResponse.ok) {
-      throw new Error("Verification save failed");
+      const msg =
+        typeof data.error === "string" && data.error.trim()
+          ? data.error.trim()
+          : `Verification save failed (${saveResponse.status})`;
+      throw new Error(msg);
     }
     return data;
   }
@@ -379,11 +383,19 @@ export function VerificationClient({
             ) : null}
           </div>
 
-          <div className="relative h-28 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+          <div className="min-w-0 max-w-full sm:max-w-[320px]">
             {shownImage ? (
-              <Image src={shownImage} alt="Ghana Card ID" fill className="object-cover" unoptimized />
+              <UploadedFilePreview
+                url={shownImage}
+                label="Ghana Card on file"
+                statusLabel={ghanaCardVerificationStatus.replaceAll("_", " ")}
+                variant="default"
+                density="compact"
+              />
             ) : (
-              <div className="flex h-full items-center justify-center text-xs text-zinc-500">No ID photo</div>
+              <div className="flex min-h-[140px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-xs text-zinc-500">
+                No ID photo yet
+              </div>
             )}
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { PaymentDisputeStatus, PaymentStatus, Prisma, RiskTagSeverity } from "@prisma/client";
+import { PaymentDisputeStatus, PaymentStatus, RiskTagSeverity } from "@prisma/client";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -62,26 +62,23 @@ export async function createPolicyVersion(formData: FormData) {
       data: { isActive: false },
     });
   }
-  let created;
-  try {
-    created = await prisma.policyVersion.create({
-      data: {
-        policyKey: d.policyKey,
-        version: d.version,
-        title: d.title,
-        content: safeBody,
-        isActive: d.isActive ?? true,
-        createdById: session.user.id,
-      },
-    });
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      redirect(
-        `/admin/legal?err=policy_unique&policyKey=${encodeURIComponent(d.policyKey)}&policyVersion=${encodeURIComponent(d.version)}`,
-      );
-    }
-    throw e;
-  }
+  const created = await prisma.policyVersion.upsert({
+    where: { policyKey_version: { policyKey: d.policyKey, version: d.version } },
+    create: {
+      policyKey: d.policyKey,
+      version: d.version,
+      title: d.title,
+      content: safeBody,
+      isActive: d.isActive ?? true,
+      createdById: session.user.id,
+    },
+    update: {
+      title: d.title,
+      content: safeBody,
+      isActive: d.isActive ?? true,
+      createdById: session.user.id,
+    },
+  });
   await writeLegalAuditLog({
     actorId: session.user.id,
     action: d.isActive ?? true ? "POLICY_VERSION_CREATED_AND_ACTIVATED" : "POLICY_VERSION_CREATED",

@@ -1,17 +1,18 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { applyChinaPreOrderIntlFormAction } from "@/actions/parts-admin";
+import { AdminPartsDeliveryTemplatesSection } from "@/components/admin/admin-parts-delivery-templates-section";
 import { AddPartDialog } from "@/components/admin/add-part-dialog";
 import { PageHeading } from "@/components/typography/page-headings";
-import { PartsCategoriesPanel, PartsDeliveryTemplatesPanel } from "@/components/admin/parts-categories-delivery-panel";
+import { PartsCategoriesPanel } from "@/components/admin/parts-categories-delivery-panel";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
-import { formatConverted, getGlobalCurrencySettings } from "@/lib/currency";
-import { adminFeeAmountForDisplay } from "@/lib/delivery-template-fees";
+import { formatConverted } from "@/lib/currency";
 import { GHANA_LOW_STOCK_ALERT_MAX, getGhanaLowStockPartsForAdmin } from "@/lib/ghana-low-stock";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
-import { DeliveryFeeCurrency, DeliveryMode, PartOrigin, PartStockStatus, PartListingState } from "@prisma/client";
+import { PartOrigin, PartStockStatus, PartListingState } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,6 @@ function parseTab(raw: string | undefined): Tab {
   if (raw && TAB_VALUES.includes(raw as Tab)) return raw as Tab;
   return "catalog";
 }
-
-const deliveryDefaults: Record<DeliveryMode, { name: string; etaLabel: string }> = {
-  AIR_EXPRESS: { name: "Air Delivery Express", etaLabel: "3 days" },
-  AIR_STANDARD: { name: "Normal Air Delivery", etaLabel: "5-10 days" },
-  SEA: { name: "Sea Shipping", etaLabel: "35-45 days" },
-};
 
 export default async function PartsManagementPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
@@ -63,69 +58,60 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
     ],
   };
 
-  const [fx, categoriesForFilter, categoriesAll, deliveryRows, totalParts] = await Promise.all([
-    getGlobalCurrencySettings(),
-    prisma.part.findMany({
-      select: { category: true },
-      distinct: ["category"],
-      orderBy: { category: "asc" },
-    }),
-    prisma.partCategory.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
-    prisma.deliveryOptionTemplate.findMany({ orderBy: [{ sortOrder: "asc" }, { mode: "asc" }] }),
-    prisma.part.count({ where }),
-  ]);
+  let categoriesForFilter: { category: string }[] = [];
+  let categoriesAll: Awaited<ReturnType<typeof prisma.partCategory.findMany>> = [];
+  let totalParts = 0;
+  let parts: Awaited<ReturnType<typeof prisma.part.findMany>> = [];
+  let ghanaLowStockParts: Awaited<ReturnType<typeof getGhanaLowStockPartsForAdmin>> = [];
+  let totalPages = 1;
+  let page = 1;
+  let adminPartsError: string | null = null;
 
-  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalParts) / PAGE_SIZE));
-  const page = Math.min(Math.max(1, pageReq), totalPages);
+  try {
+    const [cf, ca, tp] = await Promise.all([
+      prisma.part.findMany({
+        select: { category: true },
+        distinct: ["category"],
+        orderBy: { category: "asc" },
+      }),
+      prisma.partCategory.findMany({
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      }),
+      prisma.part.count({ where }),
+    ]);
+    categoriesForFilter = cf;
+    categoriesAll = ca;
+    totalParts = tp;
 
-  const parts =
-    tab === "catalog"
-      ? await prisma.part.findMany({
-          where,
-          orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
-          skip: (page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
-        })
-      : [];
+    totalPages = Math.max(1, Math.ceil(Math.max(0, totalParts) / PAGE_SIZE));
+    page = Math.min(Math.max(1, pageReq), totalPages);
 
-  const ghanaLowStockParts = await getGhanaLowStockPartsForAdmin();
+    parts =
+      tab === "catalog"
+        ? await prisma.part.findMany({
+            where,
+            orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
+            skip: (page - 1) * PAGE_SIZE,
+            take: PAGE_SIZE,
+          })
+        : [];
+
+    ghanaLowStockParts = await getGhanaLowStockPartsForAdmin();
+  } catch (e) {
+    console.error("[admin/parts] load failed", e);
+    adminPartsError =
+      "Parts data could not be loaded. If this persists, run prisma migrate deploy on the server (PartCategory / Part.origin / basePriceRmb must exist) and verify DATABASE_URL.";
+    totalParts = 0;
+    parts = [];
+    ghanaLowStockParts = [];
+    categoriesForFilter = [];
+    categoriesAll = [];
+    totalPages = 1;
+    page = 1;
+  }
 
   const categoriesSelect = categoriesAll.filter((c) => c.active);
 
-  const deliveryByMode = new Map(deliveryRows.map((r) => [r.mode, r]));
-  const deliveryModes = Object.keys(deliveryDefaults) as DeliveryMode[];
-  const deliveryRowsSerialized: Record<
-    string,
-    {
-      mode: DeliveryMode;
-      name: string;
-      etaLabel: string;
-      feeGhs: number;
-      feeRmb: number;
-      feeCurrency: DeliveryFeeCurrency;
-      feeAmount: number;
-      weightKg: number | null;
-      volumeCbm: number | null;
-    } | null
-  > = {};
-  for (const mode of deliveryModes) {
-    const row = deliveryByMode.get(mode);
-    deliveryRowsSerialized[mode] = row
-      ? {
-          mode: row.mode,
-          name: row.name,
-          etaLabel: row.etaLabel,
-          feeGhs: Number(row.feeGhs),
-          feeRmb: Number(row.feeRmb),
-          feeCurrency: row.feeCurrency,
-          feeAmount: adminFeeAmountForDisplay(Number(row.feeGhs), row.feeCurrency, fx),
-          weightKg: row.weightKg != null ? Number(row.weightKg) : null,
-          volumeCbm: row.volumeCbm != null ? Number(row.volumeCbm) : null,
-        }
-      : null;
-  }
   const categoryRows = categoriesAll.map((c) => ({
     id: c.id,
     name: c.name,
@@ -178,6 +164,12 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
           </p>
         </div>
       </div>
+
+      {adminPartsError ? (
+        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
+          {adminPartsError}
+        </div>
+      ) : null}
 
       <nav className="mt-6 flex flex-wrap gap-2 border-b border-white/10 pb-3">
         <Link
@@ -302,10 +294,12 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
           </form>
 
           <p className="mt-3 text-xs text-zinc-500">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalParts)} of {totalParts} SKUs
+            {adminPartsError
+              ? "Catalog totals unavailable until the database responds."
+              : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, totalParts)} of ${totalParts} SKUs`}
           </p>
 
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+          <div className="mt-4 sda-table-scroll rounded-2xl border border-white/10">
             <table className="min-w-[780px] w-full border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-white/[0.04] text-xs text-zinc-500 uppercase">
                 <tr>
@@ -320,7 +314,14 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
                 </tr>
               </thead>
               <tbody>
-                {parts.length === 0 ? (
+                {adminPartsError ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                      Fix the database connection or migrations, then refresh. Categories and delivery tabs may also fail until
+                      the schema matches.
+                    </td>
+                  </tr>
+                ) : parts.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
                       No parts match.{" "}
@@ -411,11 +412,13 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
       {tab === "categories" ? <PartsCategoriesPanel categories={categoryRows} /> : null}
 
       {tab === "delivery" ? (
-        <PartsDeliveryTemplatesPanel
-          modes={deliveryModes}
-          deliveryDefaults={deliveryDefaults}
-          rowsByMode={deliveryRowsSerialized}
-        />
+        <Suspense
+          fallback={
+            <div className="mt-6 h-48 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+          }
+        >
+          <AdminPartsDeliveryTemplatesSection context="parts" />
+        </Suspense>
       ) : null}
     </div>
   );

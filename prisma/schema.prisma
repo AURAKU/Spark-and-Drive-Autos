@@ -125,6 +125,10 @@ enum OrderStatus {
   DRAFT
   PENDING_PAYMENT
   PAID
+  /// Vehicle: deposit received; balance outstanding (see `remainingBalance`).
+  RESERVED_WITH_DEPOSIT
+  /// Ops marker — use filters/UI for follow-up; may mirror deposit-awaiting state.
+  AWAITING_BALANCE
   PROCESSING
   SOURCING
   SHIPPED
@@ -139,6 +143,14 @@ enum OrderStatus {
 enum OrderKind {
   CAR
   PARTS
+}
+
+/// Vehicle deposit balance lifecycle (outstanding balance after reservation deposit).
+enum OrderBalanceStatus {
+  CURRENT
+  DUE_SOON
+  OVERDUE
+  PAID
 }
 
 enum PaymentType {
@@ -602,6 +614,7 @@ model User {
   carRequests                  CarRequest[]
   partSourcingRequests         PartSourcingRequest[]
   orders                       Order[]
+  ordersBalanceMarkedPaid      Order[]                        @relation("OrderBalanceMarkedPaidBy")
   payments                     Payment[]
   chats                        ChatThread[]                     @relation("CustomerChats")
   leads                        Lead[]                           @relation("LeadCustomer")
@@ -814,6 +827,10 @@ model Car {
   supplierDealerNotes        String?    @db.Text
   /// Legacy display fields — optional overrides; prefer deriving from basePriceRmb + GlobalCurrencySettings
   price              Decimal            @db.Decimal(14, 2)
+  /// Optional explicit multi-currency list anchors for deposit/checkout resolution (priority: GHS → USD → CNY → legacy RMB).
+  priceGhs           Decimal?           @db.Decimal(14, 2)
+  priceUsd           Decimal?           @db.Decimal(14, 2)
+  priceCny           Decimal?           @db.Decimal(14, 2)
   currency           String             @default("GHS")
   location           String?
   featured           Boolean            @default(false)
@@ -1128,6 +1145,41 @@ model Order {
   amount                  Decimal     @db.Decimal(14, 2)
   currency                String      @default("GHS")
   notes                   String?     @db.Text
+  /// Parts China / pre-order: international shipping is quoted for ops; fees are not included in Paystack/wallet checkout totals when false.
+  shippingFeeChargedAtCheckout Boolean @default(false)
+  /// MANUAL_PENDING = fee settled later with support; tracks policy without faking payment state.
+  partsIntlShippingFeeStatus   String   @default("MANUAL_PENDING") @db.VarChar(32)
+  /// Customer-selected / quoted lane for China-stock international leg (mirrors shipment planning).
+  partsCustomerQuotedDeliveryMode  DeliveryMode?
+  partsCustomerQuotedDeliveryLabel String? @db.Text
+  /// Vehicle reservation deposit (GHS) after successful Paystack deposit payment.
+  depositAmount                  Decimal? @db.Decimal(14, 2)
+  /// Vehicle: list price GHS minus deposit; outstanding balance before full payment.
+  remainingBalance               Decimal? @db.Decimal(14, 2)
+  /// Snapshot of % used when deposit was computed (may mirror Car.reservationDepositPercent).
+  orderDepositPercentSnapshot     Decimal? @db.Decimal(5, 2)
+  /// Which explicit price column drove list-price resolution: GHS / USD / CNY (or legacy GHS from RMB).
+  currencyBase                   String?  @db.VarChar(3)
+  /// FX rate applied when converting USD/CNY list anchors to GHS (optional snapshot).
+  exchangeRateUsed               Decimal? @db.Decimal(18, 8)
+  /// When the vehicle was reserved (deposit order created / confirmed).
+  reservedAt                     DateTime?
+  /// Full vehicle list price in GHS (snapshot for deposit orders; optional for full-pay).
+  vehicleListPriceGhs            Decimal?           @db.Decimal(14, 2)
+  /// List anchor amount in `currencyBase` (e.g. USD, CNY, or GHS list).
+  baseAmount                     Decimal?           @db.Decimal(18, 2)
+  /// Balance due date = deposit success time + balance window (default 21 days).
+  balanceDueAt                   DateTime?
+  balanceReminderCount         Int                @default(0)
+  lastBalanceReminderAt        DateTime?
+  balanceStatus                OrderBalanceStatus?
+  /// Set when balance is overdue (unpaid after `balanceDueAt`) or ops flags follow-up.
+  followUpRequired             Boolean            @default(false)
+  balanceCollectionNote        String?            @db.Text
+  manualBalancePaymentRef      String?            @db.VarChar(160)
+  balanceMarkedPaidAt          DateTime?
+  balanceMarkedPaidById        String?
+  balanceMarkedPaidBy          User?              @relation("OrderBalanceMarkedPaidBy", fields: [balanceMarkedPaidById], references: [id], onDelete: SetNull)
   deliveryAddressId       String?
   deliveryAddressSnapshot Json?
   receiptData             Json?
@@ -1159,6 +1211,9 @@ model Order {
   @@index([reference])
   @@index([kind])
   @@index([receiptReference])
+  @@index([balanceDueAt])
+  @@index([balanceStatus])
+  @@index([followUpRequired])
 }
 
 model VehicleImportEstimate {
@@ -2559,6 +2614,12 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+/// Singleton metadata row — readiness uses this to confirm backup subsystem is initialized (not a substitute for successful backups).
+model SystemBackupMetadata {
+  id        String   @id @default("default")
+  updatedAt DateTime @updatedAt
 }
 
 /// Backup execution log for operational readiness and restore audits.

@@ -10,6 +10,7 @@ import {
   parseCarOpsStateFilter,
 } from "@/lib/admin-car-ops-state";
 import {
+  fallbackGlobalCurrencySettings,
   formatConverted,
   formatVehiclePriceFromRmb,
   getGlobalCurrencySettings,
@@ -18,7 +19,7 @@ import {
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
 
-import type { Prisma } from "@prisma/client";
+import type { GlobalCurrencySettings, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -60,17 +61,39 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
   if (sort === "newest") orderBy = { createdAt: "desc" };
   if (sort === "updated") orderBy = { updatedAt: "desc" };
 
-  const [total, fx] = await Promise.all([prisma.car.count({ where }), getGlobalCurrencySettings()]);
+  let total = 0;
+  let cars: Awaited<ReturnType<typeof prisma.car.findMany>> = [];
+  let fx: GlobalCurrencySettings = fallbackGlobalCurrencySettings();
+  let totalPages = 1;
+  let page = 1;
+  let adminCarsError: string | null = null;
 
-  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
-  const page = Math.min(Math.max(1, pageReq), totalPages);
-
-  const cars = await prisma.car.findMany({
-    where,
-    orderBy,
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
+  try {
+    const [count, fxRow] = await Promise.all([prisma.car.count({ where }), getGlobalCurrencySettings()]);
+    total = count;
+    fx = fxRow;
+    totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
+    page = Math.min(Math.max(1, pageReq), totalPages);
+    cars = await prisma.car.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+  } catch (e) {
+    console.error("[admin/cars] load failed", e);
+    adminCarsError =
+      "Vehicle inventory could not be loaded. Confirm the database matches the deployed schema (run prisma migrate deploy on the server) and DATABASE_URL is correct.";
+    total = 0;
+    cars = [];
+    totalPages = 1;
+    page = 1;
+    try {
+      fx = await getGlobalCurrencySettings();
+    } catch {
+      fx = fallbackGlobalCurrencySettings();
+    }
+  }
 
   const buildPageHref = (p: number) => {
     const params = new URLSearchParams();
@@ -115,6 +138,12 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
         </div>
         <AddVehicleDialog initialOpen={addVehicle} />
       </div>
+
+      {adminCarsError ? (
+        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
+          {adminCarsError}
+        </div>
+      ) : null}
 
       <form
         className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:flex-row lg:flex-wrap lg:items-end"
@@ -190,10 +219,12 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
       </form>
 
       <p className="mt-4 text-xs text-zinc-500">
-        Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} vehicles
+        {adminCarsError
+          ? "Inventory totals unavailable until the database responds."
+          : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} of ${total} vehicles`}
       </p>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+      <div className="mt-4 sda-table-scroll rounded-2xl border border-white/10">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
@@ -208,7 +239,13 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
             </tr>
           </thead>
           <tbody>
-            {cars.length === 0 ? (
+            {adminCarsError ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                  Fix the database connection or migrations, then refresh this page.
+                </td>
+              </tr>
+            ) : cars.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
                   No vehicles match. Adjust filters or add a listing.

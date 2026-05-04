@@ -4,9 +4,10 @@ import * as XLSX from "xlsx";
 
 import { formatMoney } from "@/lib/format";
 import { getGlobalCurrencySettings } from "@/lib/currency";
-import type { Prisma } from "@prisma/client";
+import type { DeliveryMode, Prisma } from "@prisma/client";
 
 import {
+  type AdminCarOrderLaneFilter,
   type AdminOrderRich,
   ADMIN_ORDERS_EXPORT_MAX,
   buildAdminOrdersBaseWhere,
@@ -19,7 +20,7 @@ import {
   type OrdersExportKindFilter,
 } from "@/lib/admin-orders-export-query";
 
-export type { OrdersExportKindFilter };
+export type { OrdersExportKindFilter, AdminCarOrderLaneFilter };
 export {
   ADMIN_ORDERS_PAGE_SIZE,
   ADMIN_ORDERS_EXPORT_MAX,
@@ -64,9 +65,22 @@ export async function fetchOrdersForAdminExport(
   dateRange?: { gte: Date; lt: Date } | null,
   partsLineage: import("@/lib/admin-orders-parts-filter").AdminPartsLineage = null,
   searchWhere: Prisma.OrderWhereInput | null = null,
-  opts?: { skip?: number; take?: number; orderIds?: string[] },
+  opts?: {
+    skip?: number;
+    take?: number;
+    orderIds?: string[];
+    partsDeliveryMode?: DeliveryMode | null;
+    carOrderLane?: AdminCarOrderLaneFilter;
+  },
 ) {
-  const where = buildAdminOrdersBaseWhere(kindFilter, dateRange, partsLineage, searchWhere);
+  const where = buildAdminOrdersBaseWhere(
+    kindFilter,
+    dateRange,
+    partsLineage,
+    searchWhere,
+    opts?.partsDeliveryMode,
+    opts?.carOrderLane,
+  );
   return fetchAdminOrdersRich(where, {
     ...opts,
     take: opts?.take ?? ADMIN_ORDERS_EXPORT_MAX,

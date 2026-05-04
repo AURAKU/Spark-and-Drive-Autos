@@ -24,13 +24,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { isPaymentProofPdfUrl } from "@/lib/payment-proof-url";
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { getSettlementInstructions, SETTLEMENT_METHOD_ORDER, settlementMethodLabel } from "@/lib/payment-settlement";
 import { PAYMENT_STATUS_ORDER } from "@/lib/payment-status-utils";
 
 type PaymentWithRelations = Payment & {
   proofs: PaymentProof[];
-  user: Pick<User, "email" | "name"> | null;
+  user: Pick<User, "email" | "name" | "phone"> | null;
 };
 
 export function AdminPaymentPanel({ payment: initial }: { payment: PaymentWithRelations }) {
@@ -161,7 +161,11 @@ export function AdminPaymentPanel({ payment: initial }: { payment: PaymentWithRe
         </div>
         <div className="text-sm text-zinc-400">
           <p>
-            <span className="text-zinc-500">Customer:</span> {payment.user?.email ?? "—"}
+            <span className="text-zinc-500">Customer:</span>{" "}
+            <span className="text-zinc-300">{payment.user?.email ?? "—"}</span>
+            {payment.user?.phone?.trim() ? (
+              <span className="text-zinc-400"> · {payment.user.phone.trim()}</span>
+            ) : null}
           </p>
           <p className="mt-2">
             Use status to request proof (<strong className="text-zinc-300">Awaiting proof</strong>) or confirm manually (
@@ -209,31 +213,23 @@ function ProofReviewCard({
   onReject: (note: string) => void;
 }) {
   const [note, setNote] = useState("");
-  const isPdf = isPaymentProofPdfUrl(proof.imageUrl);
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-      {isPdf ? (
-        <div className="flex h-40 flex-col items-center justify-center gap-2 bg-zinc-900/80 px-3">
-          <p className="text-center text-xs font-medium text-zinc-300">PDF receipt</p>
-          <a
-            href={proof.imageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-semibold text-[var(--brand)] hover:underline"
-          >
-            Open PDF in new tab
-          </a>
-        </div>
-      ) : (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={proof.imageUrl} alt="Payment proof" className="h-40 w-full object-cover" />
-      )}
+      <UploadedFilePreview
+        url={proof.imageUrl}
+        publicId={proof.publicId}
+        label="Payment proof"
+        uploadedAt={proof.createdAt}
+        statusLabel={proof.status}
+        variant="admin"
+      />
       <div className="space-y-2 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-          {proof.status}
-          {isPdf ? <span className="ml-2 text-zinc-600">· PDF</span> : <span className="ml-2 text-zinc-600">· Image</span>}
-        </p>
-        {proof.note ? <p className="text-xs text-zinc-400">{proof.note}</p> : null}
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Review actions</p>
+        {proof.note ? (
+          <p className="text-xs text-zinc-400">
+            <span className="font-medium text-zinc-300">Customer note:</span> {proof.note}
+          </p>
+        ) : null}
         <Input
           placeholder="Note to customer (optional)"
           value={note}

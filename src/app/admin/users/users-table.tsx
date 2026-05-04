@@ -151,7 +151,7 @@ export function UsersTable({
           </form>
         </div>
       ) : null}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card/30 shadow-sm ring-1 ring-border/30 dark:border-white/10 dark:bg-transparent dark:ring-white/5">
+      <div className="sda-table-scroll rounded-2xl border border-border bg-card/30 shadow-sm ring-1 ring-border/30 dark:border-white/10 dark:bg-transparent dark:ring-white/5">
         <table className="w-full min-w-[920px] text-left text-sm">
           <thead className="border-b border-border bg-muted/50 text-xs font-medium tracking-wide text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]">
             <tr>

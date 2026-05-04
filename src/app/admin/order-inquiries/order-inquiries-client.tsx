@@ -71,7 +71,7 @@ export function OrderInquiriesClient({ rows }: { rows: OrderInquiryRow[] }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
+      <div className="sda-table-scroll rounded-2xl border border-white/10">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
             <tr>

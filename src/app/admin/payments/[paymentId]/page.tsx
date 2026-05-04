@@ -18,7 +18,7 @@ export default async function AdminPaymentDetailPage({ params }: Props) {
     include: {
       proofs: { orderBy: { createdAt: "desc" } },
       statusHistory: { orderBy: { createdAt: "desc" }, take: 40 },
-      user: { select: { email: true, name: true } },
+      user: { select: { email: true, name: true, phone: true } },
       order: { include: { car: { select: { title: true, slug: true } } } },
     },
   });

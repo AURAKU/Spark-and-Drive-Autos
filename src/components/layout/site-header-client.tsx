@@ -120,7 +120,7 @@ export function SiteHeaderClient({
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/90">
+    <header className="sticky top-0 z-50 border-b border-border bg-background dark:border-white/10 dark:bg-zinc-950 max-md:backdrop-blur-none md:bg-background/90 md:backdrop-blur-xl md:dark:bg-zinc-950/90">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/40 to-transparent" />
       <div className="relative min-h-[4.25rem] w-full px-2 py-3 sm:px-4 lg:px-6">
         <div className="flex min-h-[calc(4.25rem-1.5rem)] items-center justify-between">

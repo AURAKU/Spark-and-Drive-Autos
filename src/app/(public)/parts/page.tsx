@@ -167,9 +167,9 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   const favoriteIds = new Set(favoriteRows.map((f) => f.partId));
 
   return (
-    <div className="parts-theme relative [--brand:#ef4444]">
+    <div className="parts-theme relative isolate [--brand:#ef4444]">
       <div
-        className="parts-theme-bg pointer-events-none absolute inset-0 -z-10 opacity-80"
+        className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-80"
         style={{
           backgroundImage:
             "radial-gradient(980px 520px at 10% 8%, rgba(239,68,68,0.24), transparent), radial-gradient(760px 440px at 92% 16%, rgba(255,255,255,0.1), transparent), linear-gradient(180deg, rgba(4,4,5,0.95), rgba(10,10,12,0.9)), url('/brand/gear-storefront-theme.png')",
@@ -177,7 +177,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
           backgroundSize: "auto,auto,auto,cover",
         }}
       />
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+      <div className="relative z-[1] mx-auto min-w-0 max-w-7xl px-4 py-12 sm:px-6">
         <div className="parts-hero relative overflow-hidden rounded-3xl border border-red-300/25 bg-black/40 p-6 shadow-[0_0_55px_-24px_rgba(239,68,68,0.65)] sm:p-8">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-500/18 via-transparent to-white/5" />
           <div className="relative flex flex-col gap-6">

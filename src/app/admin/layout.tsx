@@ -10,11 +10,11 @@ import { safeAuth } from "@/lib/safe-auth";
 
 const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin", label: "Command Center" },
-  { href: "/admin/health", label: "System health" },
   { href: "/admin/users", label: "All Users" },
   { href: "/admin/cars", label: "Cars Inventory" },
   { href: "/admin/parts", label: "Parts Management" },
   { href: "/admin/orders", label: "All Orders" },
+  { href: "/admin/deposit-balances", label: "Deposit balances" },
   { href: "/admin/payments/intelligence", label: "Payment intelligence" },
   { href: "/admin/shipping", label: "Shipping & Delivery Tracking" },
   { href: "/admin/duty", label: "Duty Tracking" },
@@ -30,6 +30,7 @@ const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin/import-export", label: "BULK Imports & Export Inventory" },
   { href: "/admin/duplicates", label: "Duplicate Inventory" },
   { href: "/admin/audit", label: "Audit logs" },
+  { href: "/admin/health", label: "System health" },
 ];
 
 const assistantLinks: AdminNavLink[] = [
@@ -92,7 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <ThemeToggle className="pointer-events-auto" />
             </div>
           </div>
-          <div className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
+          <div className="sda-main-safe mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
         </div>
       </div>
     </div>

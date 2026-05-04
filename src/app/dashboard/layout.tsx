@@ -144,7 +144,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <CurrencySwitcher initial={displayCurrency} compact />
             </div>
           </div>
-          <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+          <div className="sda-main-safe mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
             {!isStaff ? <DashboardLegalPendingBanner pending={pendingLegal} /> : null}
             {children}
           </div>

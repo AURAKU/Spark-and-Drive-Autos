@@ -175,7 +175,7 @@ export function ManualCheckoutClient({
       </Button>
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>
-        <DialogContent className="border border-white/10 bg-[#0a0e14] sm:max-w-md">
+        <DialogContent className="sda-dark-dialog-surface border border-white/10 bg-[#0a0e14] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">Sign in required</DialogTitle>
             <DialogDescription className="text-zinc-400">

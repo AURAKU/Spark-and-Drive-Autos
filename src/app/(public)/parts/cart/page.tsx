@@ -17,9 +17,9 @@ export default async function PartsCartPage() {
   const session = await safeAuth();
   if (!session?.user?.id) {
     return (
-      <div className="parts-theme relative [--brand:#ef4444]">
+      <div className="parts-theme relative isolate [--brand:#ef4444]">
         <div
-          className="parts-theme-bg pointer-events-none absolute inset-0 -z-10 opacity-80"
+          className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-80"
           style={{
             backgroundImage:
               "radial-gradient(840px 420px at 10% 10%, rgba(239,68,68,0.2), transparent), radial-gradient(680px 360px at 90% 14%, rgba(255,255,255,0.08), transparent), linear-gradient(180deg, rgba(5,5,6,0.95), rgba(9,10,12,0.9)), url('/brand/gear-storefront-theme.png')",
@@ -27,7 +27,7 @@ export default async function PartsCartPage() {
             backgroundSize: "auto,auto,auto,cover",
           }}
         />
-        <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+        <div className="relative z-[1] mx-auto min-w-0 max-w-4xl px-4 py-12 sm:px-6">
           <PageHeading>Parts cart</PageHeading>
           <p className="mt-3 text-sm text-zinc-300">Please sign in to view your saved cart items.</p>
           <Link
@@ -104,9 +104,9 @@ export default async function PartsCartPage() {
   const legalCheckoutReady = checkoutAgreementOk && paymentNoticeOk;
 
   return (
-    <div className="parts-theme relative [--brand:#ef4444]">
+    <div className="parts-theme relative isolate [--brand:#ef4444]">
       <div
-        className="parts-theme-bg pointer-events-none absolute inset-0 -z-10 opacity-80"
+        className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-80"
         style={{
           backgroundImage:
             "radial-gradient(840px 420px at 10% 10%, rgba(239,68,68,0.2), transparent), radial-gradient(680px 360px at 90% 14%, rgba(255,255,255,0.08), transparent), linear-gradient(180deg, rgba(5,5,6,0.95), rgba(9,10,12,0.9)), url('/brand/gear-storefront-theme.png')",
@@ -114,7 +114,7 @@ export default async function PartsCartPage() {
           backgroundSize: "auto,auto,auto,cover",
         }}
       />
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+      <div className="relative z-[1] mx-auto min-w-0 max-w-6xl px-4 py-12 sm:px-6">
         <PageHeading>Parts cart</PageHeading>
         <p className="mt-2 text-sm text-zinc-300">
           Select items ready for payment, choose delivery address, and complete wallet checkout.

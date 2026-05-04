@@ -49,7 +49,7 @@ export function CheckoutBlockedDialog({
     >
       <DialogContent
         showCloseButton={allowDismiss}
-        className="overflow-hidden border border-amber-500/35 bg-[#0a0e14] p-0 text-popover-foreground shadow-2xl sm:max-w-md"
+        className="sda-dark-dialog-surface overflow-hidden border border-amber-500/35 bg-[#0a0e14] p-0 text-popover-foreground shadow-2xl sm:max-w-md"
       >
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
         <div className="px-6 pb-6 pt-8">

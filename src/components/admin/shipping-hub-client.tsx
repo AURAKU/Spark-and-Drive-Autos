@@ -29,6 +29,8 @@ export type AdminShipmentRow = {
   kind: ShipmentKind;
   currentStage: ShipmentLogisticsStage;
   deliveryMode: string | null;
+  /** Checkout-quoted China lane label on the order (when present). */
+  customerQuotedPartsDelivery: string | null;
   feeAmount: number | null;
   estimatedDuration: string | null;
   trackingNumber: string | null;
@@ -244,6 +246,11 @@ export function ShippingHubClient({
                       </p>
                       {row.trackingNumber ? (
                         <p className="mt-1 font-mono text-[10px] text-zinc-500">Tracking: {row.trackingNumber}</p>
+                      ) : null}
+                      {row.customerQuotedPartsDelivery && row.orderKind === "PARTS" ? (
+                        <p className="mt-1 text-[11px] text-cyan-200/85">
+                          Customer lane: {row.customerQuotedPartsDelivery}
+                        </p>
                       ) : null}
                     </div>
                   </div>

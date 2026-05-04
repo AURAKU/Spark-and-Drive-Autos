@@ -9,7 +9,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <Suspense fallback={<SiteHeaderFallback />}>
         <SiteHeader />
       </Suspense>
-      <main className="flex-1 min-w-0 overflow-x-clip">{children}</main>
+      <main className="sda-main-safe min-w-0 flex-1 overflow-x-clip">{children}</main>
       <PublicSiteFooter />
     </div>
   );

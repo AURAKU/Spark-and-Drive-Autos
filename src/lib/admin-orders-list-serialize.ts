@@ -1,4 +1,5 @@
 import type { GlobalCurrencySettings } from "@prisma/client";
+import { OrderStatus } from "@prisma/client";
 
 import { orderPartsLineageLabel } from "@/lib/admin-orders-parts-filter";
 import {
@@ -77,6 +78,20 @@ export function buildAdminOrderListRow(
         ? "0"
         : String(o.partItems.reduce((s, li) => s + li.quantity, 0));
 
+  let carDepositTracking: string | null = null;
+  if (o.kind === "CAR" && o.orderStatus === OrderStatus.RESERVED_WITH_DEPOSIT) {
+    const dep = o.depositAmount != null ? formatMoney(Number(o.depositAmount), o.currency) : "—";
+    const rem = o.remainingBalance != null ? formatMoney(Number(o.remainingBalance), o.currency) : "—";
+    const start = o.reservedAt ?? o.createdAt;
+    const days = (Date.now() - start.getTime()) / 864e5;
+    const dueHint =
+      o.balanceDueAt != null ? ` · due ${o.balanceDueAt.toISOString().slice(0, 10)}` : "";
+    carDepositTracking = `Deposit ${dep} · Remaining ${rem} · ${Math.max(0, Math.floor(days))}d since reservation${dueHint}`;
+    if (o.followUpRequired) {
+      carDepositTracking += " · FOLLOW UP REQUIRED";
+    }
+  }
+
   const preview: AdminOrderPreviewPayload = {
     orderNumber: o.reference,
     customerName: o.user?.name?.trim() || "—",
@@ -96,7 +111,7 @@ export function buildAdminOrderListRow(
     orderDateIso: o.createdAt.toISOString(),
     dueOrEta: o.shipments[0]?.estimatedDuration?.trim() || null,
     imageUrl,
-    adminNotes: o.notes?.trim() || null,
+    adminNotes: [o.notes?.trim(), carDepositTracking].filter(Boolean).join(" | ") || null,
   };
 
   return {

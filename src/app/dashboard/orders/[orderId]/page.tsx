@@ -4,18 +4,22 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { PageHeading } from "@/components/typography/page-headings";
 import { OrderDutySection } from "@/components/duty/order-duty-section";
 import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
 import { DeferredChinaFreightPanel } from "@/components/parts/deferred-china-freight-panel";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
+import { BALANCE_DUE_WINDOW_DAYS } from "@/lib/deposit-balance-logic";
 import { formatMoney } from "@/lib/format";
 import { getDeferredChinaContextForUser } from "@/lib/parts-china-pending-shipping";
 import { SHIPMENT_KIND_LABEL, SHIPMENT_STAGE_LABEL } from "@/lib/shipping/constants";
 import { ghanaPartsCustomerStageLabel } from "@/lib/shipping/ghana-parts-flow";
 import { getShipmentsForOrderDetail } from "@/lib/shipping/shipment-service";
 import { prisma } from "@/lib/prisma";
+
+import { PaymentType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -45,13 +49,15 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
 
   if (!order) notFound();
 
-  const [shipments, pendingChinaPre, walletGhs] = await Promise.all([
+  const [shipments, pendingChinaPre, accountContact] = await Promise.all([
     getShipmentsForOrderDetail(orderId, userId),
     order.kind === "PARTS" ? getDeferredChinaContextForUser(orderId, userId) : Promise.resolve(null),
-    prisma.user
-      .findUnique({ where: { id: userId }, select: { walletBalance: true } })
-      .then((u) => Number(u?.walletBalance ?? 0)),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { walletBalance: true, email: true, phone: true },
+    }),
   ]);
+  const walletGhs = Number(accountContact?.walletBalance ?? 0);
   const generatedReceipts = await prisma.generatedReceipt.findMany({
     where: { orderId, userId },
     orderBy: { issuedAt: "desc" },
@@ -112,8 +118,58 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
             <dt className="text-zinc-500">Last updated</dt>
             <dd className="text-zinc-200">{order.updatedAt.toLocaleString()}</dd>
           </div>
+          <div>
+            <dt className="text-zinc-500">Account email</dt>
+            <dd className="break-all text-zinc-200">{accountContact?.email ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Account phone</dt>
+            <dd className="text-zinc-200">{accountContact?.phone?.trim() || "—"}</dd>
+          </div>
         </dl>
       </div>
+
+      {order.kind === "CAR" && order.paymentType === PaymentType.RESERVATION_DEPOSIT ? (
+        <div className="mt-8 rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] p-5">
+          <h2 className="text-sm font-semibold text-cyan-100/95">Reservation deposit</h2>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-zinc-500">Deposit paid</dt>
+              <dd className="text-zinc-100">
+                {order.depositAmount != null ? formatMoney(Number(order.depositAmount), order.currency) : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Outstanding balance</dt>
+              <dd className="text-zinc-100">
+                {order.remainingBalance != null && Number(order.remainingBalance) > 0
+                  ? formatMoney(Number(order.remainingBalance), order.currency)
+                  : "₵0.00"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Balance due by</dt>
+              <dd className="text-zinc-200">
+                {order.balanceDueAt
+                  ? order.balanceDueAt.toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })
+                  : `Within ${BALANCE_DUE_WINDOW_DAYS} days of your deposit payment`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Balance status</dt>
+              <dd className="text-zinc-200">{order.balanceStatus?.replaceAll("_", " ") ?? "—"}</dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+            Complete the remaining balance before the due date. Pay offline via bank or MoMo as instructed by support —
+            online card checkout for the balance may not be available yet for reserved vehicles.
+          </p>
+        </div>
+      ) : null}
 
       {order.kind === "CAR" ? <OrderDutySection orderId={order.id} orderKind={order.kind} /> : null}
 
@@ -329,6 +385,30 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
                 ))}
               </ul>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {order.payments.some((p) => p.proofs.length > 0) ? (
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-white">Payment proofs</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Receipts or screenshots you uploaded for linked payments.
+          </p>
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            {order.payments.flatMap((pay) =>
+              pay.proofs.map((proof) => (
+                <UploadedFilePreview
+                  key={proof.id}
+                  url={proof.imageUrl}
+                  publicId={proof.publicId}
+                  label={`Proof · ${pay.providerReference ?? pay.paymentType}`}
+                  uploadedAt={proof.createdAt}
+                  statusLabel={proof.status}
+                  variant="default"
+                />
+              )),
+            )}
           </div>
         </div>
       ) : null}

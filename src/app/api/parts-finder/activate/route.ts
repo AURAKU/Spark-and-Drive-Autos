@@ -94,7 +94,10 @@ export async function POST(req: Request) {
       );
     }
 
-    await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
+    const ensured = await ensurePartsFinderActivationPolicyVersions({ actorUserId: session.user.id });
+    if (!ensured.ok) {
+      console.warn("[api/parts-finder/activate] policy ensure non-fatal:", ensured.reason, ensured.code ?? "");
+    }
     const [platformPv, discPv] = await Promise.all([
       prisma.policyVersion.findFirst({
         where: { policyKey: POLICY_KEYS.PLATFORM_TERMS_PRIVACY, isActive: true },

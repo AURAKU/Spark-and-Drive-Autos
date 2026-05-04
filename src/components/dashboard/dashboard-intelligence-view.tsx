@@ -55,7 +55,7 @@ export function DashboardIntelligenceView({ data }: Props) {
     <div className="space-y-8">
       <header className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-[var(--brand)]/12 via-card to-muted/40 p-6 text-foreground shadow-sm dark:border-white/10 dark:from-[var(--brand)]/12 dark:via-zinc-900/50 dark:to-zinc-950 dark:shadow-none sm:p-8">
         <div
-          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--brand)]/20 blur-3xl dark:opacity-100"
+          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--brand)]/20 blur-3xl opacity-90 dark:opacity-75"
           aria-hidden
         />
         <div className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rounded-full bg-cyan-500/15 blur-3xl dark:bg-cyan-500/10" />
@@ -289,7 +289,7 @@ export function DashboardIntelligenceView({ data }: Props) {
             All orders
           </Link>
         </div>
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card text-card-foreground dark:border-white/10">
+        <div className="sda-table-scroll rounded-2xl border border-border bg-card text-card-foreground dark:border-white/10">
           <table className="w-full min-w-[520px] text-left text-sm sm:text-base">
             <thead className="border-b border-border bg-muted/40 text-xs font-medium uppercase text-muted-foreground dark:border-white/10 dark:bg-white/[0.06] sm:text-sm">
               <tr>

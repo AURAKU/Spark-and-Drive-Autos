@@ -1,6 +1,11 @@
 import type { CheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 
-export type CheckoutConflictCode = "INELIGIBLE" | "ALREADY_PURCHASED" | "CAR_NOT_FOUND";
+export type CheckoutConflictCode =
+  | "INELIGIBLE"
+  | "ALREADY_PURCHASED"
+  | "CAR_NOT_FOUND"
+  | "DEPOSIT_ALREADY_PAID"
+  | "BALANCE_PAYMENT_ONLINE_UNAVAILABLE";
 
 export function throwCheckoutConflict(code: CheckoutConflictCode, reason?: CheckoutIneligibleReason): never {
   const e = new Error(`checkout:${code}`);

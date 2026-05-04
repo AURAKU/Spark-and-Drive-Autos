@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { NotificationType, Prisma, ReceiptType } from "@prisma/client";
+import { DeliveryMode, NotificationType, Prisma, ReceiptType } from "@prisma/client";
 
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { getGlobalCurrencySettings } from "@/lib/currency";
@@ -277,6 +277,23 @@ export async function createPartsWalletOrder(input: {
   let result: { id: string; reference: string };
   try {
     result = await prisma.$transaction(async (tx) => {
+    const quotedLeg = chinaLegs.find((l) => !l.deferred && l.chinaDeliveryMode);
+    let partsCustomerQuotedDeliveryMode: DeliveryMode | null = null;
+    let partsCustomerQuotedDeliveryLabel: string | null = null;
+    if (quotedLeg?.chinaDeliveryMode) {
+      partsCustomerQuotedDeliveryMode = quotedLeg.chinaDeliveryMode;
+      const tmpl = await tx.deliveryOptionTemplate.findUnique({
+        where: { mode: quotedLeg.chinaDeliveryMode },
+        select: { name: true },
+      });
+      const modeChoice =
+        quotedLeg.chinaShippingChoice === "SEA" ? "Sea" : quotedLeg.chinaShippingChoice ? "Air" : "";
+      partsCustomerQuotedDeliveryLabel = tmpl?.name
+        ? `${tmpl.name}${modeChoice ? ` · ${modeChoice}` : ""}`
+        : `${quotedLeg.chinaDeliveryMode.replaceAll("_", " ")}${modeChoice ? ` · ${modeChoice}` : ""}`;
+    }
+    const hasChinaParts = normalizedItems.some((i) => i.part.origin === "CHINA");
+
     const order = await tx.order.create({
       data: {
         reference,
@@ -286,6 +303,10 @@ export async function createPartsWalletOrder(input: {
         paymentType: "FULL",
         amount: total,
         currency: "GHS",
+        shippingFeeChargedAtCheckout: false,
+        partsIntlShippingFeeStatus: hasChinaParts ? "MANUAL_PENDING" : "NOT_APPLICABLE",
+        partsCustomerQuotedDeliveryMode,
+        partsCustomerQuotedDeliveryLabel,
         deliveryAddressId: address.id,
         deliveryAddressSnapshot: addressSnapshot,
         receiptData: receipt as Prisma.InputJsonValue,

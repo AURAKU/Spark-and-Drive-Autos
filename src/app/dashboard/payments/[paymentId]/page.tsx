@@ -7,11 +7,12 @@ import { AlipaySupportHandoffDialog } from "@/components/payments/alipay-support
 import { PaymentDisputePanel } from "@/components/payments/payment-dispute-panel";
 import { PaymentProofUpload } from "@/components/payments/payment-proof-upload";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { formatMoney } from "@/lib/format";
 import { getSettlementInstructions, settlementMethodLabel } from "@/lib/payment-settlement";
-import { isPaymentProofPdfUrl } from "@/lib/payment-proof-url";
 import { prisma } from "@/lib/prisma";
+import { cn } from "@/lib/utils";
 import { PaymentProvider } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -188,30 +189,24 @@ export default async function DashboardPaymentDetailPage({ params, searchParams 
       {payment.proofs.length > 0 ? (
         <div className="mt-10">
           <h2 className="text-lg font-semibold text-foreground">Your uploads</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <p className="mt-1 text-sm text-muted-foreground">
+            View uploaded proof clearly below. Use full screen or open in a new tab for a closer look.
+          </p>
+          <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
             {payment.proofs.map((p) => (
-              <div key={p.id} className="overflow-hidden rounded-xl border border-border bg-card dark:border-white/10">
-                {isPaymentProofPdfUrl(p.imageUrl) ? (
-                  <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 bg-muted dark:bg-zinc-900">
-                    <span className="text-xs font-medium text-muted-foreground">PDF</span>
-                    <a
-                      href={p.imageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-semibold text-[var(--brand)] hover:underline"
-                    >
-                      View PDF
-                    </a>
-                  </div>
-                ) : (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={p.imageUrl} alt="" className="aspect-video w-full object-cover" />
-                )}
-                <div className="p-3 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground dark:text-zinc-300">{p.status}</span>
-                  {p.note ? <p className="mt-1">{p.note}</p> : null}
+              <div key={p.id} className="space-y-3">
+                <UploadedFilePreview
+                  url={p.imageUrl}
+                  publicId={p.publicId}
+                  label="Uploaded proof"
+                  uploadedAt={p.createdAt}
+                  statusLabel={p.status}
+                  variant="default"
+                />
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground dark:border-white/10 dark:bg-black/30">
+                  {p.note ? <p className="text-foreground/90">{p.note}</p> : null}
                   {p.adminNote ? (
-                    <p className="mt-2 border-t border-border pt-2 dark:border-white/10 dark:text-zinc-500">
+                    <p className={cn(p.note ? "mt-2 border-t border-border pt-2 dark:border-white/10" : "", "dark:text-zinc-400")}>
                       Team: {p.adminNote}
                     </p>
                   ) : null}

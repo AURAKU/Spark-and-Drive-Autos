@@ -195,7 +195,10 @@ export async function fetchPaymentIntelligenceAggregateData(params: {
       include: {
         user: { select: { email: true, name: true } },
         order: { select: { reference: true } },
-        proofs: { select: { id: true, status: true } },
+        proofs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, status: true, imageUrl: true, createdAt: true, publicId: true },
+        },
       },
     }),
   ]);

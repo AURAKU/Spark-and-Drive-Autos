@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReceiptStatus } from "@prisma/client";
 
+import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { PageHeading } from "@/components/typography/page-headings";
 import { ShipmentFlowByKind } from "@/components/shipping/shipment-flow-by-kind";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
@@ -23,7 +24,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      user: { select: { email: true, name: true } },
+      user: { select: { email: true, name: true, phone: true } },
       car: true,
       partItems: { include: { part: { select: { stockStatus: true, origin: true } } } },
       payments: { orderBy: { createdAt: "desc" }, include: { proofs: true } },
@@ -59,7 +60,9 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         Order {order.reference}
       </PageHeading>
       <p className="mt-1 text-sm text-zinc-400">
-        {order.user?.email ?? "No user"} · {order.orderStatus.replaceAll("_", " ")}
+        <span>{order.user?.email ?? "No user"}</span>
+        {order.user?.phone?.trim() ? <span> · {order.user.phone.trim()}</span> : null}
+        <span> · {order.orderStatus.replaceAll("_", " ")}</span>
       </p>
       <p className="mt-2 text-xs text-zinc-500">
         Placed: {order.createdAt.toLocaleString()} · Updated: {order.updatedAt.toLocaleString()}
@@ -69,7 +72,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       </p>
       <div className="mt-3">
         <Link
-          href={`/admin/duty-estimator?orderId=${encodeURIComponent(order.id)}&customerId=${encodeURIComponent(order.userId ?? "")}&clientName=${encodeURIComponent(order.user?.name ?? order.user?.email ?? "")}&clientContact=${encodeURIComponent(order.user?.email ?? "")}&vehicleName=${encodeURIComponent(order.car?.title ?? "Duty estimate")}`}
+          href={`/admin/duty-estimator?orderId=${encodeURIComponent(order.id)}&customerId=${encodeURIComponent(order.userId ?? "")}&clientName=${encodeURIComponent(order.user?.name ?? order.user?.email ?? "")}&clientContact=${encodeURIComponent(order.user?.phone?.trim() || (order.user?.email ?? ""))}&vehicleName=${encodeURIComponent(order.car?.title ?? "Duty estimate")}`}
           className="inline-flex items-center rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--brand)] hover:bg-[var(--brand)]/20"
         >
           Generate duty estimate
@@ -122,6 +125,24 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             ) : null}
           </div>
         </div>
+        {order.kind === "PARTS" &&
+        (order.partsCustomerQuotedDeliveryLabel?.trim() || order.partsCustomerQuotedDeliveryMode) ? (
+          <div className="mt-4 space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 text-xs text-zinc-200">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">
+              China / international lane (customer selection at checkout)
+            </p>
+            <p>
+              <span className="text-zinc-500">Quoted lane: </span>
+              {order.partsCustomerQuotedDeliveryLabel?.trim() ||
+                order.partsCustomerQuotedDeliveryMode?.replaceAll("_", " ") ||
+                "—"}
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              Intl. shipping fee status: {order.partsIntlShippingFeeStatus.replaceAll("_", " ")} · charged at checkout:{" "}
+              {order.shippingFeeChargedAtCheckout ? "yes" : "no"}
+            </p>
+          </div>
+        ) : null}
         {order.kind === "PARTS" && order.deliveryAddressSnapshot ? (
           <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-zinc-300">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Customer delivery (checkout)</p>
@@ -291,6 +312,28 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                 </a>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {order.payments.some((p) => p.proofs.length > 0) ? (
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-white">Payment proofs</h2>
+          <p className="mt-1 text-sm text-zinc-500">Review customer uploads linked to these payments.</p>
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            {order.payments.flatMap((pay) =>
+              pay.proofs.map((proof) => (
+                <UploadedFilePreview
+                  key={proof.id}
+                  url={proof.imageUrl}
+                  publicId={proof.publicId}
+                  label={`Proof · ${pay.providerReference ?? pay.paymentType}`}
+                  uploadedAt={proof.createdAt}
+                  statusLabel={proof.status}
+                  variant="admin"
+                />
+              )),
+            )}
           </div>
         </div>
       ) : null}

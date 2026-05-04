@@ -390,7 +390,7 @@ export function PartDetailActions({
       </div>
 
       <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
-        <DialogContent className="border border-white/10 bg-[#0a0f15] sm:max-w-lg">
+        <DialogContent className="sda-dark-dialog-surface border border-white/10 bg-[#0a0f15] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white">Order summary</DialogTitle>
             <DialogDescription className="text-zinc-400">

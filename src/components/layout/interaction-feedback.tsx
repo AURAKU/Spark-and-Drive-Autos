@@ -15,12 +15,6 @@ export function InteractionFeedback() {
 
       interactive.classList.add("ui-press-highlight");
       window.setTimeout(() => interactive.classList.remove("ui-press-highlight"), 260);
-
-      const maybeLink = interactive.closest("a[href]") as HTMLAnchorElement | null;
-      if (maybeLink && maybeLink.getAttribute("href")?.startsWith("/")) {
-        document.body.classList.add("ui-page-nav-pulse");
-        window.setTimeout(() => document.body.classList.remove("ui-page-nav-pulse"), 340);
-      }
     }
 
     document.addEventListener("pointerdown", handlePointerDown, { capture: true });

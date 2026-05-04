@@ -1,4 +1,4 @@
-import { GhanaCardVerificationStatus } from "@prisma/client";
+import { GhanaCardVerificationStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -8,10 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
 const schema = z.object({
-  ghanaCardIdNumber: z.string().min(3).max(80),
-  imageUrl: z.string().url(),
-  imagePublicId: z.string().min(1).max(500),
-  expiryDate: z.string().date(),
+  ghanaCardIdNumber: z.string().trim().min(3).max(80),
+  imageUrl: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().url()),
+  imagePublicId: z.string().trim().min(1).max(500),
+  expiryDate: z.string().trim().date(),
 });
 
 async function findPendingOrCanonicalConflict(excludeUserId: string, normalizedId: string) {
@@ -30,53 +30,82 @@ async function findPendingOrCanonicalConflict(excludeUserId: string, normalizedI
   });
 }
 
-export async function POST(req: Request) {
-  const session = await safeAuth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = await req.json().catch(() => null);
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-
-  const userNormalized = normalizeGhanaCardId(parsed.data.ghanaCardIdNumber);
-  if (!userNormalized) {
-    return NextResponse.json({ error: "Ghana Card ID number is required." }, { status: 400 });
-  }
-  const ai = await extractGhanaCardDetailsFromImageUrl(parsed.data.imageUrl);
-  const pendingNumber = userNormalized;
-  const pendingExpiryDate = new Date(parsed.data.expiryDate);
-
-  if (pendingNumber) {
-    const other = await findPendingOrCanonicalConflict(session.user.id, pendingNumber);
-    if (other) {
-      return NextResponse.json(
-        { error: "This Ghana Card ID number is already linked or pending on another account." },
-        { status: 409 },
-      );
+function prismaFailureMessage(e: unknown): string {
+  if (e instanceof Prisma.PrismaClientKnownRequestError) {
+    if (e.code === "P2002") {
+      return "That Ghana Card ID or upload is already linked to another account.";
+    }
+    if (e.code === "P2022") {
+      return "Identity fields are out of date on the server. Ask an operator to run database migrations (prisma migrate deploy).";
     }
   }
+  return e instanceof Error ? e.message : "Verification save failed";
+}
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      ghanaCardVerificationStatus: GhanaCardVerificationStatus.PENDING_REVIEW,
-      ghanaCardPendingIdNumber: pendingNumber,
-      ghanaCardAiSuggestedNumber: ai.normalizedIdNumber,
-      ghanaCardPendingImageUrl: parsed.data.imageUrl,
-      ghanaCardPendingImagePublicId: parsed.data.imagePublicId ?? null,
-      ghanaCardPendingExpiresAt: pendingExpiryDate,
-      ghanaCardRejectedReason: null,
-      ghanaCardReviewedAt: null,
-      ghanaCardReviewedById: null,
-    },
-  });
+export async function POST(req: Request) {
+  try {
+    const session = await safeAuth();
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  return NextResponse.json({
-    ok: true,
-    status: GhanaCardVerificationStatus.PENDING_REVIEW,
-    pendingIdNumber: pendingNumber,
-    pendingExpiryDate: pendingExpiryDate?.toISOString() ?? null,
-    aiSuggested: ai.normalizedIdNumber,
-    aiUsed: ai.usedAi,
-  });
+    const body = await req.json().catch(() => null);
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0]?.message ?? "Invalid request";
+      return NextResponse.json({ error: first }, { status: 400 });
+    }
+
+    const userNormalized = normalizeGhanaCardId(parsed.data.ghanaCardIdNumber);
+    if (!userNormalized) {
+      return NextResponse.json({ error: "Ghana Card ID number is required." }, { status: 400 });
+    }
+    const ai = await extractGhanaCardDetailsFromImageUrl(parsed.data.imageUrl);
+    const pendingNumber = userNormalized;
+    const pendingExpiryDate = new Date(parsed.data.expiryDate);
+    if (Number.isNaN(pendingExpiryDate.getTime())) {
+      return NextResponse.json({ error: "Invalid expiry date." }, { status: 400 });
+    }
+
+    if (pendingNumber) {
+      const other = await findPendingOrCanonicalConflict(session.user.id, pendingNumber);
+      if (other) {
+        return NextResponse.json(
+          { error: "This Ghana Card ID number is already linked or pending on another account." },
+          { status: 409 },
+        );
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        ghanaCardVerificationStatus: GhanaCardVerificationStatus.PENDING_REVIEW,
+        ghanaCardPendingIdNumber: pendingNumber,
+        ghanaCardAiSuggestedNumber: ai.normalizedIdNumber,
+        ghanaCardPendingImageUrl: parsed.data.imageUrl,
+        ghanaCardPendingImagePublicId: parsed.data.imagePublicId.trim(),
+        ghanaCardPendingExpiresAt: pendingExpiryDate,
+        ghanaCardRejectedReason: null,
+        ghanaCardReviewedAt: null,
+        ghanaCardReviewedById: null,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      status: GhanaCardVerificationStatus.PENDING_REVIEW,
+      pendingIdNumber: pendingNumber,
+      pendingExpiryDate: pendingExpiryDate.toISOString(),
+      aiSuggested: ai.normalizedIdNumber,
+      aiUsed: ai.usedAi,
+    });
+  } catch (e) {
+    console.error("[api/profile/ghana-card]", e);
+    const status =
+      e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002"
+        ? 409
+        : e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025"
+          ? 404
+          : 500;
+    return NextResponse.json({ error: prismaFailureMessage(e) }, { status });
+  }
 }

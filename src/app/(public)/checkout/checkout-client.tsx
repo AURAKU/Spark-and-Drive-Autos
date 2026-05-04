@@ -656,7 +656,7 @@ export function CheckoutClient({
           }
         }}
       >
-        <DialogContent className="border border-white/10 bg-[#0a0e14] sm:max-w-md">
+        <DialogContent className="sda-dark-dialog-surface border border-white/10 bg-[#0a0e14] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">Ready for secure payment</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -690,7 +690,7 @@ export function CheckoutClient({
       </Dialog>
 
       <Dialog open={authGateOpen} onOpenChange={setAuthGateOpen}>
-        <DialogContent className="overflow-hidden border border-white/10 bg-[#0a0e14] p-0 shadow-2xl sm:max-w-md">
+        <DialogContent className="sda-dark-dialog-surface overflow-hidden border border-white/10 bg-[#0a0e14] p-0 shadow-2xl sm:max-w-md">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/50 to-transparent" />
           <div className="px-6 pb-6 pt-8">
             <div className="mb-5 flex size-12 items-center justify-center rounded-2xl border border-[var(--brand)]/25 bg-[var(--brand)]/10">
@@ -737,7 +737,7 @@ export function CheckoutClient({
       </Dialog>
 
       <Dialog open={contractOpen} onOpenChange={setContractOpen}>
-        <DialogContent className="border border-white/10 bg-[#0a0e14] sm:max-w-lg">
+        <DialogContent className="sda-dark-dialog-surface border border-white/10 bg-[#0a0e14] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white">Sourcing contract</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -761,7 +761,7 @@ export function CheckoutClient({
       </Dialog>
 
       <Dialog open={riskOpen} onOpenChange={setRiskOpen}>
-        <DialogContent className="border border-white/10 bg-[#0a0e14] sm:max-w-lg">
+        <DialogContent className="sda-dark-dialog-surface border border-white/10 bg-[#0a0e14] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white">Risk acknowledgement</DialogTitle>
             <DialogDescription className="text-zinc-400">
