@@ -1,52 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: oklch(1 0 0);
@@ -119,7 +73,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
     box-sizing: border-box;
   }
   :root {
@@ -411,12 +365,12 @@
   .light body.ui-page-nav-pulse::before {
     background: radial-gradient(ellipse at top, color-mix(in srgb, var(--brand) 20%, transparent), transparent 70%);
   }
-}
 
-.dark .ui-highlight-chip {
-  background-color: color-mix(in srgb, var(--brand) 22%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
-  color: color-mix(in srgb, var(--brand) 80%, white 20%);
+  .dark .ui-highlight-chip {
+    background-color: color-mix(in srgb, var(--brand) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+    color: color-mix(in srgb, var(--brand) 80%, white 20%);
+  }
 }
 
 @media (pointer: coarse) {
@@ -454,10 +408,8 @@
 }
 
 @media (max-width: 640px) {
-  @layer base {
-    html {
-      font-size: 15px;
-    }
+  html {
+    font-size: 15px;
   }
 }
 
@@ -466,18 +418,22 @@
     font-size: 0.78rem;
     line-height: 1.35;
   }
+
   .text-\[11px\] {
     font-size: 0.84rem;
     line-height: 1.38;
   }
+
   .text-\[12px\] {
     font-size: 0.9rem;
     line-height: 1.42;
   }
+
   .text-xs {
     font-size: 0.84rem;
     line-height: 1.35;
   }
+
   .text-sm {
     font-size: 0.96rem;
     line-height: 1.45;
@@ -510,8 +466,8 @@
     font-weight: 700;
     color: #f97316;
     text-shadow:
-      0 0 14px color-mix(in srgb, #f97316 48%, transparent),
-      0 0 12px color-mix(in srgb, #fdba74 40%, transparent);
+      0 0 14px rgba(249, 115, 22, 0.48),
+      0 0 12px rgba(251, 146, 60, 0.4);
     animation: pf-slider-marquee 34s linear infinite;
     will-change: transform;
   }
@@ -519,8 +475,8 @@
   .dark .pf-slider-item {
     color: #fb923c;
     text-shadow:
-      0 0 16px color-mix(in srgb, #f97316 52%, transparent),
-      0 0 16px color-mix(in srgb, #14d8e6 38%, transparent);
+      0 0 16px rgba(249, 115, 22, 0.52),
+      0 0 10px rgba(20, 184, 166, 0.38);
   }
 }
 
