@@ -8,9 +8,13 @@ import {
   getPaystackCallbackOrigin,
   getPaystackSecrets,
 } from "@/lib/payment-provider-registry";
-import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import {
+  customerCheckoutBlockedMessage,
+  getCarCheckoutIneligibleReason,
+  isVehicleListingMarkedSold,
+} from "@/lib/checkout-eligibility";
 import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
-import { depositAmountGhsFromFull } from "@/lib/checkout-amount";
+import { globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
@@ -32,7 +36,6 @@ import { prisma } from "@/lib/prisma";
 import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitPayment } from "@/lib/rate-limit";
 import { recordSecurityObservation } from "@/lib/security-observation";
-import { carHasSuccessfulFullVehiclePayment } from "@/lib/sold-vehicle";
 import {
   computeDepositCheckoutSnapshot,
   resolveOrderStorageAnchors,
@@ -50,6 +53,8 @@ const schema = z.object({
   riskAccepted: z.boolean().optional(),
   riskVersion: z.string().min(1).max(40).optional(),
 });
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
@@ -128,12 +133,6 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
-  if (await carHasSuccessfulFullVehiclePayment(car.id)) {
-    return NextResponse.json(
-      { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
-      { status: 409 },
-    );
-  }
   if (requiresSourcingContract(car.sourceType)) {
     const acceptedContract = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
     if (!acceptedContract) {
@@ -168,12 +167,36 @@ export async function POST(req: Request) {
   const settings = await getGlobalCurrencySettings();
   const depositPctStored =
     car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  /** Single list-price resolution (GHS + currencyBase + FX) for both deposit and full pay — matches deposit math. */
-  const listResolution = resolveVehicleListPriceGhs(car, settings);
-  const previewAmount =
-    parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT
-      ? depositAmountGhsFromFull(listResolution.fullListGhs, depositPctStored)
-      : Math.round(Math.max(0, listResolution.fullListGhs) * 100) / 100;
+  const globalDepositPct = globalReservationDepositPercentFromSettings(settings);
+
+  let previewAmount: number;
+  if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+    const snapPreview = computeDepositCheckoutSnapshot(car, settings, depositPctStored, globalDepositPct);
+    if (!snapPreview || snapPreview.depositGhs <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Reservation deposit could not be calculated. Check the vehicle base selling price and deposit percentage settings.",
+          code: "INVALID_DEPOSIT_AMOUNT",
+        },
+        { status: 409 },
+      );
+    }
+    previewAmount = snapPreview.depositGhs;
+  } else {
+    const listResolution = resolveVehicleListPriceGhs(car, settings);
+    const fullListGhsRounded = Math.round(Math.max(0, listResolution.fullListGhs) * 100) / 100;
+    if (fullListGhsRounded <= 0) {
+      return NextResponse.json(
+        {
+          error: "This vehicle does not have a valid list price for payment. Contact support.",
+          code: "INVALID_VEHICLE_PRICE",
+        },
+        { status: 409 },
+      );
+    }
+    previewAmount = fullListGhsRounded;
+  }
   try {
     await requireVerification({
       userId: session.user.id,
@@ -234,7 +257,7 @@ export async function POST(req: Request) {
         });
         const hasFullPaid = paidRows.some((p) => p.paymentType === PaymentType.FULL);
         const hasDepositPaid = paidRows.some((p) => p.paymentType === PaymentType.RESERVATION_DEPOSIT);
-        if (hasFullPaid) throwCheckoutConflict("ALREADY_PURCHASED");
+        if (hasFullPaid && isVehicleListingMarkedSold(carFresh)) throwCheckoutConflict("ALREADY_PURCHASED");
         if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT && hasDepositPaid) {
           throwCheckoutConflict("DEPOSIT_ALREADY_PAID");
         }
@@ -253,7 +276,8 @@ export async function POST(req: Request) {
           paymentType: parsed.data.paymentType,
         };
         if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
-          const snap = computeDepositCheckoutSnapshot(carFresh, settings, depPct);
+          const snap = computeDepositCheckoutSnapshot(carFresh, settings, depPct, globalDepositPct);
+          if (!snap || snap.depositGhs <= 0) throwCheckoutConflict("INVALID_DEPOSIT_AMOUNT");
           const anchors = resolveOrderStorageAnchors(carFresh, snap.resolution);
           amountTx = snap.depositGhs;
           const ord = await tx.order.create({
@@ -365,6 +389,16 @@ export async function POST(req: Request) {
             error:
               "This vehicle has an active reservation deposit. Complete the remaining balance with our team — online full payment cannot replace that flow yet.",
             code: "BALANCE_PAYMENT_ONLINE_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "INVALID_DEPOSIT_AMOUNT") {
+        return NextResponse.json(
+          {
+            error:
+              "Reservation deposit could not be calculated. Check the vehicle list price and deposit percentage settings.",
+            code: "INVALID_DEPOSIT_AMOUNT",
           },
           { status: 409 },
         );

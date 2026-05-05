@@ -294,8 +294,8 @@ export function ProfileClient({
           <span className="text-zinc-500">Email:</span> {email ?? "—"}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-          Email cannot be changed here. Phone number is saved permanently to this account and cannot be changed here once
-          it has been added.
+          Email and phone are fixed to this account and cannot be changed here. You can add a phone number once if it is
+          missing; after it is saved, it stays tied to this user ID and email.
         </p>
       </div>
 

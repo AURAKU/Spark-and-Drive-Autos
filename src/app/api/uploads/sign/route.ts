@@ -17,6 +17,8 @@ const bodySchema = z.object({
  * Client must POST multipart to uploadUrl with: file, api_key, timestamp, signature, folder
  * (same fields that were included in the signature — see Cloudinary unsigned/signed upload docs).
  */
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

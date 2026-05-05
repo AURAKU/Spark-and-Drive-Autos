@@ -18,6 +18,8 @@ function tokenHash(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");

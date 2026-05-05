@@ -15,6 +15,8 @@ const schema = z.object({
   sizeBytes: z.number().int().positive().max(MAX_IMAGE_BYTES),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const rl = await rateLimitForm(`verify-upload:${ip}`);

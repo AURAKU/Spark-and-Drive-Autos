@@ -26,6 +26,8 @@ const schema = z.object({
   consentAccepted: z.boolean(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");

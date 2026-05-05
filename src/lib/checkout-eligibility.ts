@@ -29,6 +29,13 @@ export function getCarCheckoutIneligibleReason(
   return null;
 }
 
+/** True when DB flags indicate the listing is treated as sold (blocks checkout via `getCarCheckoutIneligibleReason`). */
+export function isVehicleListingMarkedSold(
+  car: Pick<Car, "listingState" | "availabilityStatus">,
+): boolean {
+  return car.listingState === CarListingState.SOLD || car.availabilityStatus === AvailabilityStatus.SOLD;
+}
+
 /** Short, customer-facing copy when checkout / Paystack / manual intent must be refused. */
 export function customerCheckoutBlockedMessage(reason: CheckoutIneligibleReason): string {
   const line =

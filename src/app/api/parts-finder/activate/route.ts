@@ -13,6 +13,8 @@ import { partsFinderActivateBodySchema } from "@/lib/parts-finder/activation-leg
 import { requireVerification } from "@/lib/identity-verification";
 import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/legal-versioning";
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");

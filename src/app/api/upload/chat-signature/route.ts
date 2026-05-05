@@ -14,6 +14,8 @@ const schema = z.object({
 /**
  * Signed upload for chat attachments (customer, guest, or admin with thread access).
  */
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   let body: unknown;
   try {

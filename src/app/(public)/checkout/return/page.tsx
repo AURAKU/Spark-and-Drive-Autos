@@ -10,6 +10,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { formatDate, formatMoney, safeDateToIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Props = { searchParams: Promise<{ reference?: string }> };
@@ -157,13 +158,18 @@ export default async function CheckoutReturnPage(props: Props) {
             select: { id: true, status: true },
           });
           if (paymentLookup && paymentLookup.status !== "SUCCESS") {
-            await transitionPaymentStatus(paymentLookup.id, {
-              toStatus: "SUCCESS",
-              source: "CHECKOUT_RETURN",
-              note: "Verified via Paystack on checkout return",
-              receiptData: { reference, verified: true },
-              paidAt: paidAt ?? undefined,
-            });
+            try {
+              await transitionPaymentStatus(paymentLookup.id, {
+                toStatus: "SUCCESS",
+                source: "CHECKOUT_RETURN",
+                note: "Verified via Paystack on checkout return",
+                receiptData: { reference, verified: true },
+                paidAt: paidAt ?? undefined,
+                providerVerified: true,
+              });
+            } catch (transitionErr) {
+              console.warn("[checkout/return] transition after Paystack verify failed", transitionErr);
+            }
           }
         }
       }

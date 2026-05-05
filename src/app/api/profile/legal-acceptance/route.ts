@@ -7,8 +7,11 @@ import {
   PROFILE_LEGAL_URL,
 } from "@/lib/legal-compliance-central";
 import { getUserLegalStatusRows } from "@/lib/legal-profile";
+import { safeDateToIso } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
+
+export const runtime = "nodejs";
 
 export async function GET() {
   const session = await safeAuth();
@@ -42,7 +45,7 @@ export async function GET() {
       title: r.title,
       version: r.version,
     })),
-    legalAcceptedAt: user?.legalAcceptedAt?.toISOString() ?? null,
+    legalAcceptedAt: safeDateToIso(user?.legalAcceptedAt),
     legalAcceptedVersion: user?.legalAcceptedVersion ?? null,
   });
 }

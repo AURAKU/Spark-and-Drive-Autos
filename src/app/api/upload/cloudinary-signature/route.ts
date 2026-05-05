@@ -9,6 +9,8 @@ const schema = z.object({
   kind: z.enum(["image", "video"]).optional().default("image"),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
     await requireAdmin();

@@ -804,7 +804,7 @@ model Car {
   estimatedDelivery  String?
   /// Estimated sea freight to Ghana (GHS), shown on listing/checkout; copied onto car shipment when paid.
   seaShippingFeeGhs  Decimal?           @db.Decimal(14, 2)
-  /// Reservation deposit as % of vehicle list price in GHS (from base RMB conversion). Null = site default (5%, min ₵5,000).
+  /// Reservation deposit as % of resolved vehicle list price (converted to GHS for Paystack). Null = global default in `GlobalCurrencySettings.defaultReservationDepositPercent`.
   reservationDepositPercent Decimal?    @db.Decimal(5, 2)
   /// Admin-entered list price amount in `basePriceCurrency` (preserved for sourcing / accounting)
   basePriceAmount    Decimal            @default(0) @db.Decimal(14, 2)
@@ -1685,6 +1685,8 @@ model GlobalCurrencySettings {
   rmbToGhs    Decimal  @db.Decimal(18, 6)
   /// 1 USD equals how many GHS (direct: GHS = USD × rate; USD = GHS / rate)
   usdToGhs    Decimal  @db.Decimal(18, 6)
+  /// When `Car.reservationDepositPercent` is null, use this % of resolved list price (GHS) for reservation deposit.
+  defaultReservationDepositPercent Decimal @default(5) @db.Decimal(5, 2)
   updatedAt   DateTime @updatedAt
   updatedById String?
   updatedBy   User?    @relation("CurrencyUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)

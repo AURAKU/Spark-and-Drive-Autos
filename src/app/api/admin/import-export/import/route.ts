@@ -135,6 +135,8 @@ function isRecordEffectivelyEmpty(record: Record<string, string>) {
   return Object.values(record).every((v) => (v ?? "").trim().length === 0);
 }
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   let session: Awaited<ReturnType<typeof requireAdmin>>;
   try {

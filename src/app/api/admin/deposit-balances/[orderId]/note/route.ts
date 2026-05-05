@@ -11,6 +11,8 @@ const bodySchema = z.object({
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request, context: RouteContext) {
   try {
     await requireAdmin();

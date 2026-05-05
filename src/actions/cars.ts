@@ -77,7 +77,7 @@ const carSchema = z.object({
     const n = Number(v);
     if (!Number.isFinite(n)) return null;
     return n;
-  }, z.number().min(0).max(100).nullable()),
+  }, z.number().gt(0).lte(100).nullable()),
   accidentHistory: optionalStr(8000),
   sourceType: z.nativeEnum(SourceType),
   availabilityStatus: z.nativeEnum(AvailabilityStatus),

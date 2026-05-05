@@ -9,6 +9,8 @@ import { sanitizePlainText } from "@/lib/sanitize";
 
 const nameSchema = z.string().min(2).max(120);
 
+export const runtime = "nodejs";
+
 export async function PATCH(req: Request) {
   try {
     const session = await requireUser();

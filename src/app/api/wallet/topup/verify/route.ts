@@ -9,6 +9,8 @@ import { applyWalletLedgerEntry } from "@/lib/wallet-ledger";
 
 const schema = z.object({ reference: z.string().min(8).max(80) });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

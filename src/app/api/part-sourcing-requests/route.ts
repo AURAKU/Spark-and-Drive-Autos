@@ -32,6 +32,8 @@ const schema = z.object({
   imageUrls: z.array(z.string().url()).max(MAX_IMAGES).optional().default([]),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

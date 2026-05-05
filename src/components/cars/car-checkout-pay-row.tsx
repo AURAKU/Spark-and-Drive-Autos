@@ -11,6 +11,8 @@ type Props = {
   canPayOnline: boolean;
   blockTitle: string;
   blockMessage: string;
+  /** When false, only “Pay full” is offered (listing price missing or deposit would be invalid). */
+  reserveAvailable?: boolean;
   /** Shown when online checkout is available: estimated deposit from list price (GHS) and % label. */
   reservationDepositGhs?: number;
   reservationDepositPercentLabel?: number;
@@ -21,6 +23,7 @@ export function CarCheckoutPayRow({
   canPayOnline,
   blockTitle,
   blockMessage,
+  reserveAvailable = true,
   reservationDepositGhs,
   reservationDepositPercentLabel,
 }: Props) {
@@ -38,14 +41,16 @@ export function CarCheckoutPayRow({
           <Link href={`/checkout?carId=${carId}&type=FULL`} className={payClass}>
             Pay full
           </Link>
-          <Link href={`/checkout?carId=${carId}&type=RESERVATION_DEPOSIT`} className={reserveClass}>
-            Reserve with deposit
-          </Link>
+          {reserveAvailable ? (
+            <Link href={`/checkout?carId=${carId}&type=RESERVATION_DEPOSIT`} className={reserveClass}>
+              Reserve with deposit
+            </Link>
+          ) : null}
         </div>
-        {reservationDepositGhs != null && reservationDepositPercentLabel != null ? (
+        {reserveAvailable && reservationDepositGhs != null && reservationDepositPercentLabel != null ? (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Reserve this car with {reservationDepositPercentLabel}% deposit ({formatMoney(reservationDepositGhs, "GHS")}).
-            Minimum deposit rules may apply.
+            Reserve this car with {reservationDepositPercentLabel}% of the list total ({formatMoney(reservationDepositGhs, "GHS")}{" "}
+            in Ghana cedis at checkout).
           </p>
         ) : null}
       </div>
@@ -57,9 +62,11 @@ export function CarCheckoutPayRow({
       <button type="button" className={payClass} onClick={() => setBlockedDialogOpen(true)}>
         Pay full
       </button>
-      <button type="button" className={reserveClass} onClick={() => setBlockedDialogOpen(true)}>
-        Reserve with deposit
-      </button>
+      {reserveAvailable ? (
+        <button type="button" className={reserveClass} onClick={() => setBlockedDialogOpen(true)}>
+          Reserve with deposit
+        </button>
+      ) : null}
       <CheckoutBlockedDialog
         open={blockedDialogOpen}
         onOpenChange={setBlockedDialogOpen}

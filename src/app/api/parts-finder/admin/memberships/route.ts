@@ -11,6 +11,8 @@ const schema = z.object({
   reason: z.string().trim().max(1000).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const { session } = await requirePartsFinderAdmin();

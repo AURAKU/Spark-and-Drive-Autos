@@ -12,6 +12,8 @@ const querySchema = z.object({
 
 type RouteContext = { params: Promise<{ verificationId: string }> };
 
+export const runtime = "nodejs";
+
 export async function GET(req: Request, ctx: RouteContext) {
   const admin = await requireAdmin();
   const allowed = await canAdminViewVerification(admin.user.id);

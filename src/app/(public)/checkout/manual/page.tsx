@@ -5,9 +5,9 @@ import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links"
 import { notFound } from "next/navigation";
 
 import { ManualCheckoutClient } from "./manual-checkout-client";
-import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { getGlobalCurrencySettings } from "@/lib/currency";
+import { getVehicleSettlementAmountGhs } from "@/lib/vehicle-deposit-pricing";
 import { getUserLegalStatusRows } from "@/lib/legal-profile";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
@@ -38,6 +38,11 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
       id: true,
       title: true,
       basePriceRmb: true,
+      basePriceAmount: true,
+      basePriceCurrency: true,
+      priceGhs: true,
+      priceUsd: true,
+      priceCny: true,
       currency: true,
       listingState: true,
       availabilityStatus: true,
@@ -68,7 +73,30 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
 
   const fx = await getGlobalCurrencySettings();
   const pct = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  const amountGhs = getVehicleCheckoutAmountGhs(Number(car.basePriceRmb), paymentType, fx, pct);
+  const settlement = getVehicleSettlementAmountGhs(car, paymentType, fx, pct);
+  if (!settlement || settlement.settlementGhs <= 0) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16">
+        <PageHeading variant="dashboard" className="!text-xl">
+          Offline checkout unavailable
+        </PageHeading>
+        <p className="mt-2 text-sm font-medium text-white">{car.title}</p>
+        <p className="mt-4 text-sm leading-relaxed text-amber-100/90">
+          This vehicle does not have a valid list price for checkout. Contact support to continue.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <BrowseCarsCtaLink href="/inventory" size="compact" />
+          <Link
+            href="/contact"
+            className="inline-flex h-10 items-center rounded-lg border border-white/15 px-4 text-sm text-white hover:bg-white/5"
+          >
+            Contact support
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  const amountGhs = settlement.settlementGhs;
 
   const session = await safeAuth();
   let profileLegalComplete = false;
@@ -83,7 +111,7 @@ export default async function ManualCheckoutPage({ searchParams }: { searchParam
       paymentType={paymentType}
       vehicleTitle={car.title}
       amountGhs={amountGhs}
-      currency={car.currency}
+      currency="GHS"
       profileLegalComplete={profileLegalComplete}
     />
   );

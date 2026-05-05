@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   try {
     await requireAdmin();

@@ -9,6 +9,8 @@ const schema = z.object({
   reference: z.string().min(6).max(120),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
     await requireSuperAdmin();

@@ -12,10 +12,6 @@ import { AdminVehicleSupplierCostField } from "@/components/admin/admin-vehicle-
 import { AdminZodIssues } from "@/components/admin/admin-zod-issues";
 import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
 import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
-import {
-  DEFAULT_RESERVATION_DEPOSIT_MIN_GHS,
-  DEFAULT_RESERVATION_DEPOSIT_PERCENT,
-} from "@/lib/checkout-amount";
 import type { DisplayCurrency } from "@/lib/currency";
 import {
   AUTOFILL_TOAST_REVIEW,
@@ -476,22 +472,22 @@ export function EditCarForm({
           lastSavedReferenceGhs={Number(car.price)}
         />
         <div>
-          <Label htmlFor="reservationDepositPercent">Reservation deposit (% of list price, GHS)</Label>
+          <Label htmlFor="reservationDepositPercent">Reservation deposit (% of resolved list total in GHS)</Label>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Shown on the public vehicle page and used at checkout. Calculated from the listing price in Ghana cedis (from
-            RMB). Leave blank for site default ({DEFAULT_RESERVATION_DEPOSIT_PERCENT}%, minimum ₵
-            {DEFAULT_RESERVATION_DEPOSIT_MIN_GHS.toLocaleString("en-GH")}).
+            Deposit = list total (GHS) × this percentage ÷ 100. Shown on the vehicle page, inventory, and Paystack. Leave
+            blank to use the global default under Admin → Settings → Exchange rates. Per-car value must be between 0.01 and
+            100 if set.
           </p>
           <Input
             id="reservationDepositPercent"
             name="reservationDepositPercent"
             type="number"
             step="0.01"
-            min={0}
+            min={0.01}
             max={100}
             className="mt-1"
             defaultValue={car.reservationDepositPercent != null ? String(car.reservationDepositPercent) : ""}
-            placeholder={`Default ${DEFAULT_RESERVATION_DEPOSIT_PERCENT}%`}
+            placeholder="Global default"
           />
         </div>
         <AdminVehicleSupplierCostField

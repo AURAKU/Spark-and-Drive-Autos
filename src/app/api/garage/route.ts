@@ -16,6 +16,8 @@ const addSchema = z.object({
   nextServiceReminder: z.string().datetime().optional().nullable(),
 });
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const session = await safeAuth();
   if (!session?.user?.id) {

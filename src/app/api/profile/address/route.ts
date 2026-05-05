@@ -18,6 +18,8 @@ const schema = z.object({
   isDefault: z.boolean().optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

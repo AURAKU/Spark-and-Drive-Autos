@@ -28,6 +28,8 @@ const schema = z.object({
     .transform((s) => (s?.trim() ? s.trim() : null)),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

@@ -6,6 +6,7 @@ import { VerificationClient } from "@/components/dashboard/verification-client";
 import { PageHeading } from "@/components/typography/page-headings";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { getUserLegalStatusRows } from "@/lib/legal-profile";
+import { safeDateToIso } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 import { ProfileClient } from "./profile-client";
@@ -228,11 +229,11 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           <VerificationClient
             ghanaCardIdNumber={user?.ghanaCardIdNumber ?? null}
             ghanaCardImageUrl={user?.ghanaCardImageUrl ?? null}
-            ghanaCardExpiresAt={user?.ghanaCardExpiresAt?.toISOString() ?? null}
+            ghanaCardExpiresAt={safeDateToIso(user?.ghanaCardExpiresAt) ?? null}
             ghanaCardVerificationStatus={user?.ghanaCardVerificationStatus ?? GhanaCardVerificationStatus.NONE}
             ghanaCardPendingIdNumber={user?.ghanaCardPendingIdNumber ?? null}
             ghanaCardPendingImageUrl={user?.ghanaCardPendingImageUrl ?? null}
-            ghanaCardPendingExpiresAt={user?.ghanaCardPendingExpiresAt?.toISOString() ?? null}
+            ghanaCardPendingExpiresAt={safeDateToIso(user?.ghanaCardPendingExpiresAt) ?? null}
             ghanaCardAiSuggestedNumber={user?.ghanaCardAiSuggestedNumber ?? null}
             ghanaCardRejectedReason={user?.ghanaCardRejectedReason ?? null}
             latest={
@@ -243,9 +244,9 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
                     documentType: latestVerification.documentType as never,
                     reason: latestVerification.reason,
                     rejectionReason: latestVerification.rejectionReason,
-                    submittedAt: latestVerification.submittedAt.toISOString(),
-                    reviewedAt: latestVerification.reviewedAt?.toISOString() ?? null,
-                    expiresAt: latestVerification.expiresAt?.toISOString() ?? null,
+                    submittedAt: safeDateToIso(latestVerification.submittedAt) ?? new Date(0).toISOString(),
+                    reviewedAt: safeDateToIso(latestVerification.reviewedAt),
+                    expiresAt: safeDateToIso(latestVerification.expiresAt),
                   }
                 : null
             }

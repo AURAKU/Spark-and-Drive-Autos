@@ -3,11 +3,14 @@ import { Redis } from "@upstash/redis";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { safeDateToIso } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 function has(...values: Array<string | undefined>) {
   return values.every((value) => Boolean(value?.trim()));
 }
+
+export const runtime = "nodejs";
 
 export async function GET() {
   try {
@@ -94,8 +97,8 @@ export async function GET() {
     backupMetadataExists: Boolean(backupMetadataRow),
     /** At least one successful entry in `SystemBackupLog` (actual backup run). */
     successfulBackupLogged: Boolean(lastBackup),
-    lastBackupCompletedAt: lastBackup?.completedAt?.toISOString() ?? null,
-    lastBackupCreatedAt: lastBackup?.createdAt?.toISOString() ?? null,
+    lastBackupCompletedAt: safeDateToIso(lastBackup?.completedAt),
+    lastBackupCreatedAt: safeDateToIso(lastBackup?.createdAt),
     lastBackupFileName: lastBackup?.fileName ?? null,
     lastBackupType: lastBackup?.type ?? null,
   };

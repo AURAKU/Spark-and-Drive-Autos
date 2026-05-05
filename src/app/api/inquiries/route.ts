@@ -18,6 +18,8 @@ const schema = z.object({
   guestPhone: z.string().max(40).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = await rateLimitForm(`inquiry:${ip}`);

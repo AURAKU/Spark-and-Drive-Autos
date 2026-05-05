@@ -8,6 +8,8 @@ const bodySchema = z.object({
   id: z.string().trim().min(1),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

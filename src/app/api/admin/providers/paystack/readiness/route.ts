@@ -4,6 +4,8 @@ import { requireSuperAdmin } from "@/lib/auth-helpers";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getPaystackSecrets } from "@/lib/payment-provider-registry";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     await requireSuperAdmin();

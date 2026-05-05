@@ -19,6 +19,8 @@ import { PolicyAcceptanceRequiredError, requirePolicyAcceptance } from "@/lib/le
 /**
  * One-step activation: debit wallet (GHS), record successful payment, activate membership.
  */
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");

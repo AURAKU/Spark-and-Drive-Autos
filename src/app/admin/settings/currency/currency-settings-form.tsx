@@ -20,6 +20,7 @@ export function CurrencySettingsForm({
     usdToRmb: number;
     rmbToGhs: number;
     usdToGhs: number;
+    defaultReservationDepositPercent: number;
     updatedAt: string;
     updatedByLabel: string | null;
   } | null;
@@ -29,12 +30,16 @@ export function CurrencySettingsForm({
   const [usdToRmb, setUsdToRmb] = useState(initial?.usdToRmb ?? 7);
   const [rmbToGhs, setRmbToGhs] = useState(initial?.rmbToGhs ?? 0.586);
   const [usdToGhs, setUsdToGhs] = useState(initial?.usdToGhs ?? 11.65);
+  const [defaultReservationDepositPercent, setDefaultReservationDepositPercent] = useState(
+    initial?.defaultReservationDepositPercent ?? 5,
+  );
 
   useEffect(() => {
     if (initial) {
       setUsdToRmb(initial.usdToRmb);
       setRmbToGhs(initial.rmbToGhs);
       setUsdToGhs(initial.usdToGhs);
+      setDefaultReservationDepositPercent(initial.defaultReservationDepositPercent);
     }
   }, [initial]);
 
@@ -131,6 +136,25 @@ export function CurrencySettingsForm({
               className="mt-1"
               value={usdToGhs}
               onChange={(e) => setUsdToGhs(parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="defaultReservationDepositPercent">Default reservation deposit (%)</Label>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              Used when a vehicle has no per-car deposit %. Deposit = resolved list total (GHS) × this percentage ÷ 100.
+              Must be between 0.01 and 100.
+            </p>
+            <Input
+              id="defaultReservationDepositPercent"
+              name="defaultReservationDepositPercent"
+              type="number"
+              step="0.01"
+              min={0.01}
+              max={100}
+              required
+              className="mt-1"
+              value={defaultReservationDepositPercent}
+              onChange={(e) => setDefaultReservationDepositPercent(parseFloat(e.target.value) || 0)}
             />
           </div>
         </div>

@@ -9,6 +9,8 @@ const schema = z.object({
   userIds: z.array(z.string().min(1)).min(1).max(300),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
     await requireAdmin();

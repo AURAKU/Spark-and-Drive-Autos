@@ -10,10 +10,6 @@ import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint"
 import { AdminVehicleListPriceField } from "@/components/admin/admin-vehicle-list-price-field";
 import { AdminVehicleSupplierCostField } from "@/components/admin/admin-vehicle-supplier-cost-field";
 import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
-import {
-  DEFAULT_RESERVATION_DEPOSIT_MIN_GHS,
-  DEFAULT_RESERVATION_DEPOSIT_PERCENT,
-} from "@/lib/checkout-amount";
 import type { DisplayCurrency } from "@/lib/currency";
 import {
   AUTOFILL_TOAST_REVIEW,
@@ -403,20 +399,19 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
         defaultCurrency={priceCurrencySeed}
       />
       <div>
-        <Label htmlFor="reservationDepositPercent">Reservation deposit (% of list price, GHS)</Label>
+        <Label htmlFor="reservationDepositPercent">Reservation deposit (% of resolved list total in GHS)</Label>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Optional. Leave blank for site default ({DEFAULT_RESERVATION_DEPOSIT_PERCENT}%, minimum ₵
-          {DEFAULT_RESERVATION_DEPOSIT_MIN_GHS.toLocaleString("en-GH")}).
+          Optional. Leave blank for the global default under Admin → Settings → Exchange rates. If set, use 0.01–100.
         </p>
         <Input
           id="reservationDepositPercent"
           name="reservationDepositPercent"
           type="number"
           step="0.01"
-          min={0}
+          min={0.01}
           max={100}
           className="mt-1"
-          placeholder={`Default ${DEFAULT_RESERVATION_DEPOSIT_PERCENT}%`}
+          placeholder="Global default"
         />
       </div>
       <AdminVehicleSupplierCostField key={`car-sup-${supplierCostKey}`} />

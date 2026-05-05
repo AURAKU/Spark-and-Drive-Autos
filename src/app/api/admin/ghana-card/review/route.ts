@@ -27,6 +27,8 @@ const schema = z
     }
   });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   let admin;
   try {

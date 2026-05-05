@@ -5,7 +5,8 @@ export type CheckoutConflictCode =
   | "ALREADY_PURCHASED"
   | "CAR_NOT_FOUND"
   | "DEPOSIT_ALREADY_PAID"
-  | "BALANCE_PAYMENT_ONLINE_UNAVAILABLE";
+  | "BALANCE_PAYMENT_ONLINE_UNAVAILABLE"
+  | "INVALID_DEPOSIT_AMOUNT";
 
 export function throwCheckoutConflict(code: CheckoutConflictCode, reason?: CheckoutIneligibleReason): never {
   const e = new Error(`checkout:${code}`);

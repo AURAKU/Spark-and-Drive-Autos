@@ -10,7 +10,7 @@ import {
   shippingFeeStatus,
   shippingSummary,
 } from "@/lib/admin-orders-export-query";
-import { formatMoney } from "@/lib/format";
+import { dateLikeToTimeMs, formatMoney, safeDateToIso } from "@/lib/format";
 import { orderItemTitleSummary } from "@/lib/order-item-display";
 
 export type AdminOrderPreviewPayload = {
@@ -82,10 +82,10 @@ export function buildAdminOrderListRow(
   if (o.kind === "CAR" && o.orderStatus === OrderStatus.RESERVED_WITH_DEPOSIT) {
     const dep = o.depositAmount != null ? formatMoney(Number(o.depositAmount), o.currency) : "—";
     const rem = o.remainingBalance != null ? formatMoney(Number(o.remainingBalance), o.currency) : "—";
-    const start = o.reservedAt ?? o.createdAt;
-    const days = (Date.now() - start.getTime()) / 864e5;
-    const dueHint =
-      o.balanceDueAt != null ? ` · due ${o.balanceDueAt.toISOString().slice(0, 10)}` : "";
+    const startMs = dateLikeToTimeMs(o.reservedAt ?? o.createdAt);
+    const days = startMs != null ? (Date.now() - startMs) / 864e5 : 0;
+    const dueIso = safeDateToIso(o.balanceDueAt);
+    const dueHint = dueIso ? ` · due ${dueIso.slice(0, 10)}` : "";
     carDepositTracking = `Deposit ${dep} · Remaining ${rem} · ${Math.max(0, Math.floor(days))}d since reservation${dueHint}`;
     if (o.followUpRequired) {
       carDepositTracking += " · FOLLOW UP REQUIRED";
@@ -108,7 +108,7 @@ export function buildAdminOrderListRow(
     paymentType: o.paymentType.replaceAll("_", " "),
     deliveryMode: shippingSummary(o),
     shippingFeeStatus: shippingFeeStatus(o),
-    orderDateIso: o.createdAt.toISOString(),
+    orderDateIso: safeDateToIso(o.createdAt) ?? new Date(0).toISOString(),
     dueOrEta: o.shipments[0]?.estimatedDuration?.trim() || null,
     imageUrl,
     adminNotes: [o.notes?.trim(), carDepositTracking].filter(Boolean).join(" | ") || null,
@@ -124,8 +124,8 @@ export function buildAdminOrderListRow(
     paymentStatus: o.payments[0]?.status ?? null,
     amount: Number(o.amount),
     currency: o.currency,
-    createdAt: o.createdAt.toISOString(),
-    updatedAt: o.updatedAt.toISOString(),
+    createdAt: safeDateToIso(o.createdAt) ?? new Date(0).toISOString(),
+    updatedAt: safeDateToIso(o.updatedAt) ?? new Date(0).toISOString(),
     partsLineageLabel: orderPartsLineageLabel(o),
     preview,
   };

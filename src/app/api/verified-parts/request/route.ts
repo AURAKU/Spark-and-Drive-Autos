@@ -23,6 +23,8 @@ const schema = z.object({
   selectedMatchSnapshot: z.unknown().optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
     const { session } = await requirePartsFinderMembership("RESULTS");

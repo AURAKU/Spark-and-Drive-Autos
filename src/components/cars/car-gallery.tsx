@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { Button } from "@/components/ui/button";
 import type { CarGalleryImage } from "@/lib/car-gallery";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export function CarGallery({ images, children }: Props) {
           className="relative block h-full w-full cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={`View image ${safeActive + 1} of ${count} full screen`}
         >
-          <Image
+          <VehicleCoverImage
             src={current!.url}
             alt={current!.alt}
             fill
@@ -160,7 +160,7 @@ export function CarGallery({ images, children }: Props) {
             aria-label={`Show image ${i + 1} of ${count}`}
             aria-current={i === safeActive ? "true" : undefined}
           >
-            <Image src={im.url} alt="" fill className="object-cover" sizes="120px" />
+            <VehicleCoverImage src={im.url} alt="" fill className="object-cover" sizes="120px" />
           </button>
         ))}
       </div>
@@ -190,7 +190,7 @@ export function CarGallery({ images, children }: Props) {
               </div>
 
               <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-16 pt-14 sm:px-6">
-                <Image
+                <VehicleCoverImage
                   src={current!.url}
                   alt={current!.alt}
                   width={1920}
@@ -240,7 +240,7 @@ export function CarGallery({ images, children }: Props) {
                         )}
                         aria-label={`Go to image ${i + 1}`}
                       >
-                        <Image src={im.url} alt="" fill className="object-cover" sizes="96px" />
+                        <VehicleCoverImage src={im.url} alt="" fill className="object-cover" sizes="96px" />
                       </button>
                     ))}
                   </div>

@@ -26,6 +26,8 @@ const patchSchema = z.object({
 
 type RouteContext = { params: Promise<{ paymentId: string }> };
 
+export const runtime = "nodejs";
+
 export async function PATCH(req: Request, ctx: RouteContext) {
   let session;
   try {

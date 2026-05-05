@@ -6,6 +6,8 @@ import { partsFinderSettingsSchema } from "@/lib/parts-finder/schemas";
 import { persistPartsFinderSettings } from "@/lib/parts-finder/settings-persistence";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     await requirePartsFinderAdmin();

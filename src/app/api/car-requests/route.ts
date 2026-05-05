@@ -44,6 +44,8 @@ const schema = z.object({
   sourcingContractVersion: z.string().min(1).max(40),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const userAgent = req.headers.get("user-agent");

@@ -28,6 +28,7 @@ export default async function AdminCurrencyPage() {
                 usdToRmb: Number(settings.usdToRmb),
                 rmbToGhs: Number(settings.rmbToGhs),
                 usdToGhs: Number(settings.usdToGhs),
+                defaultReservationDepositPercent: Number(settings.defaultReservationDepositPercent),
                 updatedAt: settings.updatedAt.toISOString(),
                 updatedByLabel: settings.updatedBy?.name ?? settings.updatedBy?.email ?? null,
               }

@@ -6,6 +6,7 @@ import { requireSuperAdmin } from "@/lib/auth-helpers";
 import { isAppleAuthConfigured, isGoogleAuthConfigured } from "@/lib/oauth-config";
 import { isPasswordResetEmailConfigured } from "@/lib/password-reset-email";
 import { getPaystackSecrets } from "@/lib/payment-provider-registry";
+import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -654,12 +655,10 @@ export default async function AdminApiProvidersPage() {
         <dl className="mt-4 max-w-3xl space-y-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-zinc-400">Last successful backup</dt>
-            <dd className="text-zinc-200">
+            <dd className="max-w-[min(100%,28rem)] text-right text-zinc-200">
               {latestBackupLog?.completedAt
-                ? `${latestBackupLog.completedAt.toISOString().slice(0, 16).replace("T", " ")} · ${
-                    latestBackupLog.fileName ?? "file name not recorded"
-                  }`
-                : "No successful backup metadata yet"}
+                ? `${formatDate(latestBackupLog.completedAt)} · ${latestBackupLog.fileName ?? "file name not recorded"}`
+                : "None logged yet — non-critical for serving traffic; recommended for ops and disaster recovery."}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -671,9 +670,9 @@ export default async function AdminApiProvidersPage() {
             <dd>{flag(storageProviderPresent)}</dd>
           </div>
         </dl>
-        <p className="mt-3 text-xs text-zinc-500">
-          Backup metadata source: <code className="rounded bg-white/5 px-1">SystemBackupLog</code>. Record successful
-          backup runs so this panel stays current.
+        <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+          Backup metadata source: <code className="rounded bg-white/5 px-1">SystemBackupLog</code>. Missing entries do
+          not block checkout or Paystack. Record successful backup runs so operators can confirm recovery readiness.
         </p>
       </section>
 

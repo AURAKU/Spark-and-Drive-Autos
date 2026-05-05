@@ -22,6 +22,8 @@ const schema = z.object({
   resultJson: z.unknown().optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireAdmin();

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { normalizeGhanaCardId } from "@/lib/ghana-card-id";
 import { extractGhanaCardDetailsFromImageUrl } from "@/lib/ghana-card-vision";
+import { safeDateToIso } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -41,6 +42,8 @@ function prismaFailureMessage(e: unknown): string {
   }
   return e instanceof Error ? e.message : "Verification save failed";
 }
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
@@ -94,7 +97,7 @@ export async function POST(req: Request) {
       ok: true,
       status: GhanaCardVerificationStatus.PENDING_REVIEW,
       pendingIdNumber: pendingNumber,
-      pendingExpiryDate: pendingExpiryDate.toISOString(),
+      pendingExpiryDate: safeDateToIso(pendingExpiryDate),
       aiSuggested: ai.normalizedIdNumber,
       aiUsed: ai.usedAi,
     });

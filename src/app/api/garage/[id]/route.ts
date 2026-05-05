@@ -9,6 +9,8 @@ const patchSchema = z.object({
   nextServiceReminder: z.string().datetime().optional().nullable(),
 });
 
+export const runtime = "nodejs";
+
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   const session = await safeAuth();
   if (!session?.user?.id) {

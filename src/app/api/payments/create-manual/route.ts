@@ -3,8 +3,12 @@ import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getVehicleCheckoutAmountGhs } from "@/lib/checkout-amount";
-import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
+import {
+  customerCheckoutBlockedMessage,
+  getCarCheckoutIneligibleReason,
+  isVehicleListingMarkedSold,
+} from "@/lib/checkout-eligibility";
 import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +16,11 @@ import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitPayment } from "@/lib/rate-limit";
 import { safeAuth } from "@/lib/safe-auth";
 import { recordSecurityObservation } from "@/lib/security-observation";
-import { carHasSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
+import {
+  computeDepositCheckoutSnapshot,
+  resolveOrderStorageAnchors,
+  getVehicleSettlementAmountGhs,
+} from "@/lib/vehicle-deposit-pricing";
 import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { writeLegalAuditLog } from "@/lib/legal-audit";
 import { requireVerification } from "@/lib/identity-verification";
@@ -27,6 +35,8 @@ const schema = z.object({
     "CASH_OFFICE_USD",
   ]),
 });
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
@@ -64,7 +74,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Validation failed", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const car = await prisma.car.findUnique({ where: { id: parsed.data.carId } });
+  const car = await prisma.car.findUnique({
+    where: { id: parsed.data.carId },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      basePriceRmb: true,
+      basePriceAmount: true,
+      basePriceCurrency: true,
+      priceGhs: true,
+      priceUsd: true,
+      priceCny: true,
+      currency: true,
+      listingState: true,
+      availabilityStatus: true,
+      sourceType: true,
+      reservationDepositPercent: true,
+    },
+  });
   if (!car) {
     return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
@@ -75,21 +103,16 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
-  if (await carHasSuccessfulVehiclePayment(car.id)) {
+  const settings = await getGlobalCurrencySettings();
+  const depPct = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+  const settlementPreview = getVehicleSettlementAmountGhs(car, parsed.data.paymentType, settings, depPct);
+  if (!settlementPreview || settlementPreview.settlementGhs <= 0) {
     return NextResponse.json(
-      { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
+      { error: "This vehicle does not have a valid list price for manual checkout.", code: "INVALID_VEHICLE_PRICE" },
       { status: 409 },
     );
   }
-
-  const settings = await getGlobalCurrencySettings();
-  const depPct = car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  const previewAmount = getVehicleCheckoutAmountGhs(
-    Number(car.basePriceRmb),
-    parsed.data.paymentType,
-    settings,
-    depPct,
-  );
+  const previewAmount = settlementPreview.settlementGhs;
   try {
     await requireVerification({
       userId: session.user.id,
@@ -123,34 +146,70 @@ export async function POST(req: Request) {
         if (!carFresh) throwCheckoutConflict("CAR_NOT_FOUND");
         const block = getCarCheckoutIneligibleReason(carFresh);
         if (block) throwCheckoutConflict("INELIGIBLE", block);
-        const dup = await tx.payment.findFirst({
+        const paidRows = await tx.payment.findMany({
           where: {
             status: "SUCCESS",
             order: { carId: carFresh.id, kind: OrderKind.CAR },
           },
-          select: { id: true },
+          select: { paymentType: true },
         });
-        if (dup) throwCheckoutConflict("ALREADY_PURCHASED");
+        const hasFullPaid = paidRows.some((p) => p.paymentType === PaymentType.FULL);
+        const hasDepositPaid = paidRows.some((p) => p.paymentType === PaymentType.RESERVATION_DEPOSIT);
+        if (hasFullPaid && isVehicleListingMarkedSold(carFresh)) throwCheckoutConflict("ALREADY_PURCHASED");
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT && hasDepositPaid) {
+          throwCheckoutConflict("DEPOSIT_ALREADY_PAID");
+        }
+        if (parsed.data.paymentType === PaymentType.FULL && hasDepositPaid) {
+          throwCheckoutConflict("BALANCE_PAYMENT_ONLINE_UNAVAILABLE");
+        }
         const dPct =
           carFresh.reservationDepositPercent != null ? Number(carFresh.reservationDepositPercent) : null;
-        const amountTx = getVehicleCheckoutAmountGhs(
-          Number(carFresh.basePriceRmb),
-          parsed.data.paymentType,
-          settings,
-          dPct,
-        );
-        const order = await tx.order.create({
-          data: {
-            reference,
-            userId: session.user.id,
-            carId: carFresh.id,
-            kind: OrderKind.CAR,
-            orderStatus: "PENDING_PAYMENT",
-            paymentType: parsed.data.paymentType,
-            amount: amountTx,
-            currency: carFresh.currency,
-          },
-        });
+        const globalDepositPct = globalReservationDepositPercentFromSettings(settings);
+        const settlement = getVehicleSettlementAmountGhs(carFresh, parsed.data.paymentType, settings, dPct);
+        if (!settlement || settlement.settlementGhs <= 0) throwCheckoutConflict("INVALID_DEPOSIT_AMOUNT");
+        const amountTx = settlement.settlementGhs;
+
+        const baseOrderData = {
+          reference,
+          userId: session.user.id,
+          carId: carFresh.id,
+          kind: OrderKind.CAR,
+          orderStatus: "PENDING_PAYMENT" as const,
+          paymentType: parsed.data.paymentType,
+          currency: "GHS" as const,
+          amount: amountTx,
+        };
+
+        let order;
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+          const snap = computeDepositCheckoutSnapshot(carFresh, settings, dPct, globalDepositPct);
+          if (!snap || snap.depositGhs <= 0) throwCheckoutConflict("INVALID_DEPOSIT_AMOUNT");
+          const anchors = resolveOrderStorageAnchors(carFresh, snap.resolution);
+          order = await tx.order.create({
+            data: {
+              ...baseOrderData,
+              depositAmount: snap.depositGhs,
+              remainingBalance: snap.remainingBalance,
+              orderDepositPercentSnapshot: snap.depositPercentApplied,
+              currencyBase: snap.resolution.currencyBase,
+              exchangeRateUsed: snap.resolution.exchangeRateUsed ?? undefined,
+              vehicleListPriceGhs: anchors.vehicleListPriceGhs,
+              baseAmount: anchors.baseAmount ?? undefined,
+              reservedAt: new Date(),
+            },
+          });
+        } else {
+          const anchorsFull = resolveOrderStorageAnchors(carFresh, settlement.resolution);
+          order = await tx.order.create({
+            data: {
+              ...baseOrderData,
+              currencyBase: settlement.resolution.currencyBase,
+              exchangeRateUsed: settlement.resolution.exchangeRateUsed ?? undefined,
+              vehicleListPriceGhs: anchorsFull.vehicleListPriceGhs,
+              baseAmount: anchorsFull.baseAmount ?? undefined,
+            },
+          });
+        }
 
         const pay = await tx.payment.create({
           data: {
@@ -160,7 +219,7 @@ export async function POST(req: Request) {
             settlementMethod,
             providerReference: reference,
             amount: amountTx,
-            currency: carFresh.currency,
+            currency: "GHS",
             status: "AWAITING_PROOF",
             paymentType: parsed.data.paymentType,
             idempotencyKey: reference,
@@ -204,6 +263,35 @@ export async function POST(req: Request) {
       if (e.checkoutCode === "ALREADY_PURCHASED") {
         return NextResponse.json(
           { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "DEPOSIT_ALREADY_PAID") {
+        return NextResponse.json(
+          {
+            error:
+              "A reservation deposit for this vehicle is already on file. Complete the remaining balance with our team.",
+            code: "DEPOSIT_ALREADY_PAID",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "BALANCE_PAYMENT_ONLINE_UNAVAILABLE") {
+        return NextResponse.json(
+          {
+            error:
+              "This vehicle has an active reservation deposit. Complete the remaining balance with our team before paying in full online or offline.",
+            code: "BALANCE_PAYMENT_ONLINE_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "INVALID_DEPOSIT_AMOUNT") {
+        return NextResponse.json(
+          {
+            error: "Could not compute deposit for this vehicle. Check list price and deposit percentage settings.",
+            code: "INVALID_DEPOSIT_AMOUNT",
+          },
           { status: 409 },
         );
       }

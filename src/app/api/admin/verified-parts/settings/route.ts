@@ -14,6 +14,8 @@ const schema = z.object({
   legalNote: z.string().trim().max(2500).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function GET() {
   await requireSuperAdmin();
   const settings = await getVerifiedPartSettings();

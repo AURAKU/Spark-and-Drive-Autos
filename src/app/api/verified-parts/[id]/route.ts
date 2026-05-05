@@ -4,6 +4,8 @@ import { isAdminRole } from "@/auth";
 import { safeAuth } from "@/lib/safe-auth";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   const session = await safeAuth();
   if (!session?.user?.id) {

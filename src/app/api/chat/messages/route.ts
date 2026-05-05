@@ -38,6 +38,8 @@ const postSchema = z
     message: "Message or attachment required",
   });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const ip = getRequestIp(req);
   const userAgent = req.headers.get("user-agent");

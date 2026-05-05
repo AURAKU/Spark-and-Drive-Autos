@@ -17,6 +17,8 @@ const patchSchema = z.object({
 
 type RouteContext = { params: Promise<{ messageId: string }> };
 
+export const runtime = "nodejs";
+
 export async function PATCH(req: Request, ctx: RouteContext) {
   const { messageId } = await ctx.params;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";

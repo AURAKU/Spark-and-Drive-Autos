@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
+export const runtime = "nodejs";
+
 export async function POST(_req: Request, context: RouteContext) {
   try {
     await requireAdmin();

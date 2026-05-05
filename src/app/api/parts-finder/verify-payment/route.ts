@@ -12,6 +12,8 @@ const schema = z.object({
   providerReference: z.string().min(3),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const { session } = await requirePartsFinderActivationAccess();
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
               amount: verify.amount,
               currency: verify.currency,
             },
+            providerVerified: true,
           });
         }
       }

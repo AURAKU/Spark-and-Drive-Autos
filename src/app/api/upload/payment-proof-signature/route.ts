@@ -14,6 +14,8 @@ const schema = z.object({
 /**
  * Signed Cloudinary upload for payment receipts (account owner only).
  */
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

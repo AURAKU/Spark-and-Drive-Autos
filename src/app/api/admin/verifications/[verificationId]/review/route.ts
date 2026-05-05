@@ -21,6 +21,8 @@ const schema = z.object({
 
 type RouteContext = { params: Promise<{ verificationId: string }> };
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request, ctx: RouteContext) {
   const admin = await requireAdmin();
   const ip = getRequestIp(req);

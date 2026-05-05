@@ -57,13 +57,13 @@ export function AdminOrdersPreviewDialog({ open, onOpenChange, preview, itemHref
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted/40">
+          <div className="relative flex min-h-[160px] w-full items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40 sm:aspect-[4/3]">
             {preview.imageUrl && !imgBroken ? (
               // eslint-disable-next-line @next/next/no-img-element -- arbitrary supplier URLs; fail gracefully via onError
               <img
                 src={preview.imageUrl}
                 alt=""
-                className="h-full w-full object-cover"
+                className="max-h-[min(50vh,320px)] w-full object-contain"
                 onError={() => setImgBroken(true)}
               />
             ) : (

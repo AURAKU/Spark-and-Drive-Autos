@@ -5,11 +5,11 @@ import { Suspense } from "react";
 import { CheckoutClient } from "./checkout-client";
 import type { VehiclePricePreview } from "@/lib/currency";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
+import { globalReservationDepositPercentFromSettings, resolveReservationDepositPercent } from "@/lib/checkout-amount";
 import {
-  getVehicleCheckoutAmountGhs,
-  resolveReservationDepositPercent,
-} from "@/lib/checkout-amount";
-import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
+  computeDepositCheckoutSnapshot,
+  getVehicleSettlementAmountGhs,
+} from "@/lib/vehicle-deposit-pricing";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
 import { getCheckoutLegalVersions, requiresRiskAcknowledgement, requiresSourcingContract } from "@/lib/legal-enforcement";
@@ -45,6 +45,8 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
       select: {
         title: true,
         basePriceRmb: true,
+        basePriceAmount: true,
+        basePriceCurrency: true,
         priceGhs: true,
         priceUsd: true,
         priceCny: true,
@@ -65,65 +67,68 @@ async function CheckoutWithData({ searchParams }: { searchParams: Promise<{ carI
       } else {
         const fx = await getGlobalCurrencySettings();
         const base = Number(car.basePriceRmb);
-        const fullGhs = getCarDisplayPrice(base, "GHS", fx);
         const pctStored =
           car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-        const depositSnap =
-          paymentType === PaymentType.RESERVATION_DEPOSIT
-            ? computeDepositCheckoutSnapshot(car, fx, pctStored)
-            : null;
-        const settlementGhs =
-          paymentType === PaymentType.RESERVATION_DEPOSIT && depositSnap
-            ? depositSnap.depositGhs
-            : getVehicleCheckoutAmountGhs(base, paymentType, fx, pctStored);
-        const reservationDepositPercentApplied =
-          paymentType === PaymentType.RESERVATION_DEPOSIT
-            ? depositSnap?.depositPercentApplied ?? resolveReservationDepositPercent(pctStored)
-            : 0;
-        requiresContract = requiresSourcingContract(car.sourceType);
-        requiresRisk = requiresRiskAcknowledgement(car.sourceType);
-        if (session?.user?.id) {
-          const legalRows = await getUserLegalStatusRows(session.user.id);
-          profileLegalComplete = legalRows.length === 0 || legalRows.every((r) => r.accepted);
-          if (profileLegalComplete) {
-            agreementAccepted = true;
-            contractAccepted = true;
-            riskAccepted = true;
-          } else {
-            agreementAccepted = await hasUserAccepted(
-              session.user.id,
-              POLICY_KEYS.CHECKOUT_AGREEMENT,
-              legalVersions.agreementVersion,
-            );
-            if (requiresContract) {
-              contractAccepted = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
-            }
-            if (requiresRisk) {
-              riskAccepted = await hasUserAccepted(
+        const settlementRow = getVehicleSettlementAmountGhs(car, paymentType, fx, pctStored);
+        if (!settlementRow || settlementRow.settlementGhs <= 0) {
+          checkoutBlock = {
+            title: car.title,
+            message:
+              "This vehicle does not have a valid list price for online checkout. Please contact support or choose another listing.",
+          };
+        } else {
+          const globalPct = globalReservationDepositPercentFromSettings(fx);
+          const depositSnap =
+            paymentType === PaymentType.RESERVATION_DEPOSIT
+              ? computeDepositCheckoutSnapshot(car, fx, pctStored, globalPct)
+              : null;
+          const settlementGhs = settlementRow.settlementGhs;
+          const reservationDepositPercentApplied =
+            paymentType === PaymentType.RESERVATION_DEPOSIT
+              ? depositSnap?.depositPercentApplied ?? resolveReservationDepositPercent(pctStored, globalPct)
+              : 0;
+          requiresContract = requiresSourcingContract(car.sourceType);
+          requiresRisk = requiresRiskAcknowledgement(car.sourceType);
+          if (session?.user?.id) {
+            const legalRows = await getUserLegalStatusRows(session.user.id);
+            profileLegalComplete = legalRows.length === 0 || legalRows.every((r) => r.accepted);
+            if (profileLegalComplete) {
+              agreementAccepted = true;
+              contractAccepted = true;
+              riskAccepted = true;
+            } else {
+              agreementAccepted = await hasUserAccepted(
                 session.user.id,
-                POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
-                legalVersions.riskVersion,
+                POLICY_KEYS.CHECKOUT_AGREEMENT,
+                legalVersions.agreementVersion,
               );
+              if (requiresContract) {
+                contractAccepted = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
+              }
+              if (requiresRisk) {
+                riskAccepted = await hasUserAccepted(
+                  session.user.id,
+                  POLICY_KEYS.SOURCING_RISK_ACKNOWLEDGEMENT,
+                  legalVersions.riskVersion,
+                );
+              }
             }
           }
+          const listGhsForPreview = settlementRow.fullListGhs;
+          checkoutSummary = {
+            title: car.title,
+            basePriceRmb: base,
+            displayAmount: getCarDisplayPrice(base, displayCurrency, fx),
+            displayCurrency,
+            sourceType: car.sourceType,
+            seaShippingFeeGhs: car.seaShippingFeeGhs != null ? Number(car.seaShippingFeeGhs) : null,
+            settlementGhs,
+            fullGhs: listGhsForPreview,
+            reservationDepositPercentApplied,
+            rmbToGhsDivisor: Number(fx.rmbToGhs),
+            paymentType: paymentType === PaymentType.RESERVATION_DEPOSIT ? "RESERVATION_DEPOSIT" : "FULL",
+          };
         }
-        const listGhsForPreview =
-          paymentType === PaymentType.RESERVATION_DEPOSIT && depositSnap
-            ? depositSnap.resolution.fullListGhs
-            : fullGhs;
-        checkoutSummary = {
-          title: car.title,
-          basePriceRmb: base,
-          displayAmount: getCarDisplayPrice(base, displayCurrency, fx),
-          displayCurrency,
-          sourceType: car.sourceType,
-          seaShippingFeeGhs: car.seaShippingFeeGhs != null ? Number(car.seaShippingFeeGhs) : null,
-          settlementGhs,
-          fullGhs: listGhsForPreview,
-          reservationDepositPercentApplied,
-          rmbToGhsDivisor: Number(fx.rmbToGhs),
-          paymentType: paymentType === PaymentType.RESERVATION_DEPOSIT ? "RESERVATION_DEPOSIT" : "FULL",
-        };
       }
     }
   }

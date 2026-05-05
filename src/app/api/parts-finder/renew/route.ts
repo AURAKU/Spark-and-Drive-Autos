@@ -7,6 +7,8 @@ import { getDefaultPaymentProvider, getPaystackCallbackOrigin, getPaystackSecret
 import { paystackInitialize } from "@/lib/paystack";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function POST() {
   try {
     const { session, snapshot: access } = await requirePartsFinderActivationAccess();

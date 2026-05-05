@@ -11,6 +11,7 @@ const schema = z.object({
   usdToRmb: z.coerce.number().positive(),
   rmbToGhs: z.coerce.number().positive(),
   usdToGhs: z.coerce.number().positive(),
+  defaultReservationDepositPercent: z.coerce.number().gt(0).lte(100),
 });
 
 export async function updateGlobalExchangeRates(_prev: unknown, formData: FormData) {
@@ -26,7 +27,7 @@ export async function updateGlobalExchangeRates(_prev: unknown, formData: FormDa
     return { error: "Invalid rates", issues: parsed.error.flatten() };
   }
 
-  const { usdToRmb, rmbToGhs, usdToGhs } = parsed.data;
+  const { usdToRmb, rmbToGhs, usdToGhs, defaultReservationDepositPercent } = parsed.data;
 
   await prisma.globalCurrencySettings.upsert({
     where: { id: "default" },
@@ -35,12 +36,14 @@ export async function updateGlobalExchangeRates(_prev: unknown, formData: FormDa
       usdToRmb,
       rmbToGhs,
       usdToGhs,
+      defaultReservationDepositPercent,
       updatedById: session.user.id,
     },
     update: {
       usdToRmb,
       rmbToGhs,
       usdToGhs,
+      defaultReservationDepositPercent,
       updatedById: session.user.id,
     },
   });

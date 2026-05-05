@@ -5,7 +5,11 @@ import { CarCard } from "@/components/cars/car-card";
 import { SharePageButton } from "@/components/sharing/share-page-button";
 import { PageHeading } from "@/components/typography/page-headings";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
+import { getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
+import { formatMoney } from "@/lib/format";
+import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { prisma } from "@/lib/prisma";
@@ -56,6 +60,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
+  const globalDepositPct = globalReservationDepositPercentFromSettings(fx);
 
   const andClauses: Prisma.CarWhereInput[] = [];
 
@@ -223,14 +228,27 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
           {cars.length === 0 ? (
             <p className="text-sm text-zinc-500">No vehicles match your filters yet.</p>
           ) : (
-            cars.map((car) => (
-              <CarCard
-                key={car.id}
-                car={car}
-                displayAmount={getCarDisplayPrice(Number(car.basePriceRmb ?? 0), displayCurrency, fx)}
-                displayCurrency={displayCurrency}
-              />
-            ))
+            cars.map((car) => {
+              const checkoutOk = getCarCheckoutIneligibleReason(car) === null;
+              const pctStored =
+                car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
+              const depSnap = checkoutOk
+                ? computeDepositCheckoutSnapshot(car, fx, pctStored, globalDepositPct)
+                : null;
+              const reservationDepositHint =
+                depSnap != null
+                  ? `${depSnap.depositPercentApplied}% dep. · ${formatMoney(depSnap.depositGhs, "GHS")}`
+                  : null;
+              return (
+                <CarCard
+                  key={car.id}
+                  car={car}
+                  displayAmount={getCarDisplayPrice(Number(car.basePriceRmb ?? 0), displayCurrency, fx)}
+                  displayCurrency={displayCurrency}
+                  reservationDepositHint={reservationDepositHint}
+                />
+              );
+            })
           )}
         </div>
       )}

@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import type { Car } from "@prisma/client";
 
+import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
 import type { DisplayCurrency } from "@/lib/currency";
 import { formatConverted } from "@/lib/currency";
@@ -26,9 +26,11 @@ type CarCardProps = {
   >;
   displayAmount: number;
   displayCurrency: DisplayCurrency;
+  /** e.g. “10% dep. · ₵12,000” when online reserve is available */
+  reservationDepositHint?: string | null;
 };
 
-export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
+export function CarCard({ car, displayAmount, displayCurrency, reservationDepositHint }: CarCardProps) {
   const href = `/cars/${car.slug}`;
   const stock = getVehicleStockBadgeForDisplay(car);
   const isSold = stock.variant === "sold";
@@ -38,13 +40,12 @@ export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
       <Card className="overflow-hidden border-border bg-card transition hover:border-[var(--brand)]/40 hover:shadow-[0_0_40px_-12px_rgba(20,216,230,0.45)] dark:border-white/10 dark:bg-white/[0.03]">
         <div className="relative aspect-[16/10] overflow-hidden bg-muted dark:bg-zinc-900">
           {car.coverImageUrl ? (
-            <Image
+            <VehicleCoverImage
               src={car.coverImageUrl}
               alt=""
               fill
               sizes="(max-width:768px) 100vw, 33vw"
               className="object-cover transition duration-500 group-hover:scale-[1.03]"
-              unoptimized={car.coverImageUrl.startsWith("http")}
             />
           ) : (
             <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted-foreground">
@@ -66,6 +67,8 @@ export function CarCard({ car, displayAmount, displayCurrency }: CarCardProps) {
             <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-500">
               Not available — sold
             </p>
+          ) : reservationDepositHint ? (
+            <p className="text-xs text-muted-foreground">Reserve: {reservationDepositHint}</p>
           ) : null}
         </div>
       </Card>

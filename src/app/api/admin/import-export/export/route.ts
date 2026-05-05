@@ -139,6 +139,8 @@ const postBodySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(2500).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   let session: Awaited<ReturnType<typeof requireAdmin>>;
   try {

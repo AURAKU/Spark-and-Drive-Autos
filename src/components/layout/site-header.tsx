@@ -2,9 +2,10 @@ import { cookies } from "next/headers";
 
 import { isAppleAuthConfigured, isGoogleAuthConfigured } from "@/lib/oauth-config";
 import { parseDisplayCurrency } from "@/lib/currency";
+import { safeDateToIso } from "@/lib/format";
 import { safeAuth } from "@/lib/safe-auth";
 import { prisma } from "@/lib/prisma";
-import { getStaffOperationsHref } from "@/lib/roles";
+import { getStaffOperationsHref, isAdminRole } from "@/lib/roles";
 
 import { SiteHeaderClient } from "./site-header-client";
 
@@ -34,6 +35,8 @@ export async function SiteHeader() {
   const googleOAuthConfigured = isGoogleAuthConfigured();
   const appleOAuthConfigured = isAppleAuthConfigured();
   const dashboardHref = getStaffOperationsHref(session?.user?.role);
+  const adminHealthHref =
+    session?.user?.role && isAdminRole(session.user.role) ? "/admin/health" : null;
 
   let unreadNotifications = 0;
   let recentNotifications: Array<{
@@ -60,7 +63,7 @@ export async function SiteHeader() {
     unreadNotifications = count;
     recentNotifications = recent.map((n) => ({
       ...n,
-      createdAt: n.createdAt.toISOString(),
+      createdAt: safeDateToIso(n.createdAt) ?? "",
     }));
   }
 
@@ -69,6 +72,7 @@ export async function SiteHeader() {
       displayCurrency={displayCurrency}
       isLoggedIn={Boolean(session?.user)}
       dashboardHref={dashboardHref}
+      adminHealthHref={adminHealthHref}
       googleOAuthConfigured={googleOAuthConfigured}
       appleOAuthConfigured={appleOAuthConfigured}
       unreadNotifications={unreadNotifications}

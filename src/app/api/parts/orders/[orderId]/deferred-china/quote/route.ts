@@ -6,6 +6,8 @@ import { safeAuth } from "@/lib/safe-auth";
 
 type RouteParams = { params: Promise<{ orderId: string }> };
 
+export const runtime = "nodejs";
+
 export async function GET(_req: Request, { params }: RouteParams) {
   const session = await safeAuth();
   if (!session?.user?.id) {

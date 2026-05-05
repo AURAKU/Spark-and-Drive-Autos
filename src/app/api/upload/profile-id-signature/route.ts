@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createUploadSignature } from "@/lib/cloudinary";
 import { safeAuth } from "@/lib/safe-auth";
 
+export const runtime = "nodejs";
+
 export async function POST() {
   const session = await safeAuth();
   if (!session?.user?.id) {

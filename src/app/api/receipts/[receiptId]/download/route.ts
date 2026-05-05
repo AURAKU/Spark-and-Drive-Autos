@@ -8,6 +8,8 @@ import { safeAuth } from "@/lib/safe-auth";
 
 type Ctx = { params: Promise<{ receiptId: string }> };
 
+export const runtime = "nodejs";
+
 export async function GET(req: Request, ctx: Ctx) {
   const session = await safeAuth();
   if (!session?.user?.id) {

@@ -12,6 +12,8 @@ const bodySchema = z.object({
   nickname: z.string().trim().max(80).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

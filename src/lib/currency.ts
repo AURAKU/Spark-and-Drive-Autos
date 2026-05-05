@@ -55,6 +55,7 @@ const DEFAULT_SETTINGS = {
   usdToRmb: 7,
   rmbToGhs: 0.586,
   usdToGhs: 11.65,
+  defaultReservationDepositPercent: 5,
 };
 
 /** Safe defaults when GlobalCurrencySettings cannot be read (offline DB / migration mismatch). */
@@ -64,6 +65,7 @@ export function fallbackGlobalCurrencySettings(): GlobalCurrencySettings {
     usdToRmb: new Prisma.Decimal(DEFAULT_SETTINGS.usdToRmb),
     rmbToGhs: new Prisma.Decimal(DEFAULT_SETTINGS.rmbToGhs),
     usdToGhs: new Prisma.Decimal(DEFAULT_SETTINGS.usdToGhs),
+    defaultReservationDepositPercent: new Prisma.Decimal(DEFAULT_SETTINGS.defaultReservationDepositPercent),
     updatedAt: new Date(),
     updatedById: null,
   };
@@ -84,10 +86,11 @@ const getGlobalCurrencySettingsCached = unstable_cache(
       usdToRmb: DEFAULT_SETTINGS.usdToRmb,
       rmbToGhs: DEFAULT_SETTINGS.rmbToGhs,
       usdToGhs: DEFAULT_SETTINGS.usdToGhs,
+      defaultReservationDepositPercent: DEFAULT_SETTINGS.defaultReservationDepositPercent,
     },
   });
   },
-  ["global-currency-settings:v1"],
+  ["global-currency-settings:v2"],
   { revalidate: 60 },
 );
 

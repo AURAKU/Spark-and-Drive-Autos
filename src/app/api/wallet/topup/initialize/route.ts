@@ -15,6 +15,8 @@ const schema = z.object({
   amount: z.coerce.number().min(50).max(50000),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id || !session.user.email) {

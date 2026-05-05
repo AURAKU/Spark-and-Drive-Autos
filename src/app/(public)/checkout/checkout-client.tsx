@@ -398,7 +398,8 @@ export function CheckoutClient({
                       <span className="font-semibold text-zinc-200">
                         {checkoutSummary.reservationDepositPercentApplied}%
                       </span>{" "}
-                      of the vehicle list price in Ghana cedis (minimum deposit rules may apply). Estimated full total:{" "}
+                      of the resolved vehicle list total in Ghana cedis (Paystack charges this calculated amount). Estimated
+                      full total:{" "}
                       <span className="font-semibold text-zinc-200">
                         {formatConverted(checkoutSummary.fullGhs, "GHS")}
                       </span>

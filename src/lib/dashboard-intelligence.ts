@@ -1,3 +1,4 @@
+import { safeDateToIso } from "@/lib/format";
 import { loadMembershipSnapshotForUser } from "@/lib/parts-finder/access";
 import { listShipmentsForUser } from "@/lib/shipping/shipment-service";
 import { prisma } from "@/lib/prisma";
@@ -136,7 +137,7 @@ export async function getDashboardIntelligence(
       orderRef: s.order.reference,
       orderId: s.order.id,
       headline,
-      updatedAt: s.updatedAt.toISOString(),
+      updatedAt: safeDateToIso(s.updatedAt) ?? new Date(0).toISOString(),
     };
   });
 
@@ -153,7 +154,7 @@ export async function getDashboardIntelligence(
       reference: o.reference,
       kind: o.kind,
       orderStatus: o.orderStatus,
-      createdAt: o.createdAt.toISOString(),
+      createdAt: safeDateToIso(o.createdAt) ?? new Date(0).toISOString(),
       amount: Number(o.amount),
       currency: o.currency,
     })),

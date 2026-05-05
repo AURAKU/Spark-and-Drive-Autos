@@ -32,3 +32,10 @@ export function safeDateToIso(d: Date | string | null | undefined): string | nul
     return null;
   }
 }
+
+/** Milliseconds since epoch, or null if the value is missing or not a valid date. */
+export function dateLikeToTimeMs(value: Date | string | number | null | undefined): number | null {
+  if (value == null) return null;
+  const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}

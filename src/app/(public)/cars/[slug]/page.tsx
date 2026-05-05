@@ -18,6 +18,7 @@ import {
   getGlobalCurrencySettings,
   parseDisplayCurrency,
 } from "@/lib/currency";
+import { globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
 import { BALANCE_DUE_WINDOW_DAYS } from "@/lib/deposit-balance-logic";
 import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
 import { getPublicAppUrl } from "@/lib/app-url";
@@ -79,9 +80,11 @@ export default async function CarDetailPage(props: Props) {
   const listPriceAsCifHintGhs = getCarDisplayPrice(Number(car.basePriceRmb), "GHS", fx);
   const depositPctForCheckout =
     car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
-  const depositSnap = computeDepositCheckoutSnapshot(car, fx, depositPctForCheckout);
-  const reservationDepositGhs = depositSnap.depositGhs;
-  const reservationDepositPercentLabel = depositSnap.depositPercentApplied;
+  const globalDepositPct = globalReservationDepositPercentFromSettings(fx);
+  const depositSnap = computeDepositCheckoutSnapshot(car, fx, depositPctForCheckout, globalDepositPct);
+  const reservationDepositGhs = depositSnap?.depositGhs;
+  const reservationDepositPercentLabel = depositSnap?.depositPercentApplied;
+  const reserveAvailable = Boolean(depositSnap);
 
   const galleryImages = buildCarGalleryImages(car);
   const stockBadge = getVehicleStockBadgeForDisplay(car);
@@ -251,13 +254,14 @@ export default async function CarDetailPage(props: Props) {
             </div>
           )}
 
-          {canPayOnline ? (
+          {canPayOnline && depositSnap ? (
             <div className="mt-6 rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
               <p className="font-medium text-foreground">Online checkout</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
                 <li>
-                  Deposit: <span className="font-semibold text-foreground">{reservationDepositPercentLabel}%</span> ·{" "}
-                  <span className="font-semibold text-[var(--brand)]">{formatMoney(reservationDepositGhs, "GHS")}</span>
+                  Deposit: <span className="font-semibold text-foreground">{reservationDepositPercentLabel}%</span> of list
+                  total ·{" "}
+                  <span className="font-semibold text-[var(--brand)]">{formatMoney(reservationDepositGhs ?? 0, "GHS")}</span>
                 </li>
                 <li>
                   Est. remaining balance:{" "}
@@ -277,6 +281,7 @@ export default async function CarDetailPage(props: Props) {
               canPayOnline={canPayOnline}
               blockTitle={car.title}
               blockMessage={checkoutBlockedMessage ?? ""}
+              reserveAvailable={reserveAvailable}
               reservationDepositGhs={reservationDepositGhs}
               reservationDepositPercentLabel={reservationDepositPercentLabel}
             />

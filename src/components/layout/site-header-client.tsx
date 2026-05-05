@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, Home, LayoutDashboard, LogOut, Menu, UserCircle2 } from "lucide-react";
+import { Activity, Bell, ChevronDown, Home, LayoutDashboard, LogOut, Menu, UserCircle2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
@@ -34,8 +34,9 @@ function toErrorMessage(error: unknown, fallback: string): string {
 
 /** Stable SSR/client string — avoids `toLocaleString()` hydration mismatches. */
 function formatNotificationTime(iso: string) {
+  if (!iso.trim()) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return "—";
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = String(d.getUTCDate()).padStart(2, "0");
@@ -48,6 +49,8 @@ type Props = {
   displayCurrency: DisplayCurrency;
   isLoggedIn: boolean;
   dashboardHref: string;
+  /** Staff-only link shown under navigation menus (system health). */
+  adminHealthHref: string | null;
   googleOAuthConfigured: boolean;
   appleOAuthConfigured: boolean;
   unreadNotifications: number;
@@ -72,6 +75,7 @@ export function SiteHeaderClient({
   displayCurrency,
   isLoggedIn,
   dashboardHref,
+  adminHealthHref,
   googleOAuthConfigured,
   appleOAuthConfigured,
   unreadNotifications,
@@ -140,7 +144,11 @@ export function SiteHeaderClient({
               </span>
               <ChevronDown className="mr-1 size-4 opacity-75" aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={10} className="w-56 max-w-[calc(100vw-1rem)] shadow-xl">
+            <DropdownMenuContent
+              align="start"
+              sideOffset={10}
+              className="w-56 max-w-[calc(100vw-1rem)] max-h-[min(85vh,28rem)] overflow-y-auto border-border bg-popover text-popover-foreground shadow-xl"
+            >
               <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => router.push("/")}>
                 <Home className="size-4" aria-hidden /> Main homepage
               </DropdownMenuItem>
@@ -148,6 +156,11 @@ export function SiteHeaderClient({
                 {isLoggedIn ? <LayoutDashboard className="size-4" aria-hidden /> : <UserCircle2 className="size-4" aria-hidden />}
                 Dashboard
               </DropdownMenuItem>
+              {adminHealthHref ? (
+                <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => router.push(adminHealthHref)}>
+                  <Activity className="size-4" aria-hidden /> System health
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -163,7 +176,11 @@ export function SiteHeaderClient({
                 </span>
               ) : null}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={10} className="w-[22rem] max-w-[calc(100vw-1rem)] shadow-xl">
+            <DropdownMenuContent
+              align="end"
+              sideOffset={10}
+              className="w-[22rem] max-w-[calc(100vw-1rem)] max-h-[min(90vh,32rem)] overflow-y-auto overflow-x-hidden border-border bg-popover text-popover-foreground shadow-xl"
+            >
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Display preferences</DropdownMenuLabel>
                 <div className="px-3 pb-2">
@@ -274,6 +291,12 @@ export function SiteHeaderClient({
                       <Bell className="size-4" aria-hidden />
                       View all notifications
                     </DropdownMenuItem>
+                    {adminHealthHref ? (
+                      <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => router.push(adminHealthHref)}>
+                        <Activity className="size-4" aria-hidden />
+                        System health
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem
                       className="cursor-pointer gap-2"
                       onClick={() => {

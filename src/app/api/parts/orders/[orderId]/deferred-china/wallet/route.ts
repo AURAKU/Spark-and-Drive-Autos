@@ -13,6 +13,8 @@ const bodySchema = z.object({
 
 type RouteParams = { params: Promise<{ orderId: string }> };
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request, { params }: RouteParams) {
   const session = await safeAuth();
   if (!session?.user?.id) {

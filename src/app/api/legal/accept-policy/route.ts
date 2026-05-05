@@ -26,6 +26,8 @@ const schema = z.object({
     .optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const session = await safeAuth();
   if (!session?.user?.id) {

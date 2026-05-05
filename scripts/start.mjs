@@ -3,6 +3,7 @@
  * Usage: npm run start   |   PORT=3000 npm run start
  */
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,14 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = process.env.PORT || "5173";
 
 if (process.env.NODE_ENV === "production") {
+  const buildIdPath = path.join(root, ".next", "BUILD_ID");
+  if (!fs.existsSync(buildIdPath)) {
+    console.error(
+      "[start] Missing `.next` build output (BUILD_ID). Run `npm run build` before `npm run start` or restarting PM2.",
+    );
+    process.exit(1);
+  }
+
   const preflight = spawn("node", ["scripts/validate-env.mjs"], {
     cwd: root,
     stdio: "inherit",

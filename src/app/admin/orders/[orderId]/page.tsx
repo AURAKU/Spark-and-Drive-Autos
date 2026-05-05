@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ReceiptStatus } from "@prisma/client";
+import { PaymentType, ReceiptStatus } from "@prisma/client";
 
 import { UploadedFilePreview } from "@/components/uploads/uploaded-file-preview";
 import { PageHeading } from "@/components/typography/page-headings";
@@ -94,7 +94,67 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           <p className="mt-4 text-sm text-zinc-400">
             Amount: <span className="text-[var(--brand)]">{formatMoney(Number(order.amount), order.currency)}</span>
           </p>
+          {order.kind === "CAR" && order.car ? (
+            <p className="mt-2 text-xs text-zinc-500">
+              Current list (admin):{" "}
+              <span className="text-zinc-300">
+                {formatMoney(Number(order.car.price), order.car.currency ?? "GHS")}
+              </span>
+              {order.car.reservationDepositPercent != null ? (
+                <>
+                  {" "}
+                  · Deposit % on car:{" "}
+                  <span className="text-zinc-300">{Number(order.car.reservationDepositPercent)}%</span>
+                </>
+              ) : (
+                <> · Deposit % on car: global default</>
+              )}
+            </p>
+          ) : null}
         </div>
+        {order.kind === "CAR" && order.paymentType === PaymentType.RESERVATION_DEPOSIT ? (
+          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5 lg:col-span-2">
+            <h2 className="text-sm font-semibold text-emerald-100">Reservation deposit (order snapshot)</h2>
+            <dl className="mt-4 grid gap-3 text-sm text-zinc-300 sm:grid-cols-2">
+              {order.vehicleListPriceGhs != null ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">List total at reservation (GHS)</dt>
+                  <dd className="font-medium text-white">{formatMoney(Number(order.vehicleListPriceGhs), "GHS")}</dd>
+                </div>
+              ) : null}
+              {order.orderDepositPercentSnapshot != null ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Deposit % applied</dt>
+                  <dd className="font-medium text-white">{Number(order.orderDepositPercentSnapshot)}%</dd>
+                </div>
+              ) : null}
+              {order.depositAmount != null ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Deposit paid (order)</dt>
+                  <dd className="font-medium text-emerald-200">{formatMoney(Number(order.depositAmount), order.currency)}</dd>
+                </div>
+              ) : null}
+              {order.remainingBalance != null ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Remaining balance</dt>
+                  <dd className="font-medium text-white">{formatMoney(Number(order.remainingBalance), order.currency)}</dd>
+                </div>
+              ) : null}
+              {order.balanceDueAt ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Balance due by</dt>
+                  <dd className="font-medium text-white">{order.balanceDueAt.toLocaleString()}</dd>
+                </div>
+              ) : null}
+              {order.balanceStatus ? (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Balance status</dt>
+                  <dd className="font-medium text-white">{order.balanceStatus.replaceAll("_", " ")}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        ) : null}
       </div>
 
       {order.kind === "PARTS" ? (

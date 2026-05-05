@@ -16,12 +16,13 @@ import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+/** Local bundled assets only — avoids brittle upstream hotlinks (404 spam in production logs). */
 const DEMO_IMAGES = [
-  "https://images.unsplash.com/photo-1617814076367-b759c7d7be38?w=1200&q=80",
-  "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1200&q=80",
-  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80",
-  "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=1200&q=80",
-  "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=1200&q=80",
+  "/brand/logo-emblem.png",
+  "/brand/about-logo-emblem.png",
+  "/brand/gear-storefront-theme.png",
+  "/brand/brand-hero-texture.png",
+  "/brand/about-brand-showcase.png",
 ];
 
 const DEMO_VIDEOS = [
@@ -79,6 +80,7 @@ async function main() {
         usdToRmb: 7,
         rmbToGhs: 0.586,
         usdToGhs: 11.65,
+        defaultReservationDepositPercent: 5,
       },
       update: {
         usdToRmb: 7,

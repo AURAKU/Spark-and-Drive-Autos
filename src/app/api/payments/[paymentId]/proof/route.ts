@@ -16,6 +16,8 @@ const bodySchema = z.object({
 
 type RouteContext = { params: Promise<{ paymentId: string }> };
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request, ctx: RouteContext) {
   const session = await safeAuth();
   if (!session?.user?.id) {

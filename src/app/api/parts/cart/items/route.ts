@@ -47,6 +47,8 @@ async function getCartCount(userId: string) {
   return Number(agg._sum.quantity ?? 0);
 }
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const session = await safeAuth();
   if (!session?.user?.id) return NextResponse.json({ count: 0 });

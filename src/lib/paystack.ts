@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const PAYSTACK_API = "https://api.paystack.co";
 
@@ -79,16 +79,27 @@ export async function paystackVerify(reference: string, secretKey?: string) {
   return json.data;
 }
 
+function timingSafeHexEqual(expectedHex: string, providedHex: string): boolean {
+  try {
+    const a = Buffer.from(expectedHex.toLowerCase(), "hex");
+    const b = Buffer.from(providedHex.toLowerCase(), "hex");
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 export function verifyPaystackSignature(rawBody: string, signature: string | null): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret || !signature) return false;
-  const hash = createHmac("sha512", secret).update(rawBody).digest("hex");
-  return hash === signature;
+  const hash = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
+  return timingSafeHexEqual(hash, signature.trim());
 }
 
 export function verifyPaystackSignatureWithSecret(rawBody: string, signature: string | null, secretKey?: string): boolean {
   const secret = secretKey ?? process.env.PAYSTACK_SECRET_KEY;
   if (!secret || !signature) return false;
-  const hash = createHmac("sha512", secret).update(rawBody).digest("hex");
-  return hash === signature;
+  const hash = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
+  return timingSafeHexEqual(hash, signature.trim());
 }

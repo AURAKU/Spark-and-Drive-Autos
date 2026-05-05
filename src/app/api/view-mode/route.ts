@@ -10,6 +10,8 @@ const schema = z.object({
   mode: z.enum(["admin", "user"]),
 });
 
+export const runtime = "nodejs";
+
 /**
  * Full admins only: toggle customer preview vs admin-first navigation (session / RBAC unchanged).
  * Service assistants use the support inbox directly — preview mode is not applicable.

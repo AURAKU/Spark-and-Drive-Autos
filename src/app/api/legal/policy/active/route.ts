@@ -22,6 +22,8 @@ async function findActivePolicyWithFallback(policyKey: string) {
   return null;
 }
 
+export const runtime = "nodejs";
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const policyKey = url.searchParams.get("policyKey")?.trim();

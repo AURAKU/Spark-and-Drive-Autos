@@ -24,7 +24,15 @@ function scheduleDepositBalanceMaintenance(): void {
 }
 
 export async function register() {
-  scheduleDepositBalanceMaintenance();
+  if (typeof process === "undefined" || typeof process.versions?.node === "undefined") {
+    return;
+  }
+
+  try {
+    scheduleDepositBalanceMaintenance();
+  } catch (e) {
+    console.error("[instrumentation] deposit-balance schedule failed (non-fatal)", e);
+  }
 
   if (process.env.NODE_ENV !== "production") return;
   const s = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;

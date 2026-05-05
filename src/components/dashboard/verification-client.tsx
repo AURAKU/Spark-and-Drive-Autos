@@ -70,7 +70,6 @@ async function uploadOne(file: File, kind: "front" | "back" | "selfie"): Promise
   } catch {
     sigRaw = {};
   }
-  console.log("SIGN RESPONSE:", sigRaw);
   if (!sigRes.ok) {
     throw new Error("Signing request failed");
   }
@@ -89,15 +88,12 @@ async function uploadOne(file: File, kind: "front" | "back" | "selfie"): Promise
   if (sig.eager) fd.append("eager", sig.eager);
 
   const cloudinaryResponse = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-  console.log("UPLOAD STATUS:", cloudinaryResponse.status);
   let cloudinaryResponseData: unknown;
   try {
     cloudinaryResponseData = await cloudinaryResponse.json();
   } catch {
     cloudinaryResponseData = null;
   }
-  console.log("UPLOAD RESULT:", cloudinaryResponseData);
-
   if (!cloudinaryResponse.ok) {
     throw new Error("Cloudinary upload failed");
   }
@@ -198,7 +194,6 @@ export function VerificationClient({
     } catch {
       sigBody = {};
     }
-    console.log("SIGN RESPONSE:", sigBody);
     if (!sigRes.ok) {
       throw new Error("Signing request failed");
     }
@@ -216,15 +211,12 @@ export function VerificationClient({
     fd.append("folder", sig.folder);
 
     const cloudinaryResponse = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-    console.log("UPLOAD STATUS:", cloudinaryResponse.status);
     let cloudinaryResponseData: unknown;
     try {
       cloudinaryResponseData = await cloudinaryResponse.json();
     } catch {
       cloudinaryResponseData = null;
     }
-    console.log("UPLOAD RESULT:", cloudinaryResponseData);
-
     if (!cloudinaryResponse.ok) {
       throw new Error("Cloudinary upload failed");
     }
@@ -250,7 +242,6 @@ export function VerificationClient({
         expiryDate,
       }),
     });
-    console.log("SAVE STATUS:", saveResponse.status);
     const data = (await saveResponse.json().catch(() => ({}))) as { error?: string; aiSuggested?: string | null };
     if (!saveResponse.ok) {
       const msg =

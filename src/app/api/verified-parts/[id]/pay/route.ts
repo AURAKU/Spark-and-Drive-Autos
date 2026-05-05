@@ -7,6 +7,8 @@ import { assertProfileLegalCompleteOrResponse, PROFILE_LEGAL_URL } from "@/lib/l
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function POST(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireUser();

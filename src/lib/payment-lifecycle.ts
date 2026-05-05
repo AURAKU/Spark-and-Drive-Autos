@@ -38,6 +38,11 @@ type TransitionOpts = {
   receiptData?: Prisma.InputJsonValue;
   /** When admin confirms — stored on Payment */
   review?: { reviewedById: string; reviewedAt: Date };
+  /**
+   * Paystack (or equivalent) API verified the charge server-side — satisfies the evidence guard for SUCCESS
+   * when `source` is not WEBHOOK (e.g. checkout return after `paystackVerify`).
+   */
+  providerVerified?: boolean;
 };
 
 /**
@@ -46,9 +51,12 @@ type TransitionOpts = {
  */
 export async function transitionPaymentStatus(paymentId: string, opts: TransitionOpts): Promise<void> {
   if (opts.toStatus === "SUCCESS" && opts.source !== "WEBHOOK") {
-    const hasEvidence = await hasPaymentSuccessEvidence(paymentId);
-    if (!hasEvidence && !opts.review?.reviewedById) {
-      throw new Error("PAYMENT_SUCCESS_REQUIRES_VERIFIED_EVIDENCE");
+    const skipEvidence = Boolean(opts.providerVerified) || Boolean(opts.review?.reviewedById);
+    if (!skipEvidence) {
+      const hasEvidence = await hasPaymentSuccessEvidence(paymentId);
+      if (!hasEvidence) {
+        throw new Error("PAYMENT_SUCCESS_REQUIRES_VERIFIED_EVIDENCE");
+      }
     }
   }
   const payment = await prisma.payment.findUnique({

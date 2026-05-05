@@ -7,6 +7,7 @@ import { getRequestIp } from "@/lib/client-ip";
 import { transitionPaymentStatus } from "@/lib/payment-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { rateLimitDispute } from "@/lib/rate-limit";
+import { safeDateToIso } from "@/lib/format";
 import { safeAuth } from "@/lib/safe-auth";
 import { requireVerification } from "@/lib/identity-verification";
 
@@ -15,6 +16,8 @@ const schema = z.object({
 });
 
 type RouteContext = { params: Promise<{ paymentId: string }> };
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request, ctx: RouteContext) {
   const ip = getRequestIp(req);
@@ -112,7 +115,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       newStatus: PaymentStatus.DISPUTED,
       disputeId: dispute.id,
       disputeStatus: dispute.status,
-      timestamp: dispute.flaggedAt.toISOString(),
+      timestamp: safeDateToIso(dispute.flaggedAt) ?? new Date().toISOString(),
     },
   });
   await prisma.legalAuditLog.create({
