@@ -36,13 +36,6 @@ const checkoutReturnPaymentSelect = {
       amount: true,
       currency: true,
       kind: true,
-      depositAmount: true,
-      remainingBalance: true,
-      orderDepositPercentSnapshot: true,
-      reservedAt: true,
-      balanceDueAt: true,
-      balanceStatus: true,
-      vehicleListPriceGhs: true,
       car: {
         select: {
           title: true,
@@ -243,17 +236,10 @@ export default async function CheckoutReturnPage(props: Props) {
       paystackReportedSuccess,
       confirmed,
       paidAtIso: safeDateToIso(paidAt),
-      balanceDueAtIso: order?.balanceDueAt != null ? safeDateToIso(order.balanceDueAt) : null,
       viewerOwns,
     });
 
     const isVehicleDeposit = paymentRow.paymentType === "RESERVATION_DEPOSIT";
-    const remainingBalanceNum =
-      order?.remainingBalance != null ? safeDecimalToNumber(order.remainingBalance) : null;
-    const depositPctNum =
-      order?.orderDepositPercentSnapshot != null
-        ? safeDecimalToNumber(order.orderDepositPercentSnapshot)
-        : null;
 
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-16">
@@ -275,28 +261,8 @@ export default async function CheckoutReturnPage(props: Props) {
             <p className="mt-2 text-zinc-200">
               <span className="text-emerald-300/95">✓</span> We received{" "}
               <span className="font-semibold text-white">{formatMoney(amountPaid, currency)}</span>
-              {depositPctNum != null ? (
-                <>
-                  {" "}
-                  as your reservation deposit ({depositPctNum}% of list price basis).
-                </>
-              ) : (
-                " as your reservation deposit."
-              )}
+              {" as your reservation deposit."}
             </p>
-            {remainingBalanceNum != null ? (
-              <p className="mt-2 text-zinc-300">
-                Remaining balance:{" "}
-                <span className="font-semibold text-white">{formatMoney(remainingBalanceNum, orderCurrency)}</span>
-              </p>
-            ) : null}
-            {order?.balanceDueAt ? (
-              <p className="mt-3 text-xs text-zinc-400">
-                Balance due by{" "}
-                <span className="font-medium text-zinc-200">{formatDate(order.balanceDueAt)}</span> (21 days from your
-                deposit).
-              </p>
-            ) : null}
             <p className="mt-4 text-xs leading-relaxed text-zinc-500">
               Your vehicle is reserved. Our team will contact you to complete the remaining balance within the allowed
               window.
