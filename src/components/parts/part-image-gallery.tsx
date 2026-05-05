@@ -114,7 +114,7 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
           imagePlaceholder
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
-          deliveryPreset="galleryStage"
+          deliveryPreset="partDetailHero"
         />
         {count > 1 ? (
           <>

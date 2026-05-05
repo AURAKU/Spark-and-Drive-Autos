@@ -90,6 +90,10 @@ function timingSafeHexEqual(expectedHex: string, providedHex: string): boolean {
   }
 }
 
+/**
+ * Verifies `x-paystack-signature` (hex) = HMAC-SHA512(rawBody, Paystack **Secret Key**).
+ * `rawBody` must be the untouched request body string (e.g. `await request.text()`), not `JSON.stringify` of parsed JSON.
+ */
 export function verifyPaystackSignature(rawBody: string, signature: string | null): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret || !signature) return false;
@@ -97,8 +101,9 @@ export function verifyPaystackSignature(rawBody: string, signature: string | nul
   return timingSafeHexEqual(hash, signature.trim());
 }
 
+/** @param secretKey Paystack Secret Key (sk_live_… / sk_test_…), same as API Bearer token. */
 export function verifyPaystackSignatureWithSecret(rawBody: string, signature: string | null, secretKey?: string): boolean {
-  const secret = secretKey ?? process.env.PAYSTACK_SECRET_KEY;
+  const secret = secretKey?.trim() || process.env.PAYSTACK_SECRET_KEY;
   if (!secret || !signature) return false;
   const hash = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
   return timingSafeHexEqual(hash, signature.trim());

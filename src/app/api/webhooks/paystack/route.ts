@@ -21,20 +21,39 @@ export async function POST(req: Request) {
     monitoringEvent("webhook.rate_limited", { provider: "paystack", ip });
     return NextResponse.json({ error: "Too many webhook attempts" }, { status: 429 });
   }
-  const raw = await req.text();
-  const sig = req.headers.get("x-paystack-signature");
-  const { webhookSecret } = await getPaystackSecrets();
 
-  const ok = verifyPaystackSignatureWithSecret(raw, sig, webhookSecret || undefined);
+  /** Must be the exact bytes Paystack signed — never use JSON.parse/stringify before verify. */
+  const raw = await req.text();
+  const paystack = await getPaystackSecrets();
+  const headerName = (paystack.webhookHeaderName || "x-paystack-signature").toLowerCase();
+  const sig = req.headers.get(headerName) ?? req.headers.get("x-paystack-signature");
+
+  /** Paystack HMAC-SHA512 uses your Secret Key (sk_…), same as REST API — not a separate dashboard "webhook secret". */
+  const signingKey = paystack.secretKey?.trim() || undefined;
+  const ok = verifyPaystackSignatureWithSecret(raw, sig, signingKey);
   if (!ok) {
-    monitoringEvent("webhook.signature_invalid", { provider: "paystack", ip, hasSig: Boolean(sig) });
+    monitoringEvent("webhook.signature_invalid", {
+      provider: "paystack",
+      ip,
+      hasSig: Boolean(sig),
+      hasSigningSecret: Boolean(signingKey),
+      bodyLength: raw.length,
+      signatureLength: sig?.length ?? 0,
+    });
     await recordSecurityObservation({
       severity: "CRITICAL",
       channel: "WEBHOOK",
       title: "Paystack webhook rejected (invalid HMAC signature)",
-      detail: "Possible spoofed or misconfigured webhook; verify Paystack secret and proxy headers.",
+      detail:
+        "Verify PAYSTACK_SECRET_KEY / Admin Paystack secret key matches the Paystack dashboard (same key used for API). Optional webhook-secret fields must match that key or be left empty.",
       path: "/api/webhooks/paystack",
-      metadataJson: { hasSig: Boolean(sig) },
+      ipAddress: ip,
+      metadataJson: {
+        hasSig: Boolean(sig),
+        hasSigningSecret: Boolean(signingKey),
+        bodyLength: raw.length,
+        signatureLength: sig?.length ?? 0,
+      },
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
@@ -151,8 +170,7 @@ export async function POST(req: Request) {
 
   const status = payload.data?.status;
   if (status === "success") {
-    const { secretKey } = await getPaystackSecrets();
-    const verified = await paystackVerify(reference, secretKey || undefined);
+    const verified = await paystackVerify(reference, signingKey || undefined);
     if (verified.status !== "success") {
       await prisma.paymentWebhookEvent.update({ where: { id: webhook.id }, data: { processed: true } });
       await writeAuditLog({

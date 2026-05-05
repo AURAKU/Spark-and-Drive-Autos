@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
+import { cloudinaryVideoFramePosterUrl } from "@/lib/cloudinary-video-poster";
 import { prisma } from "@/lib/prisma";
 
 const urlIn = z.object({
@@ -47,7 +48,10 @@ export async function addCarImage(carId: string, input: z.infer<typeof urlIn>) {
   return { ok: true };
 }
 
-export async function addCarVideo(carId: string, input: z.infer<typeof urlIn> & { thumbnailUrl?: string | null }) {
+export async function addCarVideo(
+  carId: string,
+  input: z.infer<typeof urlIn> & { thumbnailUrl?: string | null; mimeType?: string | null },
+) {
   try {
     await requireAdmin();
   } catch {
@@ -56,6 +60,7 @@ export async function addCarVideo(carId: string, input: z.infer<typeof urlIn> & 
   const parsed = urlIn
     .extend({
       thumbnailUrl: z.string().url().optional().nullable(),
+      mimeType: z.string().max(120).optional().nullable(),
     })
     .safeParse(input);
   if (!parsed.success) return { error: "Invalid video data" };
@@ -68,12 +73,16 @@ export async function addCarVideo(carId: string, input: z.infer<typeof urlIn> & 
   });
   const sortOrder = (max._max.sortOrder ?? -1) + 1;
 
+  const derivedThumb = cloudinaryVideoFramePosterUrl(parsed.data.url);
+  const thumbnailUrl = parsed.data.thumbnailUrl?.trim() || derivedThumb || undefined;
+
   await prisma.carVideo.create({
     data: {
       carId,
       url: parsed.data.url,
       publicId: parsed.data.publicId ?? undefined,
-      thumbnailUrl: parsed.data.thumbnailUrl ?? undefined,
+      thumbnailUrl,
+      mimeType: parsed.data.mimeType?.trim() || undefined,
       sortOrder,
     },
   });

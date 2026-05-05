@@ -30,9 +30,13 @@ fi
 
 if [[ -n "${DATABASE_URL:-}" ]] && [[ "$have_pg_dump" -eq 1 ]]; then
   export BACKUP_SQL_PATH="$DEST/database.sql"
-  bash "$ROOT_DIR/scripts/backup-db.sh"
+  if bash "$ROOT_DIR/scripts/backup-db.sh"; then
+    echo "  ✓ Database dump → database.sql"
+  else
+    echo "  ⚠ Database dump failed (Postgres not running, wrong DATABASE_URL, or network). Continuing with code/env backup."
+    rm -f "$DEST/database.sql" 2>/dev/null || true
+  fi
   unset BACKUP_SQL_PATH
-  echo "  ✓ Database dump → database.sql"
 elif [[ -z "${DATABASE_URL:-}" ]]; then
   echo "  ⚠ DATABASE_URL not set — skipped database (load .env or export DATABASE_URL)."
 else

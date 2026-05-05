@@ -46,6 +46,7 @@ export async function getPaystackSecrets() {
   }
   const json = (config?.configJson ?? null) as ProviderConfigPayload | null;
   const decryptedSecret = decryptSecret(json?.secretKeyEnc) || json?.secretKey?.trim() || "";
+  /** Paystack signs webhooks with the same Secret Key as the API. This field is legacy/optional; if set wrongly, webhooks would fail until we stopped using it for HMAC. */
   const decryptedWebhookSecret =
     decryptSecret(json?.webhookSecretEnc) || json?.webhookSecret?.trim() || decryptedSecret;
   return {

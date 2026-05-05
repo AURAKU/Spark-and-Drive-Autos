@@ -12,12 +12,28 @@ import { formatMoney } from "@/lib/format";
 import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const PAGE_SIZE = 10;
+
+const inventoryCarInclude = {
+  videos: {
+    orderBy: [{ isFeatured: "desc" as const }, { sortOrder: "asc" as const }],
+    take: 1,
+    select: { thumbnailUrl: true, url: true, publicId: true },
+  },
+  images: {
+    orderBy: { sortOrder: "asc" as const },
+    take: 1,
+    select: { url: true },
+  },
+} satisfies Prisma.CarInclude;
+
+type InventoryCarRow = Prisma.CarGetPayload<{ include: typeof inventoryCarInclude }>;
 
 /** Next.js may provide string or string[] for repeated keys — normalize to one value. */
 function firstQueryValue(sp: Record<string, string | string[] | undefined>, key: string): string | undefined {
@@ -103,7 +119,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
   let total = 0;
   let totalPages = 1;
   let page = 1;
-  let cars: Awaited<ReturnType<typeof prisma.car.findMany>> = [];
+  let cars: InventoryCarRow[] = [];
   let inventoryError: string | null = null;
 
   try {
@@ -115,6 +131,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
       orderBy: [{ featured: "desc" }, { listingState: "asc" }, { updatedAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
+      include: inventoryCarInclude,
     });
   } catch (e) {
     console.error("[inventory] database query failed", e);
@@ -239,6 +256,8 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
                 depSnap != null
                   ? `${depSnap.depositPercentApplied}% dep. · ${formatMoney(depSnap.depositGhs, "GHS")}`
                   : null;
+              const v0 = car.videos[0];
+              const img0 = car.images[0];
               return (
                 <CarCard
                   key={car.id}
@@ -246,6 +265,13 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
                   displayAmount={getCarDisplayPrice(Number(car.basePriceRmb ?? 0), displayCurrency, fx)}
                   displayCurrency={displayCurrency}
                   reservationDepositHint={reservationDepositHint}
+                  videoTeaser={
+                    v0
+                      ? {
+                          posterUrl: resolveCarVideoPosterUrl(v0, car.coverImageUrl ?? img0?.url ?? null),
+                        }
+                      : null
+                  }
                 />
               );
             })

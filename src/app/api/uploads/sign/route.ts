@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getRequestIp } from "@/lib/client-ip";
 import {
   CLOUDINARY_USER_MESSAGE,
   createAutoFolderUploadSignature,
   createGhanaCardClientUploadSignature,
   isCloudinaryMissingConfigError,
 } from "@/lib/cloudinary";
+import { recordSecurityObservation } from "@/lib/security-observation";
 import { safeAuth } from "@/lib/safe-auth";
 
 const looseBody = z.object({
@@ -28,6 +30,7 @@ const looseBody = z.object({
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const ip = getRequestIp(req);
   let json: unknown;
   try {
     json = await req.json();
@@ -48,6 +51,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "folder is required for admin-inventory" }, { status: 400 });
     }
     if (!/^[a-z0-9/_-]{3,180}$/i.test(folderRaw)) {
+      void recordSecurityObservation({
+        severity: "MEDIUM",
+        channel: "API",
+        title: "Invalid Cloudinary sign folder (admin-inventory)",
+        path: "/api/uploads/sign",
+        ipAddress: ip,
+        metadataJson: { purpose: "admin-inventory", folderLen: folderRaw.length },
+      });
       return NextResponse.json({ error: "Invalid folder" }, { status: 400 });
     }
 
@@ -56,10 +67,34 @@ export async function POST(req: Request) {
     } catch (e) {
       if (e instanceof Error && e.message === "UNAUTHORIZED") {
         console.info("[api/uploads/sign] admin-inventory: no session");
+        const guest = await safeAuth();
+        void recordSecurityObservation({
+          severity: "MEDIUM",
+          channel: "API",
+          title: "Unauthorized admin inventory upload sign attempt",
+          detail: "Session missing or expired while requesting signed upload.",
+          path: "/api/uploads/sign",
+          ipAddress: ip,
+          userId: guest?.user?.id ?? null,
+          email: guest?.user?.email ?? null,
+          metadataJson: { purpose: "admin-inventory", folderPrefix: folderRaw.split("/")[0] ?? "" },
+        });
         return NextResponse.json({ error: "Please log in as admin to upload media." }, { status: 401 });
       }
       if (e instanceof Error && e.message === "FORBIDDEN") {
         console.info("[api/uploads/sign] admin-inventory: not an admin role");
+        const authed = await safeAuth();
+        void recordSecurityObservation({
+          severity: "HIGH",
+          channel: "API",
+          title: "Forbidden admin inventory upload sign attempt",
+          detail: "Authenticated user without admin role requested inventory upload signature.",
+          path: "/api/uploads/sign",
+          ipAddress: ip,
+          userId: authed?.user?.id ?? null,
+          email: authed?.user?.email ?? null,
+          metadataJson: { purpose: "admin-inventory", folderPrefix: folderRaw.split("/")[0] ?? "" },
+        });
         return NextResponse.json({ error: "Admin access is required to upload inventory media." }, { status: 403 });
       }
       throw e;

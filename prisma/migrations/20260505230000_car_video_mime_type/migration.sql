@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "CarVideo" ADD COLUMN IF NOT EXISTS "mimeType" VARCHAR(120);

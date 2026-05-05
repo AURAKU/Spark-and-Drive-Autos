@@ -24,6 +24,7 @@ import { BALANCE_DUE_WINDOW_DAYS } from "@/lib/deposit-balance-logic";
 import { computeDepositCheckoutSnapshot } from "@/lib/vehicle-deposit-pricing";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { buildCarGalleryImages } from "@/lib/car-gallery";
+import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
@@ -135,25 +136,35 @@ export default async function CarDetailPage(props: Props) {
           <CarGallery images={galleryImages}>
             <VehicleImageStockBadges car={car} />
           </CarGallery>
-          <div className="space-y-3">
+          <div id="vehicle-walkthrough" className="scroll-mt-24 space-y-3">
             <p className="text-xs tracking-[0.25em] text-muted-foreground uppercase">Walkthrough</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              {car.videos.map((v, i) => (
-                <div key={v.id} className="overflow-hidden rounded-2xl border border-border bg-muted/80 dark:border-white/10 dark:bg-black/40">
-                  {v.isFeatured ? (
-                    <p className="border-b border-border bg-muted px-3 py-1.5 text-[10px] font-medium tracking-wide text-[var(--brand)] uppercase dark:border-white/10 dark:bg-white/[0.06]">
-                      Hero clip
-                    </p>
-                  ) : null}
-                  <LazyVideo
-                    src={v.url}
-                    poster={v.thumbnailUrl}
-                    featured={v.isFeatured}
-                    eagerMount={i === 0}
-                    title={v.isFeatured ? "Featured walkthrough video" : "Vehicle walkthrough video"}
-                  />
-                </div>
-              ))}
+              {car.videos.map((v) => {
+                const firstStill =
+                  car.coverImageUrl?.trim() || car.images[0]?.url?.trim() || null;
+                const poster = resolveCarVideoPosterUrl(v, firstStill);
+                return (
+                  <div
+                    key={v.id}
+                    className="overflow-hidden rounded-2xl border border-border bg-muted/80 dark:border-white/10 dark:bg-black/40"
+                  >
+                    {v.isFeatured ? (
+                      <p className="border-b border-border bg-muted px-3 py-1.5 text-[10px] font-medium tracking-wide text-[var(--brand)] uppercase dark:border-white/10 dark:bg-white/[0.06]">
+                        Hero clip
+                      </p>
+                    ) : null}
+                    <div className="p-1">
+                      <LazyVideo
+                        src={v.url}
+                        poster={poster}
+                        featured={v.isFeatured}
+                        clickToLoad
+                        title={v.isFeatured ? "Featured walkthrough video" : "Vehicle walkthrough video"}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

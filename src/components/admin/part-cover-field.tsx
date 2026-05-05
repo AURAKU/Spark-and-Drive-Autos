@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,14 @@ export function PartCoverField({ initialUrl, initialPublicId }: Props) {
       </div>
       {url ? (
         <div className="relative h-40 w-full max-w-xs overflow-hidden rounded-xl border border-white/10 bg-black/30">
-          <Image src={url} alt="" fill className="object-cover" sizes="320px" unoptimized />
+          <VehicleCoverImage
+            src={url}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="320px"
+            deliveryPreset="card"
+          />
         </div>
       ) : null}
       <Button type="button" variant="outline" size="sm" className="border-white/15" onClick={() => { setUrl(""); setPublicId(""); }}>

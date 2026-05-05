@@ -13,6 +13,8 @@ export type CloudinaryDeliveryPreset =
   | "galleryStage"
   | "galleryMain"
   | "galleryPremium"
+  /** Parts/product detail main image — high quality without 4K payload. */
+  | "partDetailHero"
   | "videoPreview"
   | "videoPremium"
   | "previewCompact"
@@ -31,6 +33,7 @@ const PRESET_TRANSFORMS: Record<Exclude<CloudinaryDeliveryPreset, "none">, strin
   galleryMain: "c_limit,w_1920,q_auto,f_auto",
   /** Premium detail view — preserve high-end clarity without touching originals. */
   galleryPremium: "c_limit,w_3840,q_auto:best,f_auto,dpr_auto",
+  partDetailHero: "c_limit,w_1800,h_1800,q_auto:best,f_auto,dpr_auto",
   /** Non-hero video playback for cards/lists/modals. */
   videoPreview: "c_limit,w_1920,q_auto:good,f_auto",
   /** Hero video playback with premium adaptive quality. */

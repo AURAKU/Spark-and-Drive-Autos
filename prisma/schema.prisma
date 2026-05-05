@@ -884,6 +884,8 @@ model CarVideo {
   sortOrder    Int      @default(0)
   durationSec  Int?
   thumbnailUrl String?
+  /// Original upload MIME (e.g. video/mp4) for support and diagnostics.
+  mimeType     String?  @db.VarChar(120)
   isFeatured   Boolean  @default(false)
   createdAt    DateTime @default(now())
 

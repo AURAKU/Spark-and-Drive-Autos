@@ -18,11 +18,13 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CarImage, CarVideo } from "@prisma/client";
-import { GripVertical, Star } from "lucide-react";
+import { GripVertical, Star, Trash2, Upload } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useMemo, useTransition } from "react";
+import { type ReactNode, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+
+import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 
 import {
   addCarImage,
@@ -45,8 +47,11 @@ import {
 type Props = {
   carId: string;
   images: Pick<CarImage, "id" | "url" | "sortOrder" | "isCover" | "publicId">[];
-  videos: Pick<CarVideo, "id" | "url" | "sortOrder" | "thumbnailUrl" | "publicId" | "isFeatured">[];
+  videos: Pick<CarVideo, "id" | "url" | "sortOrder" | "thumbnailUrl" | "publicId" | "isFeatured" | "mimeType">[];
 };
+
+type QueuedImage = { key: string; file: File; preview: string };
+type QueuedVideo = { key: string; file: File; preview: string };
 
 function SortableGalleryRow({
   id,
@@ -73,12 +78,18 @@ function SortableGalleryRow({
 export function CarMediaPanel({ carId, images, videos }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [imageQueue, setImageQueue] = useState<QueuedImage[]>([]);
+  const [videoQueue, setVideoQueue] = useState<QueuedVideo[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingVideos, setUploadingVideos] = useState(false);
 
   const sortedImages = useMemo(() => [...images].sort((a, b) => a.sortOrder - b.sortOrder), [images]);
   const sortedVideos = useMemo(() => [...videos].sort((a, b) => a.sortOrder - b.sortOrder), [videos]);
 
   const imageIds = useMemo(() => sortedImages.map((i) => i.id), [sortedImages]);
   const videoIds = useMemo(() => sortedVideos.map((v) => v.id), [sortedVideos]);
+
+  const firstStillUrl = sortedImages[0]?.url ?? null;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -89,34 +100,90 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
     startTransition(() => router.refresh());
   }
 
-  async function onPickImages(files: FileList | null) {
+  function enqueueImages(files: FileList | null) {
     if (!files?.length) return;
-    for (const file of Array.from(files)) {
-      try {
-        const json = await uploadFileToCloudinary(file, `sda/cars/${carId}/images`, "image");
-        const r = await addCarImage(carId, { url: json.secure_url, publicId: json.public_id });
-        if (r?.error) toast.error(r.error);
-        else toast.success("Image added");
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Upload failed");
-      }
-    }
-    refresh();
+    const next = Array.from(files).map((file) => ({
+      key: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setImageQueue((q) => [...q, ...next]);
   }
 
-  async function onPickVideos(files: FileList | null) {
+  function removeQueuedImage(key: string) {
+    setImageQueue((q) => {
+      const hit = q.find((x) => x.key === key);
+      if (hit) URL.revokeObjectURL(hit.preview);
+      return q.filter((x) => x.key !== key);
+    });
+  }
+
+  function enqueueVideos(files: FileList | null) {
     if (!files?.length) return;
-    for (const file of Array.from(files)) {
-      try {
-        const json = await uploadFileToCloudinary(file, `sda/cars/${carId}/videos`, "video");
-        const r = await addCarVideo(carId, { url: json.secure_url, publicId: json.public_id });
-        if (r?.error) toast.error(r.error);
-        else toast.success("Video added");
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Upload failed");
+    const next = Array.from(files).map((file) => ({
+      key: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setVideoQueue((q) => [...q, ...next]);
+  }
+
+  function removeQueuedVideo(key: string) {
+    setVideoQueue((q) => {
+      const hit = q.find((x) => x.key === key);
+      if (hit) URL.revokeObjectURL(hit.preview);
+      return q.filter((x) => x.key !== key);
+    });
+  }
+
+  async function flushImageQueue() {
+    if (imageQueue.length === 0) return;
+    setUploadingImages(true);
+    try {
+      for (const item of imageQueue) {
+        try {
+          const json = await uploadFileToCloudinary(item.file, `sda/cars/${carId}/images`, "image");
+          const r = await addCarImage(carId, { url: json.secure_url, publicId: json.public_id });
+          if (r?.error) toast.error(r.error);
+          else toast.success("Image added");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Upload failed");
+        } finally {
+          URL.revokeObjectURL(item.preview);
+        }
       }
+      setImageQueue([]);
+      refresh();
+    } finally {
+      setUploadingImages(false);
     }
-    refresh();
+  }
+
+  async function flushVideoQueue() {
+    if (videoQueue.length === 0) return;
+    setUploadingVideos(true);
+    try {
+      for (const item of videoQueue) {
+        try {
+          const json = await uploadFileToCloudinary(item.file, `sda/cars/${carId}/videos`, "video");
+          const r = await addCarVideo(carId, {
+            url: json.secure_url,
+            publicId: json.public_id,
+            mimeType: item.file.type || undefined,
+          });
+          if (r?.error) toast.error(r.error);
+          else toast.success("Video added");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Upload failed");
+        } finally {
+          URL.revokeObjectURL(item.preview);
+        }
+      }
+      setVideoQueue([]);
+      refresh();
+    } finally {
+      setUploadingVideos(false);
+    }
   }
 
   async function onImagesDragEnd(event: DragEndEvent) {
@@ -161,18 +228,52 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <p className="mt-1 text-xs text-zinc-500">
           Original files are kept at upload quality (including 4K+). Optimized variants are only used for faster page delivery.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
             type="file"
             accept="image/*,application/pdf,.pdf"
             multiple
             className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
+            disabled={uploadingImages}
             onChange={(e) => {
-              void onPickImages(e.target.files);
+              enqueueImages(e.target.files);
               e.target.value = "";
             }}
           />
+          {imageQueue.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 bg-[var(--brand)] text-black hover:opacity-90"
+              disabled={uploadingImages}
+              onClick={() => void flushImageQueue()}
+            >
+              <Upload className="size-4" aria-hidden />
+              Upload {imageQueue.length} {imageQueue.length === 1 ? "file" : "files"}
+            </Button>
+          ) : null}
         </div>
+        {imageQueue.length > 0 ? (
+          <ul className="mt-4 flex flex-wrap gap-3">
+            {imageQueue.map((q) => (
+              <li key={q.key} className="relative">
+                <div className="relative h-20 w-28 overflow-hidden rounded-lg border border-white/15 bg-zinc-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- blob preview */}
+                  <img src={q.preview} alt="" className="h-full w-full object-cover" />
+                </div>
+                <button
+                  type="button"
+                  className="absolute -right-1 -top-1 rounded-full border border-white/20 bg-black/80 p-1 text-zinc-200 hover:bg-red-500/80"
+                  aria-label="Remove from queue"
+                  onClick={() => removeQueuedImage(q.key)}
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+                <p className="mt-1 max-w-[7rem] truncate text-[10px] text-zinc-500">{q.file.name}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onImagesDragEnd(e)}>
           <SortableContext items={imageIds} strategy={verticalListSortingStrategy}>
             <ul className="mt-6 space-y-4">
@@ -249,18 +350,52 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <p className="mt-1 text-xs text-zinc-500">
           Max size per file: {inventoryVideoMaxSizeLabel()}. Larger files may also fail depending on your Cloudinary plan.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
             type="file"
             accept="video/*,video/mp4,video/webm,video/quicktime,video/3gpp,video/mpeg,.mp4,.webm,.mov,.m4v,.avi,.mkv,.3gp,.mpeg,.mpg"
             multiple
             className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
+            disabled={uploadingVideos}
             onChange={(e) => {
-              void onPickVideos(e.target.files);
+              enqueueVideos(e.target.files);
               e.target.value = "";
             }}
           />
+          {videoQueue.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 bg-[var(--brand)] text-black hover:opacity-90"
+              disabled={uploadingVideos}
+              onClick={() => void flushVideoQueue()}
+            >
+              <Upload className="size-4" aria-hidden />
+              Upload {videoQueue.length} {videoQueue.length === 1 ? "video" : "videos"}
+            </Button>
+          ) : null}
         </div>
+        {videoQueue.length > 0 ? (
+          <ul className="mt-4 flex flex-wrap gap-3">
+            {videoQueue.map((q) => (
+              <li key={q.key} className="relative">
+                <div className="relative h-16 w-28 overflow-hidden rounded-lg border border-white/15 bg-zinc-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={q.preview} alt="" className="h-full w-full object-cover" />
+                </div>
+                <button
+                  type="button"
+                  className="absolute -right-1 -top-1 rounded-full border border-white/20 bg-black/80 p-1 text-zinc-200 hover:bg-red-500/80"
+                  aria-label="Remove from queue"
+                  onClick={() => removeQueuedVideo(q.key)}
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+                <p className="mt-1 max-w-[7rem] truncate text-[10px] text-zinc-500">{q.file.name}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onVideosDragEnd(e)}>
           <SortableContext items={videoIds} strategy={verticalListSortingStrategy}>
             <ul className="mt-6 space-y-4">
@@ -279,7 +414,7 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
                       <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-black">
                         <LazyVideo
                           src={v.url}
-                          poster={v.thumbnailUrl ?? undefined}
+                          poster={resolveCarVideoPosterUrl(v, firstStillUrl)}
                           featured={v.isFeatured}
                           className="absolute inset-0"
                           videoClassName="h-full w-full object-cover"

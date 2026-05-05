@@ -32,7 +32,9 @@ export type SpotlightCar = Pick<
   | "listingState"
   | "coverImageUrl"
   | "basePriceRmb"
->;
+> & {
+  videoPreview?: { thumbnailUrl: string | null; url: string; publicId: string | null };
+};
 
 export type SpotlightPart = Pick<
   Part,
@@ -69,6 +71,30 @@ function uniqueById<T extends { id: string }>(items: T[]): T[] {
     out.push(x);
   }
   return out;
+}
+
+export async function attachCarVideoPreview<
+  T extends { id: string; coverImageUrl: string | null },
+>(cars: T[]): Promise<Array<T & { videoPreview?: SpotlightCar["videoPreview"] }>> {
+  if (cars.length === 0) return cars as Array<T & { videoPreview?: SpotlightCar["videoPreview"] }>;
+  const ids = cars.map((c) => c.id);
+  const rows = await prisma.carVideo.findMany({
+    where: { carId: { in: ids } },
+    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
+    select: { carId: true, thumbnailUrl: true, url: true, publicId: true },
+  });
+  const firstByCar = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    if (!firstByCar.has(r.carId)) firstByCar.set(r.carId, r);
+  }
+  return cars.map((c) => {
+    const v = firstByCar.get(c.id);
+    if (!v) return c as T & { videoPreview?: SpotlightCar["videoPreview"] };
+    return {
+      ...c,
+      videoPreview: { thumbnailUrl: v.thumbnailUrl, url: v.url, publicId: v.publicId },
+    };
+  });
 }
 
 const EXCLUDED_ORDER: OrderStatus[] = [
@@ -274,9 +300,11 @@ export async function getHomeSpotlight(): Promise<{
   const pickedCars = shuffledCars.slice(0, SPOTLIGHT_CARS);
   const pickedParts = shuffledParts.slice(0, SPOTLIGHT_PARTS);
 
+  const pickedCarsWithVideo = await attachCarVideoPreview(pickedCars);
+
   let entries: SpotlightEntry[] = shuffle(
     [
-      ...pickedCars.map((car) => ({ kind: "car" as const, car })),
+      ...pickedCarsWithVideo.map((car) => ({ kind: "car" as const, car })),
       ...pickedParts.map((part) => ({ kind: "part" as const, part })),
     ],
     seed ^ 0xdeadbeef,
@@ -322,9 +350,10 @@ export async function getHomeSpotlight(): Promise<{
         },
       }),
     ]);
+    const fcWithVideo = await attachCarVideoPreview(fc);
     entries = shuffle(
       [
-        ...fc.map((car) => ({ kind: "car" as const, car })),
+        ...fcWithVideo.map((car) => ({ kind: "car" as const, car })),
         ...fp.map((part) => ({ kind: "part" as const, part })),
       ],
       seed ^ 0xabc,

@@ -9,7 +9,8 @@ import { SourcingFlags } from "@/components/landing/sourcing-flags";
 import { BrowseCarsCtaLink, BuyPartsCtaLink } from "@/components/storefront/storefront-cta-links";
 import { SectionHeading } from "@/components/typography/page-headings";
 import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { getHomeSpotlightCached } from "@/lib/landing-spotlight";
+import { attachCarVideoPreview, getHomeSpotlightCached } from "@/lib/landing-spotlight";
+import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import type { SpotlightEntry } from "@/lib/landing-spotlight";
 import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
 import { PARTS_FINDER_HERO_LINE } from "@/lib/parts-finder/marketing-copy";
@@ -85,8 +86,9 @@ export default async function HomePage() {
           basePriceRmb: true,
         },
       });
+      const fallbackWithVideo = await attachCarVideoPreview(fallback);
       spotlight = {
-        entries: fallback.map((car) => ({ kind: "car" as const, car })),
+        entries: fallbackWithVideo.map((car) => ({ kind: "car" as const, car })),
         slotStartedAt: spotlight.slotStartedAt,
         nextRotationAt: spotlight.nextRotationAt,
         seed: spotlight.seed,
@@ -213,6 +215,16 @@ export default async function HomePage() {
                   car={entry.car}
                   displayAmount={getCarDisplayPrice(Number(entry.car.basePriceRmb), displayCurrency, fx)}
                   displayCurrency={displayCurrency}
+                  videoTeaser={
+                    entry.car.videoPreview
+                      ? {
+                          posterUrl: resolveCarVideoPosterUrl(
+                            entry.car.videoPreview,
+                            entry.car.coverImageUrl ?? null,
+                          ),
+                        }
+                      : null
+                  }
                 />
               ) : (
                 <LandingPartSpotlightCard
