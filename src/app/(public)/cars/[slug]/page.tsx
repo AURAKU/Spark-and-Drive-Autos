@@ -5,6 +5,7 @@ import { CarCheckoutPayRow } from "@/components/cars/car-checkout-pay-row";
 import { CarFavoriteButton } from "@/components/cars/car-favorite-button";
 import { CarGallery } from "@/components/cars/car-gallery";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
+import { LazyVideo } from "@/components/media/lazy-video";
 import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
 import { InquiryPanel } from "@/components/inquiry/inquiry-panel";
 import { SharePageButton } from "@/components/sharing/share-page-button";
@@ -26,6 +27,7 @@ import { buildCarGalleryImages } from "@/lib/car-gallery";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
@@ -44,10 +46,31 @@ export async function generateMetadata(props: Props) {
   const { slug } = await props.params;
   const car = await prisma.car.findFirst({
     where: { slug, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
-    select: { title: true },
+    select: {
+      title: true,
+      coverImageUrl: true,
+      images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    },
   });
   if (!car) return { title: "Vehicle" };
-  return { title: car.title };
+  const rawImg = car.coverImageUrl?.trim() || car.images[0]?.url?.trim() || null;
+  const ogImage = rawImg
+    ? rawImg.startsWith("http")
+      ? optimizeCloudinaryUrl(rawImg, "og")
+      : `${getPublicAppUrl()}${rawImg.startsWith("/") ? "" : "/"}${rawImg}`
+    : `${getPublicAppUrl()}/icon-512.png`;
+  return {
+    title: car.title,
+    openGraph: {
+      title: car.title,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: car.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: car.title,
+      images: [ogImage],
+    },
+  };
 }
 
 export default async function CarDetailPage(props: Props) {
@@ -122,9 +145,12 @@ export default async function CarDetailPage(props: Props) {
                       Hero clip
                     </p>
                   ) : null}
-                  <video controls className="aspect-video w-full" poster={v.thumbnailUrl ?? undefined} preload="metadata">
-                    <source src={v.url} />
-                  </video>
+                  <LazyVideo
+                    src={v.url}
+                    poster={v.thumbnailUrl}
+                    featured={v.isFeatured}
+                    title={v.isFeatured ? "Featured walkthrough video" : "Vehicle walkthrough video"}
+                  />
                 </div>
               ))}
             </div>

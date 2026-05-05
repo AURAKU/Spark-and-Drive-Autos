@@ -53,6 +53,13 @@ export const metadata: Metadata = {
     title: "Spark & Drive Autos",
     description: "Premium automotive commerce and managed import journeys in Ghana.",
     type: "website",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Spark & Drive Autos" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Spark & Drive Autos",
+    description: "Premium automotive commerce and managed import journeys in Ghana.",
+    images: ["/icon-512.png"],
   },
 };
 

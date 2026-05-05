@@ -16,6 +16,7 @@ import {
   ALLOWED_VERIFICATION_DOCUMENT_TYPES,
   ID_VERIFICATION_CONSENT_TEXT,
 } from "@/lib/identity-verification-shared";
+import { MEDIA_UPLOAD_GUIDANCE } from "@/lib/media-upload-guidance";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -319,6 +320,7 @@ export function VerificationClient({
         <p className="mt-2 text-sm text-zinc-400">
           Upload or take a photo directly. Your upload is stored temporarily for review, then saved permanently after admin approval.
         </p>
+        <p className="mt-2 text-xs text-zinc-500">{MEDIA_UPLOAD_GUIDANCE.identity.combined}</p>
 
         <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">{statusMessage}</div>
 
@@ -400,6 +402,9 @@ export function VerificationClient({
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h3 className="text-base font-semibold text-white">Submit / resubmit verification</h3>
+        <p className="mt-2 text-xs text-zinc-500">
+          Document photos: {MEDIA_UPLOAD_GUIDANCE.identity.images} Selfie must match the same rules.
+        </p>
         <form onSubmit={submit} className="mt-4 space-y-4">
           <div>
             <label className="text-xs text-zinc-500">Document type</label>

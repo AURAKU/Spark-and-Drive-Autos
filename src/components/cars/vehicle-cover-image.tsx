@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import type { CloudinaryDeliveryPreset } from "@/lib/cloudinary-delivery";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { VEHICLE_IMAGE_PLACEHOLDER_SRC } from "@/lib/vehicle-image-fallback";
 
 type Props = {
@@ -11,15 +13,28 @@ type Props = {
   className?: string;
   sizes?: string;
   priority?: boolean;
+  /** When set, Cloudinary URLs get bandwidth-friendly transforms; other URLs unchanged. */
+  deliveryPreset?: CloudinaryDeliveryPreset;
 } & ({ fill: true; width?: never; height?: never } | { fill?: false; width: number; height: number });
 
+function shouldUnoptimizeImageUrl(url: string): boolean {
+  if (!url.startsWith("http")) return false;
+  if (url.includes("res.cloudinary.com")) return false;
+  return true;
+}
+
 export function VehicleCoverImage(props: Props) {
-  const { src, alt, className, sizes, priority } = props;
-  const [current, setCurrent] = useState(src);
+  const { src, alt, className, sizes, priority, deliveryPreset = "none" } = props;
+  const resolved = useMemo(() => {
+    if (!src?.trim()) return VEHICLE_IMAGE_PLACEHOLDER_SRC;
+    return optimizeCloudinaryUrl(src.trim(), deliveryPreset);
+  }, [src, deliveryPreset]);
+
+  const [current, setCurrent] = useState(resolved);
 
   useEffect(() => {
-    setCurrent(src);
-  }, [src]);
+    setCurrent(resolved);
+  }, [resolved]);
 
   const onError = () => {
     if (current !== VEHICLE_IMAGE_PLACEHOLDER_SRC) {
@@ -27,7 +42,7 @@ export function VehicleCoverImage(props: Props) {
     }
   };
 
-  const unoptimized = current.startsWith("http");
+  const unoptimized = shouldUnoptimizeImageUrl(current);
 
   if (props.fill) {
     return (

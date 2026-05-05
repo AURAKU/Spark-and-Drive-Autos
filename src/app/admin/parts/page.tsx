@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -7,10 +8,12 @@ import { AddPartDialog } from "@/components/admin/add-part-dialog";
 import { PageHeading } from "@/components/typography/page-headings";
 import { PartsCategoriesPanel } from "@/components/admin/parts-categories-delivery-panel";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { formatConverted } from "@/lib/currency";
 import { GHANA_LOW_STOCK_ALERT_MAX, getGhanaLowStockPartsForAdmin } from "@/lib/ghana-low-stock";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
+import { VEHICLE_IMAGE_PLACEHOLDER_SRC } from "@/lib/vehicle-image-fallback";
 
 import { PartOrigin, PartStockStatus, PartListingState } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
@@ -300,9 +303,10 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
           </p>
 
           <div className="mt-4 sda-table-scroll rounded-2xl border border-white/10">
-            <table className="min-w-[780px] w-full border-collapse text-left text-sm">
+            <table className="min-w-[860px] w-full border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-white/[0.04] text-xs text-zinc-500 uppercase">
                 <tr>
+                  <th className="px-4 py-3 font-medium w-[88px]">Thumb</th>
                   <th className="px-4 py-3 font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">Category</th>
@@ -316,14 +320,14 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
               <tbody>
                 {adminPartsError ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-zinc-500">
                       Fix the database connection or migrations, then refresh. Categories and delivery tabs may also fail until
                       the schema matches.
                     </td>
                   </tr>
                 ) : parts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-zinc-500">
                       No parts match.{" "}
                       <Link className="text-[var(--brand)] hover:underline" href={tabLink("catalog", { add: "1" })}>
                         Add one
@@ -335,8 +339,23 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
                   parts.map((p) => {
                     const isChinaListedPreorder =
                       p.origin === PartOrigin.CHINA && p.stockStatus === PartStockStatus.ON_REQUEST;
+                    const thumbSrc = p.coverImageUrl?.trim()
+                      ? optimizeCloudinaryUrl(p.coverImageUrl, "tableThumb")
+                      : VEHICLE_IMAGE_PLACEHOLDER_SRC;
                     return (
                       <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-4 py-3 align-middle">
+                          <div className="relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md border border-white/10 bg-zinc-900">
+                            <Image
+                              src={thumbSrc}
+                              alt=""
+                              fill
+                              className="object-cover"
+                              sizes="72px"
+                              unoptimized={!thumbSrc.includes("res.cloudinary.com")}
+                            />
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-zinc-300 tabular-nums">
                           {isChinaListedPreorder ? (
                             <span>

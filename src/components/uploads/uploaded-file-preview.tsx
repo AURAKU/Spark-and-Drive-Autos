@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { classifyUploadedFile, type UploadedFileKind } from "@/lib/uploaded-file-classify";
 import { isTrustedPaymentProofUrl } from "@/lib/payment-proof-url";
 import { cn } from "@/lib/utils";
@@ -182,6 +183,11 @@ export function UploadedFilePreview({
     kind === "image" && imgBroken ? "unknown" : kind;
 
   const displayUrl = useMemo(() => resolveDisplayUrl(url), [url]);
+  const inlineImageSrc = useMemo(() => {
+    if (effectiveKind !== "image") return url;
+    if (density !== "compact") return url;
+    return optimizeCloudinaryUrl(url, "previewCompact");
+  }, [url, effectiveKind, density]);
 
   useEffect(() => {
     if (allowCopyUrl === true) {
@@ -227,10 +233,11 @@ export function UploadedFilePreview({
         {effectiveKind === "image" ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={url}
+            src={inlineImageSrc}
             alt=""
             className="h-full max-h-[min(70vh,520px)] w-full flex-1 bg-muted/40 object-contain dark:bg-black/40"
             onError={() => setImgBroken(true)}
+            loading={density === "compact" ? "lazy" : "eager"}
           />
         ) : effectiveKind === "pdf" ? (
           <div className="flex min-h-[inherit] flex-1 flex-col bg-muted/30 dark:bg-zinc-950/80">

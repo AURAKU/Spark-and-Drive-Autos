@@ -88,6 +88,7 @@ export function CarGallery({ images, children }: Props) {
             priority
             className="object-cover"
             sizes="(max-width:1024px) 100vw, 58vw"
+            deliveryPreset="galleryPremium"
           />
         </button>
 
@@ -160,7 +161,14 @@ export function CarGallery({ images, children }: Props) {
             aria-label={`Show image ${i + 1} of ${count}`}
             aria-current={i === safeActive ? "true" : undefined}
           >
-            <VehicleCoverImage src={im.url} alt="" fill className="object-cover" sizes="120px" />
+            <VehicleCoverImage
+              src={im.url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="120px"
+              deliveryPreset="galleryStrip"
+            />
           </button>
         ))}
       </div>
@@ -198,6 +206,7 @@ export function CarGallery({ images, children }: Props) {
                   className="max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
                   sizes="100vw"
                   priority
+                  deliveryPreset="galleryPremium"
                 />
 
                 {count > 1 ? (
@@ -240,7 +249,14 @@ export function CarGallery({ images, children }: Props) {
                         )}
                         aria-label={`Go to image ${i + 1}`}
                       >
-                        <VehicleCoverImage src={im.url} alt="" fill className="object-cover" sizes="96px" />
+                        <VehicleCoverImage
+                          src={im.url}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="96px"
+                          deliveryPreset="galleryStrip"
+                        />
                       </button>
                     ))}
                   </div>

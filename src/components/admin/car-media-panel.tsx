@@ -34,7 +34,9 @@ import {
   setCarCoverFromImage,
   setFeaturedCarVideo,
 } from "@/actions/car-media";
+import { LazyVideo } from "@/components/media/lazy-video";
 import { Button } from "@/components/ui/button";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 
 type Props = {
   carId: string;
@@ -183,6 +185,9 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <p className="mt-1 text-sm text-zinc-500">
           Upload to Cloudinary, drag by the handle to reorder, set cover for cards and hero.
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          Original files are kept at upload quality (including 4K+). Optimized variants are only used for faster page delivery.
+        </p>
         <div className="mt-4">
           <input
             type="file"
@@ -211,7 +216,13 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
                         <GripVertical className="size-5" />
                       </button>
                       <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900">
-                        <Image src={im.url} alt="" fill className="object-cover" sizes="160px" />
+                        <Image
+                          src={optimizeCloudinaryUrl(im.url, "tableThumb")}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="160px"
+                        />
                       </div>
                       <div className="min-w-0 flex-1 space-y-2">
                         <p className="truncate text-xs text-zinc-500">{im.url}</p>
@@ -259,6 +270,9 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <p className="mt-1 text-sm text-zinc-500">
           Upload walkthrough clips; drag to reorder. Star one as the hero clip (shown first on the public page).
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          Videos are uploaded as provided; playback optimization happens at viewing time without replacing the original asset.
+        </p>
         <div className="mt-4">
           <input
             type="file"
@@ -287,9 +301,14 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
                         <GripVertical className="size-5" />
                       </button>
                       <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-black">
-                        <video controls className="h-full w-full" preload="metadata" poster={v.thumbnailUrl ?? undefined}>
-                          <source src={v.url} />
-                        </video>
+                        <LazyVideo
+                          src={v.url}
+                          poster={v.thumbnailUrl ?? undefined}
+                          featured={v.isFeatured}
+                          className="absolute inset-0"
+                          videoClassName="h-full w-full object-cover"
+                          title="Vehicle video preview"
+                        />
                       </div>
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">

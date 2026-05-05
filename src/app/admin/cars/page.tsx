@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { AddVehicleDialog } from "@/components/admin/add-vehicle-dialog";
@@ -9,6 +10,7 @@ import {
   carWhereForOpsState,
   parseCarOpsStateFilter,
 } from "@/lib/admin-car-ops-state";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import {
   fallbackGlobalCurrencySettings,
   formatConverted,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
 import { prisma } from "@/lib/prisma";
+import { VEHICLE_IMAGE_PLACEHOLDER_SRC } from "@/lib/vehicle-image-fallback";
 
 import type { GlobalCurrencySettings, Prisma } from "@prisma/client";
 
@@ -225,9 +228,10 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
       </p>
 
       <div className="mt-4 sda-table-scroll rounded-2xl border border-white/10">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="w-full min-w-[1040px] text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
+              <th className="px-4 py-3 w-[88px]">Thumb</th>
               <th className="px-4 py-3">Vehicle</th>
               <th className="px-4 py-3">Stock</th>
               <th className="px-4 py-3">List (admin)</th>
@@ -241,13 +245,13 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
           <tbody>
             {adminCarsError ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                   Fix the database connection or migrations, then refresh this page.
                 </td>
               </tr>
             ) : cars.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                   No vehicles match. Adjust filters or add a listing.
                 </td>
               </tr>
@@ -261,8 +265,23 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
                 const rmbBook = formatConverted(base, "CNY");
                 const ghsLive = formatVehiclePriceFromRmb(base, "GHS", fx);
                 const usdLive = formatVehiclePriceFromRmb(base, "USD", fx);
+                const thumbSrc = c.coverImageUrl?.trim()
+                  ? optimizeCloudinaryUrl(c.coverImageUrl, "tableThumb")
+                  : VEHICLE_IMAGE_PLACEHOLDER_SRC;
                 return (
                   <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                    <td className="px-4 py-3 align-middle">
+                      <div className="relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md border border-white/10 bg-zinc-900">
+                        <Image
+                          src={thumbSrc}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="72px"
+                          unoptimized={!thumbSrc.includes("res.cloudinary.com")}
+                        />
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{c.title}</p>
                       <p className="text-xs text-zinc-500">
