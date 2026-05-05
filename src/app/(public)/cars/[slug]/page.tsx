@@ -138,7 +138,7 @@ export default async function CarDetailPage(props: Props) {
           <div className="space-y-3">
             <p className="text-xs tracking-[0.25em] text-muted-foreground uppercase">Walkthrough</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              {car.videos.map((v) => (
+              {car.videos.map((v, i) => (
                 <div key={v.id} className="overflow-hidden rounded-2xl border border-border bg-muted/80 dark:border-white/10 dark:bg-black/40">
                   {v.isFeatured ? (
                     <p className="border-b border-border bg-muted px-3 py-1.5 text-[10px] font-medium tracking-wide text-[var(--brand)] uppercase dark:border-white/10 dark:bg-white/[0.06]">
@@ -149,6 +149,7 @@ export default async function CarDetailPage(props: Props) {
                     src={v.url}
                     poster={v.thumbnailUrl}
                     featured={v.isFeatured}
+                    eagerMount={i === 0}
                     title={v.isFeatured ? "Featured walkthrough video" : "Vehicle walkthrough video"}
                   />
                 </div>

@@ -19,6 +19,68 @@ type AdminSignResponse = {
   uploadUrl?: string;
 };
 
+/** Per-file limit for admin inventory videos (client guard; Cloudinary plan may allow less). */
+export const INVENTORY_VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+
+export function inventoryVideoMaxSizeLabel(): string {
+  return "500 MB";
+}
+
+const INVENTORY_VIDEO_EXT = /\.(mp4|webm|mov|m4v|avi|mkv|3gp|mpeg|mpg)$/i;
+
+const INVENTORY_VIDEO_MIMES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-quicktime",
+  "video/m4v",
+  "video/x-m4v",
+  "video/avi",
+  "video/x-msvideo",
+  "video/matroska",
+  "video/x-matroska",
+  "video/3gpp",
+  "video/3gpp2",
+  "video/mpeg",
+  "video/mpg",
+  "video/x-mpeg",
+]);
+
+export const CLOUDINARY_VIDEO_FORMAT_REJECTED_MESSAGE =
+  "This video format could not be processed. Please try MP4, MOV, or WEBM.";
+
+function isInventoryVideoFile(file: File): boolean {
+  const mime = (file.type || "").toLowerCase();
+  const name = file.name.toLowerCase();
+  if (INVENTORY_VIDEO_EXT.test(name)) return true;
+  if (INVENTORY_VIDEO_MIMES.has(mime)) return true;
+  return false;
+}
+
+function cloudinaryVideoUploadErrorMessage(status: number, raw: string): string {
+  if (status === 413) {
+    return "This file is too large to upload. Try a smaller or shorter video.";
+  }
+  let msg = raw;
+  try {
+    const j = JSON.parse(raw) as { error?: { message?: string } };
+    if (typeof j?.error?.message === "string") msg = j.error.message;
+  } catch {
+    /* use raw */
+  }
+  const hint = msg.toLowerCase();
+  if (/too large|file size|max(imum)? size|exceed(s)?/i.test(hint)) {
+    return "This file is too large to upload. Try a smaller or shorter video.";
+  }
+  const probablyFormat =
+    status === 400 ||
+    status === 415 ||
+    status === 422 ||
+    /invalid|unsupported|not allowed|format|codec|container|mime|decode|corrupt|malformed/i.test(hint);
+  if (probablyFormat) return CLOUDINARY_VIDEO_FORMAT_REJECTED_MESSAGE;
+  return msg.trim().slice(0, 200) || "Upload failed";
+}
+
 function resolveAutoUploadUrl(data: AdminSignResponse): string {
   const cloudName = data.cloudName?.trim() || readPublicCloudinaryCloudName() || "";
   if (!cloudName) return "";
@@ -36,14 +98,12 @@ function assertInventoryFileAllowed(file: File, kind: "image" | "video"): void {
     mime === "image/webp" ||
     /\.(jpe?g|png|webp)$/i.test(name);
   const isPdf = mime === "application/pdf" || name.endsWith(".pdf");
-  const isVideo =
-    mime === "video/mp4" ||
-    mime === "video/webm" ||
-    /\.(mp4|webm)$/i.test(name);
 
   if (kind === "video") {
-    if (!isVideo) {
-      throw new Error("Video must be MP4 or WebM.");
+    if (!isInventoryVideoFile(file)) {
+      throw new Error(
+        "Unsupported video type. Use MP4, WebM, MOV, M4V, AVI, MKV, 3GP, MPEG, or MPG.",
+      );
     }
     return;
   }
@@ -59,6 +119,10 @@ export async function uploadFileToCloudinary(
   kind: "image" | "video" = "image",
 ): Promise<{ secure_url: string; public_id: string }> {
   assertInventoryFileAllowed(file, kind);
+
+  if (kind === "video" && file.size > INVENTORY_VIDEO_MAX_BYTES) {
+    throw new Error(`Videos must be ${inventoryVideoMaxSizeLabel()} or smaller.`);
+  }
 
   const sigRes = await fetch("/api/uploads/sign", {
     method: "POST",
@@ -116,6 +180,9 @@ export async function uploadFileToCloudinary(
   if (!up.ok) {
     const err = await up.text();
     console.warn("[cloudinary-upload-client] Cloudinary POST failed", up.status);
+    if (kind === "video") {
+      throw new Error(cloudinaryVideoUploadErrorMessage(up.status, err));
+    }
     throw new Error(err?.slice(0, 200) || "Upload failed");
   }
   return up.json() as Promise<{ secure_url: string; public_id: string }>;

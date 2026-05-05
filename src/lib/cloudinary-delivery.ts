@@ -9,6 +9,8 @@ export type CloudinaryDeliveryPreset =
   | "tableThumb"
   | "card"
   | "galleryStrip"
+  /** Inline car/parts gallery main stage — fast slide changes (not full lightbox). */
+  | "galleryStage"
   | "galleryMain"
   | "galleryPremium"
   | "videoPreview"
@@ -23,6 +25,8 @@ const PRESET_TRANSFORMS: Record<Exclude<CloudinaryDeliveryPreset, "none">, strin
   card: "c_limit,w_640,q_auto,f_auto",
   /** Gallery thumbnail strip */
   galleryStrip: "c_limit,w_280,h_200,q_auto,f_auto",
+  /** Main carousel / product hero — ~1280px cap for snappy swaps */
+  galleryStage: "c_limit,w_1280,h_800,q_auto,f_auto",
   /** Hero + lightbox — cap width, keep quality */
   galleryMain: "c_limit,w_1920,q_auto,f_auto",
   /** Premium detail view — preserve high-end clarity without touching originals. */

@@ -9,8 +9,10 @@ type Props = {
   className?: string;
   /** Classes on the `<video>` element (default `aspect-video w-full`). */
   videoClassName?: string;
-  /** Featured / above-the-fold clip may preload metadata; others defer until visible. */
+  /** Featured clip uses premium delivery transforms when no `deliveryPreset` is set. */
   featured?: boolean;
+  /** Mount the `<video>` immediately (first hero clip only). Others wait until near viewport. */
+  eagerMount?: boolean;
   /** Optional Cloudinary delivery transform for playback stream. */
   deliveryPreset?: CloudinaryDeliveryPreset;
   /** Optional label for the clip (accessibility). */
@@ -26,11 +28,12 @@ export function LazyVideo({
   className,
   videoClassName = "aspect-video w-full",
   featured = false,
+  eagerMount = false,
   deliveryPreset,
   title,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(featured);
+  const [active, setActive] = useState(() => Boolean(eagerMount));
 
   useEffect(() => {
     if (active) return;
@@ -40,7 +43,7 @@ export function LazyVideo({
       ([e]) => {
         if (e?.isIntersecting) setActive(true);
       },
-      { rootMargin: "160px", threshold: 0.01 },
+      { rootMargin: "200px", threshold: 0.01 },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -51,14 +54,19 @@ export function LazyVideo({
     deliveryPreset ?? (featured ? "videoPremium" : "videoPreview"),
   );
 
+  const posterUrl = poster?.trim()
+    ? optimizeCloudinaryUrl(poster.trim(), "galleryStrip")
+    : undefined;
+
   return (
     <div ref={wrapRef} className={className}>
       {active ? (
         <video
           controls
           className={videoClassName}
-          poster={poster ?? undefined}
-          preload={featured ? "metadata" : "none"}
+          poster={posterUrl}
+          preload="none"
+          playsInline
           title={title}
         >
           <source src={sourceUrl} />

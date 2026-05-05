@@ -37,7 +37,10 @@ import {
 import { LazyVideo } from "@/components/media/lazy-video";
 import { Button } from "@/components/ui/button";
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
-import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
+import {
+  inventoryVideoMaxSizeLabel,
+  uploadFileToCloudinary,
+} from "@/lib/cloudinary-upload-client";
 
 type Props = {
   carId: string;
@@ -243,10 +246,13 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <p className="mt-1 text-xs text-zinc-500">
           Videos are uploaded as provided; playback optimization happens at viewing time without replacing the original asset.
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          Max size per file: {inventoryVideoMaxSizeLabel()}. Larger files may also fail depending on your Cloudinary plan.
+        </p>
         <div className="mt-4">
           <input
             type="file"
-            accept="video/mp4,video/webm,video/*,.mp4,.webm"
+            accept="video/*,video/mp4,video/webm,video/quicktime,video/3gpp,video/mpeg,.mp4,.webm,.mov,.m4v,.avi,.mkv,.3gp,.mpeg,.mpg"
             multiple
             className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
             onChange={(e) => {

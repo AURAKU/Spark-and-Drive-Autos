@@ -1,12 +1,13 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { Button } from "@/components/ui/button";
 import type { CarGalleryImage } from "@/lib/car-gallery";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -14,7 +15,7 @@ type Props = {
   children?: ReactNode;
 };
 
-export function CarGallery({ images, children }: Props) {
+function CarGalleryInner({ images, children }: Props) {
   const [active, setActive] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -34,6 +35,30 @@ export function CarGallery({ images, children }: Props) {
     },
     [count],
   );
+
+  useEffect(() => {
+    if (count <= 1) return;
+    const links: HTMLLinkElement[] = [];
+    const preset = "galleryStage" as const;
+    const pushPreload = (url: string) => {
+      const href = optimizeCloudinaryUrl(url, preset);
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = href;
+      document.head.appendChild(link);
+      links.push(link);
+    };
+    const nextIdx = (safeActive + 1) % count;
+    const prevIdx = (safeActive - 1 + count) % count;
+    const nextUrl = images[nextIdx]?.url;
+    const prevUrl = images[prevIdx]?.url;
+    if (nextUrl) pushPreload(nextUrl);
+    if (prevUrl && prevIdx !== nextIdx) pushPreload(prevUrl);
+    return () => {
+      for (const l of links) l.remove();
+    };
+  }, [count, images, safeActive]);
 
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -82,13 +107,16 @@ export function CarGallery({ images, children }: Props) {
           aria-label={`View image ${safeActive + 1} of ${count} full screen`}
         >
           <VehicleCoverImage
+            key={current!.id}
             src={current!.url}
             alt={current!.alt}
             fill
-            priority
+            priority={safeActive === 0}
+            loading="eager"
+            imagePlaceholder
             className="object-cover"
             sizes="(max-width:1024px) 100vw, 58vw"
-            deliveryPreset="galleryPremium"
+            deliveryPreset="galleryStage"
           />
         </button>
 
@@ -165,6 +193,7 @@ export function CarGallery({ images, children }: Props) {
               src={im.url}
               alt=""
               fill
+              loading="lazy"
               className="object-cover"
               sizes="120px"
               deliveryPreset="galleryStrip"
@@ -199,6 +228,7 @@ export function CarGallery({ images, children }: Props) {
 
               <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-16 pt-14 sm:px-6">
                 <VehicleCoverImage
+                  key={`lb-${current!.id}`}
                   src={current!.url}
                   alt={current!.alt}
                   width={1920}
@@ -206,6 +236,7 @@ export function CarGallery({ images, children }: Props) {
                   className="max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
                   sizes="100vw"
                   priority
+                  loading="eager"
                   deliveryPreset="galleryPremium"
                 />
 
@@ -253,6 +284,7 @@ export function CarGallery({ images, children }: Props) {
                           src={im.url}
                           alt=""
                           fill
+                          loading="lazy"
                           className="object-cover"
                           sizes="96px"
                           deliveryPreset="galleryStrip"
@@ -269,3 +301,5 @@ export function CarGallery({ images, children }: Props) {
     </div>
   );
 }
+
+export const CarGallery = memo(CarGalleryInner);

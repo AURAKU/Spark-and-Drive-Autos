@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 
+import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { Button } from "@/components/ui/button";
 import type { PartGalleryImage } from "@/lib/part-gallery-images";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { cn } from "@/lib/utils";
 
 export type { PartGalleryImage };
@@ -17,7 +18,7 @@ type Props = {
   className?: string;
 };
 
-export function PartImageGallery({ images, productTitle, className }: Props) {
+function PartImageGalleryInner({ images, productTitle, className }: Props) {
   const [index, setIndex] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -42,6 +43,30 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
   }, [count, index]);
 
   useEffect(() => {
+    if (count <= 1) return;
+    const links: HTMLLinkElement[] = [];
+    const preset = "galleryStage" as const;
+    const pushPreload = (url: string) => {
+      const href = optimizeCloudinaryUrl(url, preset);
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = href;
+      document.head.appendChild(link);
+      links.push(link);
+    };
+    const nextIdx = (safe + 1) % count;
+    const prevIdx = (safe - 1 + count) % count;
+    const nu = images[nextIdx]?.url;
+    const pu = images[prevIdx]?.url;
+    if (nu) pushPreload(nu);
+    if (pu && prevIdx !== nextIdx) pushPreload(pu);
+    return () => {
+      for (const l of links) l.remove();
+    };
+  }, [count, images, safe]);
+
+  useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFullscreen(false);
@@ -64,13 +89,14 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
           className,
         )}
       >
-        <Image
+        <VehicleCoverImage
           src="/brand/logo-emblem.png"
           alt=""
           width={120}
           height={120}
           className="h-auto w-auto opacity-40"
           sizes="120px"
+          deliveryPreset="none"
         />
       </div>
     );
@@ -79,13 +105,16 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
   return (
     <div className={cn("space-y-3", className)}>
       <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80">
-        <Image
+        <VehicleCoverImage
+          key={current.id}
           src={current.url}
           alt={count > 1 ? `${productTitle} — photo ${safe + 1} of ${count}` : productTitle}
           fill
+          loading="eager"
+          imagePlaceholder
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
-          unoptimized
+          deliveryPreset="galleryStage"
         />
         {count > 1 ? (
           <>
@@ -93,7 +122,7 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
               type="button"
               aria-label="Previous image"
               onClick={() => go(-1)}
-              className="absolute top-1/2 left-2 -translate-y-1/2 rounded-lg border border-white/20 bg-black/50 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
+              className="absolute top-1/2 left-2 z-10 -translate-y-1/2 rounded-lg border border-white/20 bg-black/50 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
             >
               <ChevronLeft className="size-5" />
             </button>
@@ -101,7 +130,7 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
               type="button"
               aria-label="Next image"
               onClick={() => go(1)}
-              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg border border-white/20 bg-black/50 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
+              className="absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded-lg border border-white/20 bg-black/50 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
             >
               <ChevronRight className="size-5" />
             </button>
@@ -110,7 +139,7 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
             </span>
           </>
         ) : null}
-        <div className="absolute bottom-2 left-2">
+        <div className="absolute bottom-2 left-2 z-10">
           <Button
             type="button"
             size="sm"
@@ -141,7 +170,15 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
                   selected ? "border-[var(--brand)] ring-2 ring-[var(--brand)]/40" : "border-white/10 opacity-80 hover:opacity-100",
                 )}
               >
-                <Image src={img.url} alt="" fill className="object-cover" sizes="64px" unoptimized />
+                <VehicleCoverImage
+                  src={img.url}
+                  alt=""
+                  fill
+                  loading="lazy"
+                  className="object-cover"
+                  sizes="64px"
+                  deliveryPreset="galleryStrip"
+                />
               </button>
             );
           })}
@@ -182,14 +219,16 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
                   </button>
                 ) : null}
                 <div className="relative mx-auto h-[min(78dvh,calc(100dvh-12rem))] w-full max-w-[min(100vw,1200px)]">
-                  <Image
+                  <VehicleCoverImage
+                    key={`fs-${current.id}`}
                     src={current.url}
                     alt={`${productTitle} — photo ${safe + 1} of ${count}`}
                     fill
+                    loading="eager"
                     className="object-contain"
                     sizes="100vw"
-                    unoptimized
                     priority
+                    deliveryPreset="galleryPremium"
                   />
                 </div>
                 {count > 1 ? (
@@ -215,7 +254,15 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
                         i === safe ? "border-white" : "border-transparent opacity-70 hover:opacity-100",
                       )}
                     >
-                      <Image src={img.url} alt="" fill className="object-cover" sizes="64px" unoptimized />
+                      <VehicleCoverImage
+                        src={img.url}
+                        alt=""
+                        fill
+                        loading="lazy"
+                        className="object-cover"
+                        sizes="64px"
+                        deliveryPreset="galleryStrip"
+                      />
                     </button>
                   ))}
                 </div>
@@ -227,3 +274,5 @@ export function PartImageGallery({ images, productTitle, className }: Props) {
     </div>
   );
 }
+
+export const PartImageGallery = memo(PartImageGalleryInner);
