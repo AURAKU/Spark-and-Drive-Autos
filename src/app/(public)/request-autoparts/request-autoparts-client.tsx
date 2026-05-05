@@ -11,6 +11,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
 import { cn } from "@/lib/utils";
 
 const CALLBACK = "/request-autoparts";
@@ -23,23 +24,41 @@ async function uploadPartReference(file: File, uploadSessionId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uploadSessionId }),
   });
-  if (sigRes.status === 501) throw new Error("Image uploads are not configured yet.");
-  if (sigRes.status === 401) throw new Error("Your session expired. Please sign in again.");
-  if (!sigRes.ok) throw new Error("Could not start upload.");
-  const data = (await sigRes.json()) as {
+  const raw = await sigRes.text();
+  let data = {} as {
     timestamp: number;
     signature: string;
     apiKey: string;
+    cloudName?: string;
     folder: string;
-    uploadUrl: string;
+    uploadUrl?: string;
+    error?: string;
   };
+  try {
+    data = JSON.parse(raw) as typeof data;
+  } catch {
+    data = {} as typeof data;
+  }
+  const errMsg = typeof data.error === "string" ? data.error : "";
+  if (sigRes.status === 501) {
+    console.warn("[request-autoparts] Cloudinary not configured (501)");
+    throw new Error(errMsg || CLOUDINARY_USER_MESSAGE);
+  }
+  if (sigRes.status === 401) throw new Error("Your session expired. Please sign in again.");
+  if (!sigRes.ok) throw new Error(errMsg || "Could not start upload.");
+  const cloud = data.cloudName?.trim() || readPublicCloudinaryCloudName() || "";
+  let uploadUrl = data.uploadUrl?.trim();
+  if (!uploadUrl && cloud) {
+    uploadUrl = `https://api.cloudinary.com/v1_1/${cloud}/image/upload`;
+  }
+  if (!uploadUrl) throw new Error("Upload address missing. Check Cloudinary configuration.");
   const fd = new FormData();
   fd.append("file", file);
   fd.append("api_key", data.apiKey);
   fd.append("timestamp", String(data.timestamp));
   fd.append("signature", data.signature);
   fd.append("folder", data.folder);
-  const up = await fetch(data.uploadUrl, { method: "POST", body: fd });
+  const up = await fetch(uploadUrl, { method: "POST", body: fd });
   if (!up.ok) {
     const err = await up.text();
     throw new Error(err || "Upload failed");

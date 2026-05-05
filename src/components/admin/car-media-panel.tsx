@@ -37,43 +37,13 @@ import {
 import { LazyVideo } from "@/components/media/lazy-video";
 import { Button } from "@/components/ui/button";
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
+import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
 
 type Props = {
   carId: string;
   images: Pick<CarImage, "id" | "url" | "sortOrder" | "isCover" | "publicId">[];
   videos: Pick<CarVideo, "id" | "url" | "sortOrder" | "thumbnailUrl" | "publicId" | "isFeatured">[];
 };
-
-async function uploadToCloudinary(file: File, folder: string, kind: "image" | "video") {
-  const sigRes = await fetch("/api/upload/cloudinary-signature", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder, kind }),
-  });
-  if (sigRes.status === 501) {
-    throw new Error("Cloudinary is not configured. Set CLOUDINARY_* env vars.");
-  }
-  if (!sigRes.ok) throw new Error("Could not sign upload");
-  const data = (await sigRes.json()) as {
-    timestamp: number;
-    signature: string;
-    apiKey: string;
-    folder: string;
-    uploadUrl: string;
-  };
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("api_key", data.apiKey);
-  fd.append("timestamp", String(data.timestamp));
-  fd.append("signature", data.signature);
-  fd.append("folder", data.folder);
-  const up = await fetch(data.uploadUrl, { method: "POST", body: fd });
-  if (!up.ok) {
-    const err = await up.text();
-    throw new Error(err || "Upload failed");
-  }
-  return up.json() as Promise<{ secure_url: string; public_id: string }>;
-}
 
 function SortableGalleryRow({
   id,
@@ -120,7 +90,7 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
     if (!files?.length) return;
     for (const file of Array.from(files)) {
       try {
-        const json = await uploadToCloudinary(file, `sda/cars/${carId}/images`, "image");
+        const json = await uploadFileToCloudinary(file, `sda/cars/${carId}/images`, "image");
         const r = await addCarImage(carId, { url: json.secure_url, publicId: json.public_id });
         if (r?.error) toast.error(r.error);
         else toast.success("Image added");
@@ -135,7 +105,7 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
     if (!files?.length) return;
     for (const file of Array.from(files)) {
       try {
-        const json = await uploadToCloudinary(file, `sda/cars/${carId}/videos`, "video");
+        const json = await uploadFileToCloudinary(file, `sda/cars/${carId}/videos`, "video");
         const r = await addCarVideo(carId, { url: json.secure_url, publicId: json.public_id });
         if (r?.error) toast.error(r.error);
         else toast.success("Video added");
@@ -191,7 +161,7 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <div className="mt-4">
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             multiple
             className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
             onChange={(e) => {
@@ -276,7 +246,7 @@ export function CarMediaPanel({ carId, images, videos }: Props) {
         <div className="mt-4">
           <input
             type="file"
-            accept="video/*"
+            accept="video/mp4,video/webm,video/*,.mp4,.webm"
             multiple
             className="text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
             onChange={(e) => {

@@ -44,7 +44,7 @@ export function PartCoverField({ initialUrl, initialPublicId }: Props) {
           <input
             id="cover-upload"
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             className="text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
             disabled={uploading}
             onChange={(e) => {

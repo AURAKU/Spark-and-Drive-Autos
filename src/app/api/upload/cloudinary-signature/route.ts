@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
-import { createUploadSignature } from "@/lib/cloudinary";
+import { CLOUDINARY_USER_MESSAGE, createUploadSignature, isCloudinaryMissingConfigError } from "@/lib/cloudinary";
 
 const schema = z.object({
   folder: z.string().min(1).max(120),
@@ -37,8 +37,22 @@ export async function POST(req: Request) {
       parsed.data.kind === "video"
         ? `https://api.cloudinary.com/v1_1/${cloud}/video/upload`
         : `https://api.cloudinary.com/v1_1/${cloud}/image/upload`;
-    return NextResponse.json({ ...sig, uploadUrl, kind: parsed.data.kind });
-  } catch {
-    return NextResponse.json({ error: "Cloudinary not configured" }, { status: 501 });
+    return NextResponse.json({
+      timestamp: sig.timestamp,
+      signature: sig.signature,
+      apiKey: sig.apiKey,
+      cloudName: sig.cloudName,
+      folder: sig.folder,
+      uploadUrl,
+      kind: parsed.data.kind,
+    });
+  } catch (e) {
+    if (isCloudinaryMissingConfigError(e)) {
+      console.warn("[api/upload/cloudinary-signature] Cloudinary credentials missing");
+      return NextResponse.json({ error: CLOUDINARY_USER_MESSAGE }, { status: 501 });
+    }
+    const msg = e instanceof Error ? e.message : "Upload sign failed";
+    console.warn("[api/upload/cloudinary-signature]", msg);
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

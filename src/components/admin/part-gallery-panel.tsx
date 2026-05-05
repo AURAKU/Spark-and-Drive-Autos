@@ -65,7 +65,7 @@ export function PartGalleryPanel({ partId, images }: Props) {
         <p className="mt-1 text-xs text-zinc-500">Additional photos shown on the public product page (cover is separate).</p>
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,application/pdf,.pdf"
           className="mt-2 text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-white"
           disabled={uploading}
           onChange={(e) => {

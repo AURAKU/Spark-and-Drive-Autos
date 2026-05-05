@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
 import { canUploadPaymentProof } from "@/lib/payment-status-utils";
 import { getSettlementInstructions } from "@/lib/payment-settlement";
 
@@ -56,8 +57,9 @@ type UploadSig = {
   timestamp: number;
   signature: string;
   apiKey: string;
+  cloudName?: string;
   folder: string;
-  uploadUrl: string;
+  uploadUrl?: string;
   kind: "image" | "pdf";
   eager: string | null;
 };
@@ -68,9 +70,35 @@ async function uploadProofToCloudinary(file: File, paymentId: string, kind: "ima
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paymentId, kind }),
   });
-  if (sigRes.status === 501) throw new Error("Uploads are not configured.");
-  if (!sigRes.ok) throw new Error("Could not sign upload");
-  const data = (await sigRes.json()) as UploadSig;
+  const raw = await sigRes.text();
+  let data = {} as UploadSig & { error?: string };
+  try {
+    data = JSON.parse(raw) as UploadSig & { error?: string };
+  } catch {
+    data = {} as UploadSig & { error?: string };
+  }
+  const errMsg = typeof data.error === "string" ? data.error : "";
+  if (sigRes.status === 501) {
+    console.warn("[payment-proof-upload] Cloudinary not configured (501)");
+    throw new Error(errMsg || CLOUDINARY_USER_MESSAGE);
+  }
+  if (!sigRes.ok) {
+    console.warn("[payment-proof-upload] sign failed", sigRes.status, errMsg);
+    throw new Error(errMsg || "Could not sign upload. Try again or contact support.");
+  }
+
+  const cloud = data.cloudName?.trim() || readPublicCloudinaryCloudName() || "";
+  let uploadUrl = data.uploadUrl?.trim();
+  if (!uploadUrl && cloud) {
+    uploadUrl =
+      kind === "pdf"
+        ? `https://api.cloudinary.com/v1_1/${cloud}/raw/upload`
+        : `https://api.cloudinary.com/v1_1/${cloud}/image/upload`;
+  }
+  if (!uploadUrl) {
+    console.error("[payment-proof-upload] missing upload URL");
+    throw new Error("Upload could not be started. Check Cloudinary configuration.");
+  }
 
   const fd = new FormData();
   fd.append("file", file);
@@ -82,7 +110,7 @@ async function uploadProofToCloudinary(file: File, paymentId: string, kind: "ima
     fd.append("eager", data.eager);
   }
 
-  const up = await fetch(data.uploadUrl, { method: "POST", body: fd });
+  const up = await fetch(uploadUrl, { method: "POST", body: fd });
   if (!up.ok) {
     const err = await up.text();
     throw new Error(err || "Upload failed");

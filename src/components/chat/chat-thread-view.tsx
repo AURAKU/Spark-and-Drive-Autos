@@ -23,6 +23,7 @@ import { setUserMessagingBlocked } from "@/actions/chat-moderation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
 import { isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { useChatThreadRealtime } from "@/hooks/use-chat-thread-realtime";
@@ -108,22 +109,52 @@ async function uploadChatFile(file: File, threadId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ threadId, kind: resourceKind }),
   });
-  if (sigRes.status === 501) throw new Error("Cloudinary is not configured.");
-  if (!sigRes.ok) throw new Error("Could not sign upload");
-  const data = (await sigRes.json()) as {
+  const raw = await sigRes.text();
+  let payload: {
     timestamp: number;
     signature: string;
     apiKey: string;
+    cloudName?: string;
     folder: string;
-    uploadUrl: string;
-  };
+    uploadUrl?: string;
+    error?: string;
+  } = {} as (typeof payload);
+  try {
+    payload = JSON.parse(raw) as typeof payload;
+  } catch {
+    payload = {} as typeof payload;
+  }
+  const apiErr = typeof payload.error === "string" ? payload.error : "";
+  if (sigRes.status === 501) {
+    console.warn("[chat-thread-view] Cloudinary signing unavailable (501)", { threadId, resourceKind });
+    throw new Error(apiErr || CLOUDINARY_USER_MESSAGE);
+  }
+  if (!sigRes.ok) {
+    console.warn("[chat-thread-view] sign upload failed", sigRes.status, apiErr);
+    throw new Error(apiErr || "Could not sign upload. Try again or contact support.");
+  }
+  const data = payload;
+  const cloudName = data.cloudName?.trim() || readPublicCloudinaryCloudName() || "";
+  let uploadUrl = data.uploadUrl?.trim();
+  if (!uploadUrl && cloudName) {
+    uploadUrl =
+      resourceKind === "image"
+        ? `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`
+        : resourceKind === "raw"
+          ? `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`
+          : `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+  }
+  if (!uploadUrl) {
+    console.error("[chat-thread-view] missing uploadUrl and cloud name after sign");
+    throw new Error("Upload could not be started. Check Cloudinary configuration.");
+  }
   const fd = new FormData();
   fd.append("file", file);
   fd.append("api_key", data.apiKey);
   fd.append("timestamp", String(data.timestamp));
   fd.append("signature", data.signature);
   fd.append("folder", data.folder);
-  const up = await fetch(data.uploadUrl, { method: "POST", body: fd });
+  const up = await fetch(uploadUrl, { method: "POST", body: fd });
   if (!up.ok) {
     const err = await up.text();
     throw new Error(err || "Upload failed");

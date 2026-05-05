@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createPaymentProofUploadSignature } from "@/lib/cloudinary";
+import { CLOUDINARY_USER_MESSAGE, createPaymentProofUploadSignature, isCloudinaryMissingConfigError } from "@/lib/cloudinary";
 import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitForm } from "@/lib/rate-limit";
 import { safeAuth } from "@/lib/safe-auth";
@@ -48,7 +48,12 @@ export async function POST(req: Request) {
   try {
     const sig = await createPaymentProofUploadSignature({ folder, kind: "image" });
     return NextResponse.json(sig);
-  } catch {
-    return NextResponse.json({ error: "Cloudinary not configured" }, { status: 501 });
+  } catch (e) {
+    if (isCloudinaryMissingConfigError(e)) {
+      console.warn("[api/upload/verification-signature] Cloudinary credentials missing");
+      return NextResponse.json({ error: CLOUDINARY_USER_MESSAGE }, { status: 501 });
+    }
+    const msg = e instanceof Error ? e.message : "Upload sign failed";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

@@ -16,6 +16,7 @@ import {
   ALLOWED_VERIFICATION_DOCUMENT_TYPES,
   ID_VERIFICATION_CONSENT_TEXT,
 } from "@/lib/identity-verification-shared";
+import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
 import { MEDIA_UPLOAD_GUIDANCE } from "@/lib/media-upload-guidance";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -32,7 +33,8 @@ function pickClientUploadSign(data: Record<string, unknown>): {
   eager: string | null;
 } {
   const apiKey = String(data.apiKey ?? data.api_key ?? "");
-  const cloudName = String(data.cloudName ?? data.cloud_name ?? "");
+  let cloudName = String(data.cloudName ?? data.cloud_name ?? "").trim();
+  if (!cloudName) cloudName = readPublicCloudinaryCloudName() || "";
   const signature = String(data.signature ?? "");
   const folder = String(data.folder ?? "");
   const timestamp = Number(data.timestamp);
@@ -71,12 +73,18 @@ async function uploadOne(file: File, kind: "front" | "back" | "selfie"): Promise
   } catch {
     sigRaw = {};
   }
+  const signErr = typeof sigRaw.error === "string" ? sigRaw.error : "";
   if (!sigRes.ok) {
-    throw new Error("Signing request failed");
+    if (sigRes.status === 501) {
+      console.warn("[verification-client] verification image sign unavailable (501)");
+      throw new Error(signErr || CLOUDINARY_USER_MESSAGE);
+    }
+    throw new Error(signErr || "Signing request failed");
   }
 
   const sig = pickClientUploadSign(sigRaw);
   if (!sig.apiKey || !sig.signature || !Number.isFinite(sig.timestamp) || !sig.folder || !sig.uploadUrl) {
+    console.warn("[verification-client] incomplete sign payload from verification-signature");
     throw new Error("Signing request failed");
   }
 
@@ -195,12 +203,18 @@ export function VerificationClient({
     } catch {
       sigBody = {};
     }
+    const signErr = typeof sigBody.error === "string" ? sigBody.error : "";
     if (!sigRes.ok) {
-      throw new Error("Signing request failed");
+      if (sigRes.status === 501) {
+        console.warn("[verification-client] Ghana Card upload sign unavailable (501)");
+        throw new Error(signErr || CLOUDINARY_USER_MESSAGE);
+      }
+      throw new Error(signErr || "Signing request failed");
     }
 
     const sig = pickClientUploadSign(sigBody);
     if (!sig.apiKey || !sig.signature || !Number.isFinite(sig.timestamp) || !sig.folder || !sig.uploadUrl) {
+      console.warn("[verification-client] incomplete sign payload from /api/uploads/sign");
       throw new Error("Signing request failed");
     }
 
