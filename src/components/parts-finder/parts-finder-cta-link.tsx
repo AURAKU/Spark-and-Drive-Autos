@@ -29,7 +29,8 @@ type PartsFinderCtaLinkProps = Omit<LinkProps, "className" | "children" | "href"
 };
 
 function stripUnsafeLinkProps(rest: Record<string, unknown>) {
-  const { onClick: _ignoredOnClick, ...safeRest } = rest;
+  const safeRest = { ...rest };
+  delete safeRest.onClick;
   return safeRest;
 }
 

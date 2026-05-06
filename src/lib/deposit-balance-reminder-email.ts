@@ -1,72 +1,100 @@
-import { getPublicAppUrl } from "@/lib/app-url";
+import nodemailer from "nodemailer";
 
-const RESEND_API_URL = "https://api.resend.com/emails";
+const configured =
+  !!process.env.SMTP_HOST &&
+  !!process.env.SMTP_PORT &&
+  !!process.env.SMTP_USER &&
+  !!process.env.SMTP_PASS &&
+  !!process.env.EMAIL_FROM;
 
-export function isDepositBalanceReminderEmailConfigured(): boolean {
-  return Boolean(
-    process.env.RESEND_API_KEY?.trim() &&
-      (process.env.DEPOSIT_BALANCE_FROM_EMAIL?.trim() || process.env.RESET_PASSWORD_FROM_EMAIL?.trim()),
-  );
+export function isDepositBalanceReminderEmailConfigured() {
+  return configured;
 }
 
-export async function sendDepositBalanceReminderEmailSafe(params: {
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: Number(process.env.SMTP_PORT || 465) === 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+type DepositReminderArgs = {
   toEmail: string;
-  customerName: string | null;
-  orderReference: string;
-  carTitle: string | null;
-  remainingBalanceGhs: number;
-  balanceDueAt: Date | null;
-}): Promise<{ sent: boolean; reason?: string }> {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const fromEmail =
-    process.env.DEPOSIT_BALANCE_FROM_EMAIL?.trim() || process.env.RESET_PASSWORD_FROM_EMAIL?.trim();
-  if (!apiKey || !fromEmail) {
-    return { sent: false, reason: "EMAIL_NOT_CONFIGURED" };
-  }
+  customerName?: string | null;
+  orderReference?: string | null;
+  carTitle?: string | null;
+  remainingBalanceGhs?: number | null;
+  balanceDueAt?: Date | string | null;
+  dashboardUrl?: string | null;
+  subject?: string;
+  html?: string;
+};
 
-  const base = getPublicAppUrl();
-  const dueLine = params.balanceDueAt
-    ? `Balance was due on ${params.balanceDueAt.toISOString().slice(0, 10)}.`
-    : "Please complete your remaining balance as agreed.";
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;line-height:1.5;color:#111827;">
-      <h2 style="margin:0 0 10px;">Vehicle balance reminder</h2>
-      <p style="margin:0 0 12px;">Hello ${params.customerName?.trim() || "there"},</p>
-      <p style="margin:0 0 12px;">This is a reminder about order <strong>${params.orderReference}</strong>
-      ${params.carTitle ? `for <strong>${params.carTitle}</strong>` : ""}.</p>
-      <p style="margin:0 0 12px;">Outstanding balance (GHS): <strong>${params.remainingBalanceGhs.toFixed(2)}</strong></p>
-      <p style="margin:0 0 12px;">${dueLine}</p>
-      <p style="margin:0 0 12px;">
-        <a href="${base}/dashboard/orders" style="display:inline-block;padding:10px 16px;background:#0ea5e9;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
-          View your orders
-        </a>
-      </p>
-      <p style="margin:0;">If you already paid offline, reply with your receipt reference so we can match it.</p>
-    </div>
-  `.trim();
+function money(amount: number | null | undefined) {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return "the outstanding balance";
+  return `GHS ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
+function dateLabel(value: Date | string | null | undefined) {
+  if (!value) return "the agreed payment window";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "the agreed payment window";
+  return d.toLocaleDateString("en-GB");
+}
+
+function buildDepositReminderEmail(args: DepositReminderArgs) {
+  const name = args.customerName?.trim() || "Customer";
+  const reference = args.orderReference?.trim() || "your vehicle reservation";
+  const car = args.carTitle?.trim() || "your reserved vehicle";
+  const amount = money(args.remainingBalanceGhs);
+  const due = dateLabel(args.balanceDueAt);
+  const dashboardUrl =
+    args.dashboardUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://www.sparkanddriveautos.com"}/dashboard/orders`;
+
+  const subject = args.subject || `Balance reminder for ${reference}`;
+
+  const html =
+    args.html ||
+    `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">
+        <h2>Vehicle reservation balance reminder</h2>
+        <p>Hello ${name},</p>
+        <p>This is a reminder that the remaining balance for <strong>${car}</strong> is still pending.</p>
+        <p><strong>Order reference:</strong> ${reference}</p>
+        <p><strong>Outstanding balance:</strong> ${amount}</p>
+        <p><strong>Due date/window:</strong> ${due}</p>
+        <p>You can review your order here:</p>
+        <p><a href="${dashboardUrl}">${dashboardUrl}</a></p>
+        <p>Thank you,<br/>Spark & Drive Autos</p>
+      </div>
+    `;
+
+  return { subject, html };
+}
+
+export async function sendDepositReminderEmail(args: DepositReminderArgs) {
+  if (!configured) return { ok: false, error: "SMTP email is not configured" };
+
+  const { subject, html } = buildDepositReminderEmail(args);
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to: args.toEmail,
+    subject,
+    html,
+  });
+
+  return { ok: true };
+}
+
+export async function sendDepositBalanceReminderEmailSafe(args: DepositReminderArgs) {
   try {
-    const response = await fetch(RESEND_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [params.toEmail],
-        subject: `Balance reminder · ${params.orderReference}`,
-        html,
-      }),
-    });
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[deposit-balance-reminder-email]", response.status, errText.slice(0, 400));
-      return { sent: false, reason: `HTTP_${response.status}` };
-    }
-    return { sent: true };
-  } catch (e) {
-    console.error("[deposit-balance-reminder-email]", e);
-    return { sent: false, reason: "FETCH_ERROR" };
+    return await sendDepositReminderEmail(args);
+  } catch (error) {
+    console.error("[deposit-balance-reminder-email]", error);
+    return { ok: false, error: "Could not send reminder email" };
   }
 }

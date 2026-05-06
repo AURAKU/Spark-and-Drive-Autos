@@ -82,7 +82,7 @@ export async function GET() {
       process.env.PAYSTACK_PUBLIC_KEY,
       process.env.PAYSTACK_WEBHOOK_SECRET,
     ),
-    resendReady: has(process.env.RESEND_API_KEY, process.env.RESET_PASSWORD_FROM_EMAIL),
+    smtpReady: has(process.env.SMTP_HOST, process.env.RESET_PASSWORD_FROM_EMAIL),
     serperReady: has(process.env.SERPER_API_KEY),
     pusherReady: has(
       process.env.PUSHER_APP_ID,
@@ -115,7 +115,7 @@ export async function GET() {
     "cloudinaryReady",
     "storageProviderPresent",
     "paystackReady",
-    "resendReady",
+    "smtpReady",
     "serperReady",
     "pusherReady",
     "activeLegalPolicyExists",

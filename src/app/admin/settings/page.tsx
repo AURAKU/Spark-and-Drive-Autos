@@ -91,7 +91,7 @@ export default async function AdminApiProvidersPage() {
   const anthropic = Boolean(process.env.ANTHROPIC_API_KEY);
   const googleOauth = isGoogleAuthConfigured();
   const appleOauth = isAppleAuthConfigured();
-  const resendApiKey = Boolean(process.env.RESEND_API_KEY?.trim());
+  const SMTP_HOST = Boolean(process.env.RESEND_API_KEY?.trim());
   const resetFromEmail = Boolean(process.env.RESET_PASSWORD_FROM_EMAIL?.trim());
   const resetEmailFlow = isPasswordResetEmailConfigured() && appUrl;
   const auth = Boolean(
@@ -546,8 +546,8 @@ export default async function AdminApiProvidersPage() {
             <dd>{flag(appleOauth)}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-400">RESEND_API_KEY (password reset email transport)</dt>
-            <dd>{flag(resendApiKey)}</dd>
+            <dt className="text-zinc-400">SMTP_HOST (password reset email transport)</dt>
+            <dd>{flag(SMTP_HOST)}</dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-zinc-400">RESET_PASSWORD_FROM_EMAIL</dt>
@@ -571,7 +571,7 @@ export default async function AdminApiProvidersPage() {
             <code className="rounded bg-white/5 px-1">AUTH_URL</code>.
           </p>
           <p className="mt-2">
-            Forgot-password emails in production require <code className="rounded bg-white/5 px-1">RESEND_API_KEY</code> and{" "}
+            Forgot-password emails in production require <code className="rounded bg-white/5 px-1">SMTP_HOST</code> and{" "}
             <code className="rounded bg-white/5 px-1">RESET_PASSWORD_FROM_EMAIL</code>. Reset links use{" "}
             <code className="rounded bg-white/5 px-1">AUTH_URL</code>/<code className="rounded bg-white/5 px-1">NEXTAUTH_URL</code>.
           </p>

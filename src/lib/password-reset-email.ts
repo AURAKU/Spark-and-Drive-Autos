@@ -1,49 +1,47 @@
-import { getPublicAppUrl } from "@/lib/app-url";
+import nodemailer from "nodemailer";
 
-const RESEND_API_URL = "https://api.resend.com/emails";
+const configured =
+  !!process.env.SMTP_HOST &&
+  !!process.env.SMTP_PORT &&
+  !!process.env.SMTP_USER &&
+  !!process.env.SMTP_PASS &&
+  !!process.env.EMAIL_FROM;
 
-export function isPasswordResetEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.RESET_PASSWORD_FROM_EMAIL?.trim());
+export function isPasswordResetEmailConfigured() {
+  return configured;
 }
 
-export async function sendPasswordResetEmail(params: { toEmail: string; token: string }) {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const fromEmail = process.env.RESET_PASSWORD_FROM_EMAIL?.trim();
-  if (!apiKey || !fromEmail) {
-    throw new Error("PASSWORD_RESET_EMAIL_NOT_CONFIGURED");
-  }
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: Number(process.env.SMTP_PORT || 465) === 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
-  const resetUrl = `${getPublicAppUrl()}/reset-password?token=${encodeURIComponent(params.token)}`;
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;line-height:1.5;color:#111827;">
-      <h2 style="margin:0 0 10px;">Spark &amp; Drive Gear password reset</h2>
-      <p style="margin:0 0 12px;">A password reset was requested for your account.</p>
-      <p style="margin:0 0 12px;">
-        <a href="${resetUrl}" style="display:inline-block;padding:10px 16px;background:#f97316;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
-          Reset password
-        </a>
-      </p>
-      <p style="margin:0 0 8px;">This link expires in 30 minutes.</p>
-      <p style="margin:0;">If you did not request this change, you can safely ignore this email.</p>
-    </div>
-  `.trim();
+export async function sendPasswordResetEmail(args: {
+  toEmail: string;
+  token: string;
+  resetUrl?: string;
+}) {
+  if (!configured) return { ok: false, error: "SMTP email is not configured" };
 
-  const response = await fetch(RESEND_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [params.toEmail],
-      subject: "Reset your Spark & Drive Gear password",
-      html,
-    }),
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.sparkanddriveautos.com";
+  const resetUrl = args.resetUrl || `${appUrl}/reset-password?token=${encodeURIComponent(args.token)}`;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to: args.toEmail,
+    subject: "Reset your Spark & Drive Autos password",
+    html: `
+      <h2>Password reset</h2>
+      <p>Click the link below to reset your password:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>If you did not request this, ignore this email.</p>
+    `,
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`PASSWORD_RESET_EMAIL_SEND_FAILED:${response.status}:${errText.slice(0, 300)}`);
-  }
+  return { ok: true };
 }
