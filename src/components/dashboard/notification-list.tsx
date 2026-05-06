@@ -67,7 +67,6 @@ export function NotificationList({ initial }: { initial: NotificationRow[] }) {
                   <Link
                     href={n.href}
                     className="text-sm font-medium text-[var(--brand)] hover:underline"
-                    onClick={() => void onMarkRead(n.id)}
                   >
                     View full message
                   </Link>

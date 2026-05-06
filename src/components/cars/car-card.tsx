@@ -71,7 +71,6 @@ export function CarCard({
             href={`${href}#vehicle-walkthrough`}
             className="absolute bottom-2 right-2 z-20 w-[32%] max-w-[6.5rem] overflow-hidden rounded-lg border-2 border-white/25 shadow-lg outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
             aria-label="Watch video walkthrough"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="relative aspect-video w-full bg-black/50">
               <VehicleCoverImage

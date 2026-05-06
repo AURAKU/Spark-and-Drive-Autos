@@ -263,7 +263,6 @@ export function ShippingHubClient({
                     <Link
                       href={`/admin/orders/${row.orderId}`}
                       className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs font-medium text-[var(--brand)] transition hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10"
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <Link2 className="size-3.5" aria-hidden />
                       Order

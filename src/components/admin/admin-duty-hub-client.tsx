@@ -88,7 +88,6 @@ export function AdminDutyHubClient({ rows }: Props) {
                       <Link
                         href={`/admin/orders/${r.id}`}
                         className="text-xs text-[var(--brand)] hover:underline"
-                        onClick={(e) => e.stopPropagation()}
                       >
                         Order
                       </Link>

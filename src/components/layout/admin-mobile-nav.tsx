@@ -39,7 +39,6 @@ export function AdminMobileNav({ links, sectionLabel }: Props) {
               <Link
                 key={l.href}
                 href={l.href}
-                onClick={() => setOpen(false)}
                 className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition ${
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
