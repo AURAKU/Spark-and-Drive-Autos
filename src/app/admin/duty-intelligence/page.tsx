@@ -16,9 +16,9 @@ export default async function AdminDutyIntelligencePage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeading variant="dashboard">Duty Intelligence Center</PageHeading>
+        <PageHeading variant="dashboard">Duty Intelligence Center V3</PageHeading>
         <p className="mt-2 text-sm text-muted-foreground">
-          Configure formulas, exchange rates, HS codes, and review verified import training data.
+          Configure formulas, shipping costs, insurance rules, exchange rates, and review verified import training data.
         </p>
         <Link
           href="/admin/duty"

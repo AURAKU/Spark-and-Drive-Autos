@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 
-import { loadCountryConfig } from "@/lib/duty-intelligence/config-loader";
+import {
+  ADMIN_CONFIG_INIT_HINT,
+  checkDutyConfigHealth,
+  USER_CONFIG_UNAVAILABLE_MESSAGE,
+} from "@/lib/duty-intelligence/config-bootstrap";
+import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { runChargeEngine } from "@/lib/duty-intelligence/engines/charge-engine";
 import { runDutyFormulaEngine, sumByCategory } from "@/lib/duty-intelligence/engines/duty-formula-engine";
+import { estimateFreight, freightToLineItem } from "@/lib/duty-intelligence/engines/freight-engine";
+import { estimateInsurance, insuranceToLineItem } from "@/lib/duty-intelligence/engines/insurance-engine";
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "@/lib/duty-intelligence/formula-version";
-import { computeConfidence } from "@/lib/duty-intelligence/confidence";
+import { buildHistoricalComparison, computeConfidence } from "@/lib/duty-intelligence/confidence";
 import { findSimilarImports } from "@/lib/duty-intelligence/prediction";
 import {
   classifyVehicle,
@@ -14,13 +21,13 @@ import {
   computeCif,
   computeCustomsValue,
   computeFobGhs,
-  computeFreightInsurance,
   resolveExchangeRate,
 } from "@/lib/duty-intelligence/stages/value-chain";
 import type {
   CalculationLineItem,
   DutyCalculationInput,
   DutyIntelligenceResult,
+  DutyPipelineError,
   PipelineStageResult,
 } from "@/lib/duty-intelligence/types";
 
@@ -31,29 +38,36 @@ function round2(n: number): number {
 export async function runDutyIntelligencePipeline(
   input: DutyCalculationInput,
   referenceYear = new Date().getFullYear(),
-): Promise<DutyIntelligenceResult> {
-  const config = await loadCountryConfig(input.countryCode);
+): Promise<DutyIntelligenceResult | DutyPipelineError> {
+  const config = await loadCountryConfigSafe(input.countryCode);
+  if (!config) {
+    const health = await checkDutyConfigHealth(input.countryCode);
+    return {
+      code: "CONFIG_UNAVAILABLE",
+      message: USER_CONFIG_UNAVAILABLE_MESSAGE,
+      adminHint: ADMIN_CONFIG_INIT_HINT,
+      health,
+    };
+  }
+
   const stages: PipelineStageResult[] = [];
   const allLineItems: CalculationLineItem[] = [];
 
-  // Stage 1: Vehicle classification
   const classification = classifyVehicle(input, referenceYear);
   stages.push({
     stage: "VEHICLE_CLASSIFICATION",
     label: "Vehicle Classification",
     output: classification,
     lineItems: [],
-    notes: [`Vehicle age: ${classification.ageYears} years`, `Commercial: ${classification.commercial}`],
+    notes: [
+      `Profile: ${classification.profile}`,
+      `Vehicle age: ${classification.ageYears} years`,
+      `Commercial: ${classification.commercial}`,
+    ],
   });
 
-  // Stage 2: HS Code resolution
-  const hsResolution = resolveHsCode({
-    input,
-    hsCodes: config.hsCodes,
-    classification,
-  });
-  const hsDutyRateHint =
-    config.hsCodes.find((h) => h.hsCode === hsResolution.code)?.dutyRateHint ?? null;
+  const hsResolution = resolveHsCode({ input, hsCodes: config.hsCodes, classification });
+  const hsDutyRateHint = config.hsCodes.find((h) => h.hsCode === hsResolution.code)?.dutyRateHint ?? null;
   stages.push({
     stage: "HS_CODE_RESOLUTION",
     label: "HS Code Resolution",
@@ -62,7 +76,6 @@ export async function runDutyIntelligencePipeline(
     notes: [`Method: ${hsResolution.method}`, hsResolution.description],
   });
 
-  // Stage 3: Exchange rate
   const exchange = await resolveExchangeRate({ countryConfigId: config.countryConfigId, input });
   allLineItems.push(...exchange.lineItems);
   stages.push({
@@ -73,16 +86,22 @@ export async function runDutyIntelligencePipeline(
     notes: exchange.notes,
   });
 
-  // Stage 4-7: FOB, Freight, Insurance, CIF
   const fobGhs =
-    input.cifGhsOverride != null
-      ? input.cifGhsOverride
-      : computeFobGhs(input.purchase.fobAmount, exchange.rate);
-  const { freightGhs, insuranceGhs, otherGhs } = computeFreightInsurance(input);
+    input.cifGhsOverride != null ? input.cifGhsOverride : computeFobGhs(input.purchase.fobAmount, exchange.rate);
+
+  const freightEstimate = await estimateFreight({ countryConfigId: config.countryConfigId, input, fobGhs });
+  const insuranceEstimate = await estimateInsurance({
+    countryConfigId: config.countryConfigId,
+    input,
+    fobGhs,
+    freightGhs: freightEstimate.freightGhs,
+  });
+  const otherGhs = input.shipping.otherShippingChargesGhs ?? 0;
+
   const cifGhs = computeCif({
     fobGhs: input.cifGhsOverride != null ? 0 : fobGhs,
-    freightGhs,
-    insuranceGhs,
+    freightGhs: freightEstimate.freightGhs,
+    insuranceGhs: insuranceEstimate.insuranceGhs,
     otherGhs,
     override: input.cifGhsOverride,
   });
@@ -100,31 +119,15 @@ export async function runDutyIntelligencePipeline(
       formula: input.cifGhsOverride ? `Override CIF ${cifGhs}` : `${input.purchase.fobAmount} × ${exchange.rate} = ${fobGhs}`,
       source: input.cifGhsOverride ? "OVERRIDE" : "CONFIG",
     },
-    {
-      code: "FREIGHT",
-      label: "Freight",
-      category: "FREIGHT",
-      amountGhs: freightGhs,
-      basis: "Shipping freight to destination port",
-      formula: `GHS ${freightGhs}`,
-      source: freightGhs > 0 ? "CONFIG" : "HISTORICAL",
-    },
-    {
-      code: "INSURANCE",
-      label: "Insurance",
-      category: "INSURANCE",
-      amountGhs: insuranceGhs,
-      basis: "Marine / cargo insurance",
-      formula: `GHS ${insuranceGhs}`,
-      source: insuranceGhs > 0 ? "CONFIG" : "HISTORICAL",
-    },
+    freightToLineItem(freightEstimate),
+    insuranceToLineItem(insuranceEstimate),
     {
       code: "CIF",
       label: "CIF (Cost, Insurance, Freight)",
       category: "CIF",
       amountGhs: cifGhs,
       basis: "FOB + Freight + Insurance + Other",
-      formula: `${fobGhs} + ${freightGhs} + ${insuranceGhs} + ${otherGhs} = ${cifGhs}`,
+      formula: `${input.cifGhsOverride != null ? cifGhs : fobGhs} + ${freightEstimate.freightGhs} + ${insuranceEstimate.insuranceGhs} + ${otherGhs} = ${cifGhs}`,
       source: "CONFIG",
     },
     {
@@ -141,12 +144,19 @@ export async function runDutyIntelligencePipeline(
   stages.push({
     stage: "VALUE_CHAIN",
     label: "FOB → CIF → Customs Value",
-    output: { fobGhs, freightGhs, insuranceGhs, cifGhs, customsValueGhs },
+    output: {
+      fobGhs,
+      freightGhs: freightEstimate.freightGhs,
+      insuranceGhs: insuranceEstimate.insuranceGhs,
+      cifGhs,
+      customsValueGhs,
+      freightSource: freightEstimate.source,
+      insuranceRate: insuranceEstimate.percentageRate,
+    },
     lineItems: valueLineItems,
-    notes: [],
+    notes: [freightEstimate.basis, insuranceEstimate.basis],
   });
 
-  // Stage 8-10: Duty, VAT, Levy engines
   const taxLineItems = runDutyFormulaEngine({
     rules: config.formulaRules,
     calibrationFactors: config.calibrationFactors,
@@ -174,9 +184,10 @@ export async function runDutyIntelligencePipeline(
   const totalGraTaxesGhs = round2(
     taxLineItems.filter((i) => ["DUTY", "LEVY", "VAT", "FEE"].includes(i.category)).reduce((s, i) => s + i.amountGhs, 0),
   );
+  const estimatedDutyGhs = round2(
+    taxLineItems.filter((i) => i.category === "DUTY" || i.category === "LEVY" || i.category === "VAT").reduce((s, i) => s + i.amountGhs, 0),
+  );
 
-  // Stage 11-13: Port, Shipping Line, Agent engines
-  const shippingLine = config.shippingLines.find((s) => s.code === input.shipping.shippingLineCode);
   const portItems = runChargeEngine({
     templates: config.chargeTemplates,
     category: "PORT",
@@ -188,7 +199,6 @@ export async function runDutyIntelligencePipeline(
     templates: config.chargeTemplates,
     category: "SHIPPING_LINE",
     cifGhs,
-    shippingLineId: shippingLine?.id,
     calibrationFactors: config.calibrationFactors,
     source: "HISTORICAL",
   });
@@ -203,7 +213,7 @@ export async function runDutyIntelligencePipeline(
   allLineItems.push(...portItems, ...shippingItems, ...agentItems);
   stages.push(
     { stage: "PORT_CHARGES", label: "Port Charges Engine", output: {}, lineItems: portItems, notes: [] },
-    { stage: "SHIPPING_LINE", label: "Shipping Line Engine", output: { line: shippingLine?.name }, lineItems: shippingItems, notes: [] },
+    { stage: "SHIPPING_LINE", label: "Shipping Line Engine", output: {}, lineItems: shippingItems, notes: [] },
     { stage: "AGENT_FEES", label: "Agent Cost Engine", output: {}, lineItems: agentItems, notes: [] },
   );
 
@@ -212,13 +222,13 @@ export async function runDutyIntelligencePipeline(
   const agentFeesGhs = round2(sumByCategory(agentItems, ["AGENT"]));
   const totalLandedCostGhs = round2(cifGhs + totalGraTaxesGhs + totalPortChargesGhs + shippingLineChargesGhs + agentFeesGhs);
 
-  // Prediction & confidence
   const similarImports = await findSimilarImports({
     countryConfigId: config.countryConfigId,
     input,
     hsCode: hsResolution.code,
   });
-  const confidence = computeConfidence(similarImports);
+  const confidence = computeConfidence(similarImports, input);
+  const historicalComparison = buildHistoricalComparison({ similarImports, estimatedDutyGhs });
 
   const predictionAdjustments = Object.entries(config.calibrationFactors)
     .filter(([, v]) => v !== 1)
@@ -236,8 +246,8 @@ export async function runDutyIntelligencePipeline(
     lineItems: allLineItems,
     summary: {
       fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
-      freightGhs,
-      insuranceGhs,
+      freightGhs: freightEstimate.freightGhs,
+      insuranceGhs: insuranceEstimate.insuranceGhs,
       cifGhs,
       customsValueGhs,
       totalGraTaxesGhs,
@@ -256,12 +266,18 @@ export async function runDutyIntelligencePipeline(
     },
     vehicleClassification: classification,
     confidence,
+    historicalComparison,
     predictionAdjustments,
     methodologyNote:
-      "Duty Intelligence Engine v1 — all tax rates and charges are loaded from the database configuration. " +
+      "Duty Intelligence Engine V3 — freight and insurance are calculated automatically from the shipping cost matrix and insurance rules. " +
+      "All tax rates and port charges are loaded from the database configuration. " +
       "Estimates are for planning only; authoritative amounts are determined by GRA / ICUMS at clearance. " +
       "Historical verified imports improve prediction accuracy over time.",
   };
+}
+
+export function isPipelineError(r: DutyIntelligenceResult | DutyPipelineError): r is DutyPipelineError {
+  return "code" in r && r.code === "CONFIG_UNAVAILABLE";
 }
 
 export async function saveDutyCalculation(params: {
@@ -270,7 +286,9 @@ export async function saveDutyCalculation(params: {
   createdById?: string;
   status?: "DRAFT" | "SAVED";
 }): Promise<{ id: string; referenceNumber: string }> {
-  const config = await loadCountryConfig(params.input.countryCode);
+  const config = await loadCountryConfigSafe(params.input.countryCode);
+  if (!config) throw new Error("Configuration unavailable");
+
   const { customAlphabet } = await import("nanoid");
   const nanoid = customAlphabet("0123456789ABCDEFGHJKLMNPQRSTUVWXYZ", 8);
   const referenceNumber = `DI-${nanoid()}`;
@@ -290,7 +308,10 @@ export async function saveDutyCalculation(params: {
       similarImportCount: params.result.confidence.similarImportCount,
       totalLandedCostGhs: params.result.summary.totalLandedCostGhs,
       totalGraTaxesGhs: params.result.summary.totalGraTaxesGhs,
-      totalPortChargesGhs: params.result.summary.totalPortChargesGhs + params.result.summary.shippingLineChargesGhs + params.result.summary.agentFeesGhs,
+      totalPortChargesGhs:
+        params.result.summary.totalPortChargesGhs +
+        params.result.summary.shippingLineChargesGhs +
+        params.result.summary.agentFeesGhs,
       cifGhs: params.result.summary.cifGhs,
       customsValueGhs: params.result.summary.customsValueGhs,
       hsCode: params.result.hsCode,

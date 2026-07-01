@@ -1,7 +1,20 @@
 import { prisma } from "@/lib/prisma";
+import { fallbackGlobalCurrencySettings } from "@/lib/currency";
 
-import { getLatestExchangeRate } from "../config-loader";
+import { getLatestExchangeRate, isSupportedFobCurrency } from "../config-loader";
 import type { CalculationLineItem, DutyCalculationInput } from "../types";
+
+/** Approximate GHS rates for currencies not in duty exchange table — updated via admin FX. */
+const FALLBACK_RATES_TO_GHS: Record<string, number> = {
+  USD: 11.65,
+  CNY: 1.7,
+  EUR: 12.8,
+  GBP: 14.9,
+  AED: 3.17,
+  JPY: 0.078,
+  KRW: 0.0087,
+  GHS: 1,
+};
 
 export async function resolveExchangeRate(params: {
   countryConfigId: string;
@@ -42,9 +55,15 @@ export async function resolveExchangeRate(params: {
     };
   }
 
+  if (!isSupportedFobCurrency(fromCurrency)) {
+    throw new Error(`Unsupported currency: ${fromCurrency}`);
+  }
+
   const customs = await getLatestExchangeRate({ countryConfigId, fromCurrency, toCurrency: "GHS" });
   if (customs) {
-    notes.push(`Customs exchange rate: 1 ${fromCurrency} = ${customs.rate} GHS (${customs.source}, ${customs.effectiveDate.toISOString().slice(0, 10)})`);
+    notes.push(
+      `Exchange rate: 1 ${fromCurrency} = ${customs.rate} GHS (${customs.source}, ${customs.effectiveDate.toISOString().slice(0, 10)})`,
+    );
     lineItems.push({
       code: "EXCHANGE_RATE",
       label: `Exchange rate (${fromCurrency} → GHS)`,
@@ -66,22 +85,20 @@ export async function resolveExchangeRate(params: {
     };
   }
 
-  // Fallback to global currency settings
-  const global = await prisma.globalCurrencySettings.findUnique({ where: { id: "default" } });
-  if (!global) throw new Error("No exchange rate available");
+  const global = await prisma.globalCurrencySettings.findUnique({ where: { id: "default" } }).catch(() => null);
+  const settings = global ?? fallbackGlobalCurrencySettings();
 
-  let rate = 1;
-  if (fromCurrency === "USD") rate = Number(global.usdToGhs);
-  else if (fromCurrency === "CNY" || fromCurrency === "RMB") rate = 1 / Number(global.rmbToGhs);
-  else throw new Error(`Unsupported currency: ${fromCurrency}`);
+  let rate = FALLBACK_RATES_TO_GHS[fromCurrency] ?? 1;
+  if (fromCurrency === "USD") rate = Number(settings.usdToGhs);
+  else if (fromCurrency === "CNY") rate = 1 / Number(settings.rmbToGhs);
 
-  notes.push(`Global currency settings fallback: 1 ${fromCurrency} = ${rate} GHS`);
+  notes.push(`Cached exchange rate fallback: 1 ${fromCurrency} = ${rate} GHS`);
   lineItems.push({
     code: "EXCHANGE_RATE",
     label: `Exchange rate (${fromCurrency} → GHS)`,
     category: "FOB",
     amountGhs: rate,
-    basis: "GlobalCurrencySettings",
+    basis: "GlobalCurrencySettings / cached fallback",
     formula: `1 ${fromCurrency} × ${rate}`,
     rate,
     rateType: "EXCHANGE",
@@ -92,7 +109,7 @@ export async function resolveExchangeRate(params: {
     rate,
     source: "GLOBAL_CURRENCY",
     fromCurrency,
-    effectiveDate: global.updatedAt.toISOString(),
+    effectiveDate: settings.updatedAt.toISOString(),
     lineItems,
     notes,
   };
@@ -100,18 +117,6 @@ export async function resolveExchangeRate(params: {
 
 export function computeFobGhs(fobAmount: number, rate: number): number {
   return Math.round(fobAmount * rate * 100) / 100;
-}
-
-export function computeFreightInsurance(input: DutyCalculationInput): {
-  freightGhs: number;
-  insuranceGhs: number;
-  otherGhs: number;
-} {
-  return {
-    freightGhs: input.shipping.freightGhs ?? 0,
-    insuranceGhs: input.shipping.insuranceGhs ?? 0,
-    otherGhs: input.shipping.otherShippingChargesGhs ?? 0,
-  };
 }
 
 export function computeCif(params: {
@@ -126,6 +131,5 @@ export function computeCif(params: {
 }
 
 export function computeCustomsValue(cifGhs: number): number {
-  // Ghana: customs value typically equals CIF for vehicle imports
   return cifGhs;
 }

@@ -260,7 +260,7 @@ export default async function CarDetailPage(props: Props) {
                     fuelType: car.engineType,
                     fobAmount: Number(car.basePriceAmount) > 0 ? Number(car.basePriceAmount) : listPriceAsCifHintGhs,
                     fobCurrency: car.basePriceCurrency || "USD",
-                    seaShippingFeeGhs: car.seaShippingFeeGhs != null ? Number(car.seaShippingFeeGhs) : undefined,
+                    countryOfOrigin: car.sourceType === "IN_CHINA" ? "CHINA" : "CHINA",
                   }}
                 />
               </div>

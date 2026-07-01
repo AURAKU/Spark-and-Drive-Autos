@@ -154,6 +154,46 @@ const SHIPPING_LINE_CHARGES = [
   { subcategory: "RELEASE", label: "Release Fees", amountGhs: 290 },
 ];
 
+/** V3 shipping cost matrix — origin × vehicle type × method (GHS freight to Tema). */
+const SHIPPING_COST_MATRIX: Array<{
+  originCountry: "CHINA" | "JAPAN" | "USA" | "UK" | "GERMANY" | "KOREA" | "DUBAI" | "SINGAPORE" | "THAILAND" | "MALAYSIA";
+  vehicleCategory?: "SUV" | "SEDAN" | "PICKUP" | "TRUCK" | "BUS" | "VAN";
+  shippingMethod: "SEA_FREIGHT" | "CONTAINER" | "RORO" | "AIR_FREIGHT";
+  freightGhs: number;
+  transitDays: number;
+  containerType?: string;
+}> = [
+  // China
+  { originCountry: "CHINA", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 4200, transitDays: 35 },
+  { originCountry: "CHINA", vehicleCategory: "SEDAN", shippingMethod: "SEA_FREIGHT", freightGhs: 3800, transitDays: 35 },
+  { originCountry: "CHINA", vehicleCategory: "SUV", shippingMethod: "CONTAINER", freightGhs: 4800, transitDays: 32, containerType: "40HC" },
+  { originCountry: "CHINA", vehicleCategory: "SEDAN", shippingMethod: "RORO", freightGhs: 3400, transitDays: 38 },
+  { originCountry: "CHINA", vehicleCategory: "SUV", shippingMethod: "AIR_FREIGHT", freightGhs: 18500, transitDays: 7 },
+  // Japan
+  { originCountry: "JAPAN", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 4800, transitDays: 42 },
+  { originCountry: "JAPAN", vehicleCategory: "SEDAN", shippingMethod: "RORO", freightGhs: 3600, transitDays: 40 },
+  { originCountry: "JAPAN", vehicleCategory: "SEDAN", shippingMethod: "SEA_FREIGHT", freightGhs: 4200, transitDays: 42 },
+  // USA
+  { originCountry: "USA", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 7200, transitDays: 28 },
+  { originCountry: "USA", vehicleCategory: "SEDAN", shippingMethod: "RORO", freightGhs: 6200, transitDays: 30 },
+  { originCountry: "USA", vehicleCategory: "PICKUP", shippingMethod: "CONTAINER", freightGhs: 8500, transitDays: 28, containerType: "40HC" },
+  // UK / Germany
+  { originCountry: "UK", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 6800, transitDays: 25 },
+  { originCountry: "GERMANY", vehicleCategory: "SEDAN", shippingMethod: "SEA_FREIGHT", freightGhs: 6400, transitDays: 26 },
+  // Korea / Dubai / Singapore / Thailand / Malaysia
+  { originCountry: "KOREA", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 4600, transitDays: 38 },
+  { originCountry: "DUBAI", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 5200, transitDays: 18 },
+  { originCountry: "SINGAPORE", vehicleCategory: "SEDAN", shippingMethod: "SEA_FREIGHT", freightGhs: 3900, transitDays: 22 },
+  { originCountry: "THAILAND", vehicleCategory: "SUV", shippingMethod: "SEA_FREIGHT", freightGhs: 4000, transitDays: 24 },
+  { originCountry: "MALAYSIA", vehicleCategory: "SEDAN", shippingMethod: "SEA_FREIGHT", freightGhs: 3700, transitDays: 26 },
+];
+
+const INSURANCE_RULES = [
+  { percentageRate: 0.015, notes: "Default marine cargo insurance — 1.5% of (FOB + Freight)" },
+  { originCountry: "USA" as const, shippingMethod: "AIR_FREIGHT" as const, percentageRate: 0.025, notes: "Higher rate for air freight from USA" },
+  { shippingMethod: "AIR_FREIGHT" as const, percentageRate: 0.022, notes: "Air freight insurance premium" },
+];
+
 export async function seedDutyIntelligence(prisma: PrismaClient) {
   const country = await prisma.dutyCountryConfig.upsert({
     where: { countryCode: "GH" },
@@ -292,6 +332,82 @@ export async function seedDutyIntelligence(prisma: PrismaClient) {
           },
         });
       }
+    }
+  }
+
+  for (const row of SHIPPING_COST_MATRIX) {
+    const exists = await prisma.dutyShippingCostMatrix.findFirst({
+      where: {
+        countryConfigId: country.id,
+        originCountry: row.originCountry,
+        vehicleCategory: row.vehicleCategory ?? null,
+        shippingMethod: row.shippingMethod,
+        containerType: row.containerType ?? null,
+      },
+    });
+    if (!exists) {
+      await prisma.dutyShippingCostMatrix.create({
+        data: {
+          countryConfigId: country.id,
+          originCountry: row.originCountry,
+          vehicleCategory: row.vehicleCategory,
+          shippingMethod: row.shippingMethod,
+          containerType: row.containerType,
+          freightGhs: row.freightGhs,
+          transitDays: row.transitDays,
+          active: true,
+        },
+      });
+    }
+  }
+
+  for (const rule of INSURANCE_RULES) {
+    const exists = await prisma.dutyInsuranceRule.findFirst({
+      where: {
+        countryConfigId: country.id,
+        originCountry: rule.originCountry ?? null,
+        shippingMethod: rule.shippingMethod ?? null,
+        percentageRate: rule.percentageRate,
+      },
+    });
+    if (!exists) {
+      await prisma.dutyInsuranceRule.create({
+        data: {
+          countryConfigId: country.id,
+          originCountry: rule.originCountry,
+          shippingMethod: rule.shippingMethod,
+          percentageRate: rule.percentageRate,
+          minimumGhs: 150,
+          active: true,
+          notes: rule.notes,
+        },
+      });
+    }
+  }
+
+  // Additional exchange rates for V3 currencies
+  const extraRates: Array<[string, number]> = [
+    ["EUR", 12.8],
+    ["GBP", 14.9],
+    ["AED", 3.17],
+    ["JPY", 0.078],
+    ["KRW", 0.0087],
+  ];
+  for (const [from, rate] of extraRates) {
+    const exists = await prisma.dutyExchangeRate.findFirst({
+      where: { countryConfigId: country.id, fromCurrency: from, source: "BANK_OF_GHANA" },
+    });
+    if (!exists) {
+      await prisma.dutyExchangeRate.create({
+        data: {
+          countryConfigId: country.id,
+          fromCurrency: from,
+          toCurrency: "GHS",
+          rate,
+          source: "BANK_OF_GHANA",
+          effectiveDate: today,
+        },
+      });
     }
   }
 

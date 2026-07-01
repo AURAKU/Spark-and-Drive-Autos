@@ -1,8 +1,8 @@
 import { EngineType } from "@prisma/client";
 import { z } from "zod";
 
-import { runDutyIntelligencePipeline } from "@/lib/duty-intelligence/pipeline";
-import type { DutyCalculationInput } from "@/lib/duty-intelligence/types";
+import { isPipelineError, runDutyIntelligencePipeline } from "@/lib/duty-intelligence/pipeline";
+import type { DutyCalculationInput, DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
 
 import { DUTY_FORMULA_VERSION } from "./formula-version";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
@@ -80,14 +80,18 @@ export type DutyEstimateResult = {
   totalGhs: number;
   methodologyNote: string;
   /** Full intelligence result when available */
-  intelligence?: Awaited<ReturnType<typeof runDutyIntelligencePipeline>>;
+  intelligence?: DutyIntelligenceResult;
 };
 
 function toLegacyInput(input: DutyEstimateInput): DutyCalculationInput {
   return {
     countryCode: "GH",
     vehicle: {
+      manufacturer: "Unknown",
+      model: "Vehicle",
       year: input.vehicleYear,
+      countryOfOrigin: "CHINA",
+      vehicleCategory: "SEDAN",
       fuelType: input.powertrain,
       engineCc: input.engineCc,
       applyEvDutyWaiver: input.applyEvDutyWaiver,
@@ -106,7 +110,11 @@ export async function computeDutyEstimateAsync(
   input: DutyEstimateInput,
   referenceYear = new Date().getFullYear(),
 ): Promise<DutyEstimateResult> {
-  const intelligence = await runDutyIntelligencePipeline(toLegacyInput(input), referenceYear);
+  const pipelineResult = await runDutyIntelligencePipeline(toLegacyInput(input), referenceYear);
+  if (isPipelineError(pipelineResult)) {
+    return computeDutyEstimate(input, referenceYear);
+  }
+  const intelligence = pipelineResult;
   const age = Math.max(0, referenceYear - input.vehicleYear);
 
   const taxLines = intelligence.lineItems.filter((l: { category: string }) =>

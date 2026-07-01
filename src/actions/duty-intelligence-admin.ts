@@ -5,11 +5,16 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache";
-import { loadCountryConfig } from "@/lib/duty-intelligence/config-loader";
+import {
+  checkDutyConfigHealth,
+  initializeGhanaDutyConfig,
+} from "@/lib/duty-intelligence/config-bootstrap";
+import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { getDutyAnalytics } from "@/lib/duty-intelligence/analytics";
 import { processDocumentOcr } from "@/lib/duty-intelligence/ocr";
-import { runDutyIntelligencePipeline, saveDutyCalculation } from "@/lib/duty-intelligence/pipeline";
+import { isPipelineError, runDutyIntelligencePipeline, saveDutyCalculation } from "@/lib/duty-intelligence/pipeline";
 import { recalibrateFromVerifiedImport } from "@/lib/duty-intelligence/self-learning";
+import type { DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
 import { dutyCalculationInputSchema } from "@/lib/duty-intelligence/types";
 import { prisma } from "@/lib/prisma";
 
@@ -54,20 +59,21 @@ const verifiedImportSchema = z.object({
 
 export async function calculateDutyIntelligenceAction(
   input: z.infer<typeof dutyCalculationInputSchema>,
-): Promise<{ ok: true; result: Awaited<ReturnType<typeof runDutyIntelligencePipeline>> } | { ok: false; error: string }> {
+): Promise<{ ok: true; result: DutyIntelligenceResult } | { ok: false; error: string }> {
   try {
     const parsed = dutyCalculationInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid calculation input." };
     const result = await runDutyIntelligencePipeline(parsed.data);
+    if (isPipelineError(result)) return { ok: false, error: result.message };
     return { ok: true, result };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Calculation failed." };
+    return { ok: false, error: "Calculation failed. Please try again." };
   }
 }
 
 export async function saveDutyCalculationAction(
   input: z.infer<typeof dutyCalculationInputSchema>,
-  result: Awaited<ReturnType<typeof runDutyIntelligencePipeline>>,
+  result: DutyIntelligenceResult,
 ): Promise<DutyIntelligenceActionState> {
   const admin = await requireAdmin();
   try {
@@ -161,7 +167,8 @@ export async function addExchangeRateAction(
   });
   if (!parsed.success) return { error: "Invalid exchange rate." };
 
-  const config = await loadCountryConfig("GH");
+  const config = await loadCountryConfigSafe("GH");
+  if (!config) return { error: "Ghana duty configuration not initialized." };
   await prisma.dutyExchangeRate.create({
     data: {
       countryConfigId: config.countryConfigId,
@@ -188,7 +195,8 @@ export async function createVerifiedImportAction(
   const parsed = verifiedImportSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: "Invalid verified import data." };
 
-  const config = await loadCountryConfig("GH");
+  const config = await loadCountryConfigSafe("GH");
+  if (!config) return { error: "Ghana duty configuration not initialized." };
   const row = await prisma.dutyVerifiedImport.create({
     data: {
       countryConfigId: config.countryConfigId,
@@ -235,10 +243,133 @@ export async function runOcrOnDocumentAction(
   return { ok: true, extracted };
 }
 
+export async function initializeGhanaDutyConfigAction(): Promise<DutyIntelligenceActionState> {
+  await requireAdmin();
+  const result = await initializeGhanaDutyConfig();
+  if (!result.ok) return { error: result.error };
+  await dutyCacheInvalidate("duty:config");
+  revalidatePath("/admin/duty-intelligence");
+  return { ok: true };
+}
+
+const shippingCostSchema = z.object({
+  id: z.string().cuid(),
+  freightGhs: z.coerce.number().nonnegative(),
+  transitDays: z.coerce.number().int().optional(),
+});
+
+export async function updateShippingCostAction(
+  _prev: DutyIntelligenceActionState | null,
+  formData: FormData,
+): Promise<DutyIntelligenceActionState> {
+  const admin = await requireAdmin();
+  const parsed = shippingCostSchema.safeParse({
+    id: formData.get("id"),
+    freightGhs: formData.get("freightGhs"),
+    transitDays: formData.get("transitDays") || undefined,
+  });
+  if (!parsed.success) return { error: "Invalid shipping cost update." };
+
+  const existing = await prisma.dutyShippingCostMatrix.findUnique({ where: { id: parsed.data.id } });
+  if (!existing) return { error: "Shipping cost row not found." };
+
+  await prisma.dutyShippingCostMatrix.update({
+    where: { id: parsed.data.id },
+    data: {
+      freightGhs: parsed.data.freightGhs,
+      transitDays: parsed.data.transitDays,
+    },
+  });
+  await prisma.dutyIntelligenceAuditLog.create({
+    data: {
+      actorId: admin.user.id,
+      action: "SHIPPING_COST_UPDATE",
+      entityType: "DutyShippingCostMatrix",
+      entityId: existing.id,
+      beforeJson: { freightGhs: existing.freightGhs, transitDays: existing.transitDays },
+      afterJson: { freightGhs: parsed.data.freightGhs, transitDays: parsed.data.transitDays },
+    },
+  });
+  await dutyCacheInvalidate("duty:config");
+  revalidatePath("/admin/duty-intelligence");
+  return { ok: true };
+}
+
+const insuranceRuleSchema = z.object({
+  id: z.string().cuid(),
+  percentageRate: z.coerce.number().min(0).max(1),
+  minimumGhs: z.coerce.number().nonnegative().optional(),
+});
+
+export async function updateInsuranceRuleAction(
+  _prev: DutyIntelligenceActionState | null,
+  formData: FormData,
+): Promise<DutyIntelligenceActionState> {
+  const admin = await requireAdmin();
+  const parsed = insuranceRuleSchema.safeParse({
+    id: formData.get("id"),
+    percentageRate: formData.get("percentageRate"),
+    minimumGhs: formData.get("minimumGhs") || undefined,
+  });
+  if (!parsed.success) return { error: "Invalid insurance rule update." };
+
+  const existing = await prisma.dutyInsuranceRule.findUnique({ where: { id: parsed.data.id } });
+  if (!existing) return { error: "Insurance rule not found." };
+
+  await prisma.dutyInsuranceRule.update({
+    where: { id: parsed.data.id },
+    data: {
+      percentageRate: parsed.data.percentageRate,
+      minimumGhs: parsed.data.minimumGhs,
+    },
+  });
+  await prisma.dutyIntelligenceAuditLog.create({
+    data: {
+      actorId: admin.user.id,
+      action: "INSURANCE_RULE_UPDATE",
+      entityType: "DutyInsuranceRule",
+      entityId: existing.id,
+      beforeJson: { percentageRate: existing.percentageRate, minimumGhs: existing.minimumGhs },
+      afterJson: { percentageRate: parsed.data.percentageRate, minimumGhs: parsed.data.minimumGhs },
+    },
+  });
+  await dutyCacheInvalidate("duty:config");
+  revalidatePath("/admin/duty-intelligence");
+  return { ok: true };
+}
+
 export async function getDutyIntelligenceDashboardData() {
   await requireAdmin();
-  const config = await loadCountryConfig("GH");
-  const [analytics, formulaRules, hsCodes, exchangeRates, shippingLines, verifiedImports, calculations] =
+  const health = await checkDutyConfigHealth("GH");
+  const config = await loadCountryConfigSafe("GH");
+
+  if (!config) {
+    return {
+      config: null,
+      health,
+      analytics: {
+        totalCalculations: 0,
+        totalVerifiedImports: 0,
+        avgLandedCostGhs: 0,
+        avgPredictionErrorPct: null,
+        avgClearanceDays: null,
+        monthlyImports: [],
+        topVehicles: [],
+        topShippingLines: [],
+        exchangeRateTrend: [],
+      },
+      formulaRules: [],
+      hsCodes: [],
+      exchangeRates: [],
+      shippingLines: [],
+      shippingCostMatrix: [],
+      insuranceRules: [],
+      verifiedImports: [],
+      calculations: [],
+    };
+  }
+
+  const [analytics, formulaRules, hsCodes, exchangeRates, shippingLines, shippingCostMatrix, insuranceRules, verifiedImports, calculations] =
     await Promise.all([
       getDutyAnalytics(config.countryConfigId),
       prisma.dutyFormulaRule.findMany({
@@ -257,6 +388,14 @@ export async function getDutyIntelligenceDashboardData() {
       prisma.dutyShippingLine.findMany({
         where: { countryConfigId: config.countryConfigId, active: true },
         include: { chargeTemplates: { where: { active: true } } },
+      }),
+      prisma.dutyShippingCostMatrix.findMany({
+        where: { countryConfigId: config.countryConfigId, active: true },
+        orderBy: [{ originCountry: "asc" }, { shippingMethod: "asc" }],
+      }),
+      prisma.dutyInsuranceRule.findMany({
+        where: { countryConfigId: config.countryConfigId, active: true },
+        orderBy: { createdAt: "asc" },
       }),
       prisma.dutyVerifiedImport.findMany({
         where: { countryConfigId: config.countryConfigId },
@@ -281,11 +420,14 @@ export async function getDutyIntelligenceDashboardData() {
 
   return {
     config,
+    health,
     analytics,
     formulaRules,
     hsCodes,
     exchangeRates,
     shippingLines,
+    shippingCostMatrix,
+    insuranceRules,
     verifiedImports,
     calculations,
   };

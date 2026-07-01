@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useFormState } from "react-dom";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 import {
   addExchangeRateAction,
   createVerifiedImportAction,
+  initializeGhanaDutyConfigAction,
   updateFormulaRuleAction,
+  updateInsuranceRuleAction,
+  updateShippingCostAction,
   type DutyIntelligenceActionState,
 } from "@/actions/duty-intelligence-admin";
 import { formatMoney } from "@/lib/format";
@@ -16,9 +20,11 @@ type DashboardData = Awaited<ReturnType<typeof import("@/actions/duty-intelligen
 const TABS = [
   "Dashboard",
   "Formulas",
+  "Shipping Costs",
+  "Insurance Rules",
   "Exchange Rates",
   "HS Codes",
-  "Shipping Lines",
+  "Port Charges",
   "Verified Imports",
   "Calculations",
 ] as const;
@@ -37,14 +43,57 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 
 export function AdminDutyIntelligenceClient({ initialData }: { initialData: DashboardData }) {
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const [initPending, startInit] = useTransition();
+  const [initMsg, setInitMsg] = useState<string | null>(null);
   const [formulaState, formulaAction] = useFormState(updateFormulaRuleAction, {} as DutyIntelligenceActionState);
   const [rateState, rateAction] = useFormState(addExchangeRateAction, {} as DutyIntelligenceActionState);
   const [importState, importAction] = useFormState(createVerifiedImportAction, {} as DutyIntelligenceActionState);
+  const [shippingState, shippingAction] = useFormState(updateShippingCostAction, {} as DutyIntelligenceActionState);
+  const [insuranceState, insuranceAction] = useFormState(updateInsuranceRuleAction, {} as DutyIntelligenceActionState);
 
-  const { analytics } = initialData;
+  const { analytics, health } = initialData;
+  const configReady = health?.isReady ?? initialData.config != null;
+
+  function handleInitialize() {
+    setInitMsg(null);
+    startInit(async () => {
+      const result = await initializeGhanaDutyConfigAction();
+      if (result.ok) {
+        setInitMsg("Ghana duty configuration initialized. Refreshing…");
+        window.location.reload();
+      } else {
+        setInitMsg(result.error ?? "Initialization failed");
+      }
+    });
+  }
 
   return (
     <div className="space-y-6">
+      {!configReady && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-900 dark:text-amber-200">Duty configuration is not ready</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Missing: {health?.missing.join(", ") ?? "Ghana configuration"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleInitialize}
+              disabled={initPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {initPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Initialize Ghana Duty Configuration
+            </button>
+          </div>
+          {initMsg && <p className="mt-2 text-sm text-muted-foreground">{initMsg}</p>}
+        </div>
+      )}
       <nav className="flex flex-wrap gap-1 rounded-xl border border-border bg-muted/30 p-1 dark:border-white/10">
         {TABS.map((t) => (
           <button
@@ -241,12 +290,109 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
         </div>
       )}
 
-      {tab === "Shipping Lines" && (
+      {tab === "Shipping Costs" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Freight rates by origin country, vehicle type, and shipping method. Used automatically by the V3 freight engine.
+          </p>
+          {shippingState.error && <p className="text-sm text-destructive">{shippingState.error}</p>}
+          {shippingState.ok && <p className="text-sm text-emerald-600">Shipping cost updated.</p>}
+          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                  <th className="p-3">Origin</th>
+                  <th className="p-3">Vehicle</th>
+                  <th className="p-3">Method</th>
+                  <th className="p-3">Freight (GHS)</th>
+                  <th className="p-3">Transit</th>
+                  <th className="p-3">Update</th>
+                </tr>
+              </thead>
+              <tbody>
+                {initialData.shippingCostMatrix.map((row) => (
+                  <tr key={row.id} className="border-b border-border/50">
+                    <td className="p-3">{row.originCountry}</td>
+                    <td className="p-3">{row.vehicleCategory ?? "All"}</td>
+                    <td className="p-3">{row.shippingMethod.replace(/_/g, " ")}</td>
+                    <td className="p-3">{formatMoney(Number(row.freightGhs))}</td>
+                    <td className="p-3">{row.transitDays != null ? `${row.transitDays} days` : "—"}</td>
+                    <td className="p-3">
+                      <form action={shippingAction} className="flex items-center gap-2">
+                        <input type="hidden" name="id" value={row.id} />
+                        <input
+                          name="freightGhs"
+                          defaultValue={String(row.freightGhs)}
+                          className="w-24 rounded border border-border px-2 py-1 text-xs dark:border-white/15 dark:bg-black/40"
+                        />
+                        <button type="submit" className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">Save</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+                {initialData.shippingCostMatrix.length === 0 && (
+                  <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">No shipping costs — initialize configuration first.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === "Insurance Rules" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Insurance = (FOB + Freight) × percentage rate. Minimum GHS floor applies when configured.
+          </p>
+          {insuranceState.error && <p className="text-sm text-destructive">{insuranceState.error}</p>}
+          {insuranceState.ok && <p className="text-sm text-emerald-600">Insurance rule updated.</p>}
+          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                  <th className="p-3">Origin</th>
+                  <th className="p-3">Method</th>
+                  <th className="p-3">Rate %</th>
+                  <th className="p-3">Min GHS</th>
+                  <th className="p-3">Update</th>
+                </tr>
+              </thead>
+              <tbody>
+                {initialData.insuranceRules.map((rule) => (
+                  <tr key={rule.id} className="border-b border-border/50">
+                    <td className="p-3">{rule.originCountry ?? "All"}</td>
+                    <td className="p-3">{rule.shippingMethod?.replace(/_/g, " ") ?? "All"}</td>
+                    <td className="p-3">{(Number(rule.percentageRate) * 100).toFixed(2)}%</td>
+                    <td className="p-3">{rule.minimumGhs != null ? formatMoney(Number(rule.minimumGhs)) : "—"}</td>
+                    <td className="p-3">
+                      <form action={insuranceAction} className="flex items-center gap-2">
+                        <input type="hidden" name="id" value={rule.id} />
+                        <input
+                          name="percentageRate"
+                          defaultValue={String(rule.percentageRate)}
+                          step="0.0001"
+                          className="w-20 rounded border border-border px-2 py-1 text-xs dark:border-white/15 dark:bg-black/40"
+                        />
+                        <button type="submit" className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">Save</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+                {initialData.insuranceRules.length === 0 && (
+                  <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">No insurance rules — initialize configuration first.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === "Port Charges" && (
         <div className="grid gap-4 sm:grid-cols-2">
           {initialData.shippingLines.map((line) => (
             <div key={line.id} className="rounded-xl border border-border p-4 dark:border-white/10">
               <p className="font-semibold">{line.name}</p>
-              <p className="text-xs text-muted-foreground">{line.code}</p>
+              <p className="text-xs text-muted-foreground">{line.code} · Shipping line charges</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {line.chargeTemplates.map((c) => (
                   <li key={c.id} className="flex justify-between">
@@ -259,7 +405,6 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
           ))}
         </div>
       )}
-
       {tab === "Verified Imports" && (
         <div className="space-y-4">
           {importState.error && <p className="text-sm text-destructive">{importState.error}</p>}

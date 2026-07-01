@@ -1,16 +1,33 @@
 import type { DutyCalculationInput } from "@/lib/duty-intelligence/types";
 import type { LoadedHsCode } from "@/lib/duty-intelligence/types";
 
+function engineCategoryProfile(input: DutyCalculationInput): string {
+  const { fuelType, vehicleCategory, engineCc } = input.vehicle;
+  if (fuelType === "ELECTRIC") return "EV Profile";
+  if (fuelType === "HYBRID" || fuelType === "PLUGIN_HYBRID") return "Hybrid Profile";
+  if (vehicleCategory === "PICKUP") return "Commercial Vehicle Profile";
+  if (vehicleCategory === "TRUCK") return "Heavy Duty Profile";
+  if (vehicleCategory === "BUS") return "Passenger Transport Profile";
+  if (engineCc != null) {
+    if (engineCc <= 1500) return "Category A (≤1500cc)";
+    if (engineCc <= 3000) return "Category B (1500–3000cc)";
+    return "Category C (>3000cc)";
+  }
+  return "Standard Passenger Profile";
+}
+
 export function classifyVehicle(input: DutyCalculationInput, referenceYear = new Date().getFullYear()) {
   const ageYears = Math.max(0, referenceYear - input.vehicle.year);
   const commercial =
-    input.vehicle.isCommercial ??
-    (input.vehicle.vehicleCategory === "TRUCK" || input.vehicle.vehicleCategory === "BUS");
+    input.vehicle.vehicleCategory === "TRUCK" ||
+    input.vehicle.vehicleCategory === "BUS" ||
+    input.vehicle.vehicleCategory === "PICKUP";
   return {
-    category: input.vehicle.vehicleCategory ?? null,
+    category: input.vehicle.vehicleCategory,
     ageYears,
     commercial,
     fuelType: input.vehicle.fuelType,
+    profile: engineCategoryProfile(input),
   };
 }
 
@@ -30,7 +47,6 @@ export function resolveHsCode(params: {
 
   const { input, hsCodes, classification } = params;
   const candidates = hsCodes.filter((h) => {
-    // HS codes in DB may have metadata — match via description keywords when structured fields absent
     const desc = h.description.toLowerCase();
     if (classification.commercial && desc.includes("commercial")) return true;
     if (input.vehicle.fuelType === "ELECTRIC" && (desc.includes("electric") || h.hsCode.startsWith("8703.80"))) return true;
@@ -57,7 +73,6 @@ export function resolveHsCode(params: {
     return { code: best.hsCode, description: best.description, method: "AUTO_CLASSIFICATION" };
   }
 
-  // Fallback by fuel type
   if (input.vehicle.fuelType === "ELECTRIC") {
     return { code: "8703.80", description: "Electric passenger vehicles (fallback)", method: "FUEL_TYPE_FALLBACK" };
   }
