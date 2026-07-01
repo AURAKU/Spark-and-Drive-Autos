@@ -18,6 +18,7 @@ const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin/payments/intelligence", label: "Payment intelligence" },
   { href: "/admin/shipping", label: "Shipping & Delivery Tracking" },
   { href: "/admin/duty", label: "Duty Tracking" },
+  { href: "/admin/duty-intelligence", label: "Duty Intelligence" },
   { href: "/admin/security", label: "Security Surveillance" },
   { href: "/admin/settings/currency", label: "Exchange Rates" },
   { href: "/admin/legal", label: "Legal Controls" },

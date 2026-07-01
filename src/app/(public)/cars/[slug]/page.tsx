@@ -6,7 +6,7 @@ import { CarFavoriteButton } from "@/components/cars/car-favorite-button";
 import { CarGallery } from "@/components/cars/car-gallery";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
 import { LazyVideo } from "@/components/media/lazy-video";
-import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
+import { DutyIntelligenceCalculator } from "@/components/duty/duty-intelligence-calculator";
 import { InquiryPanel } from "@/components/inquiry/inquiry-panel";
 import { SharePageButton } from "@/components/sharing/share-page-button";
 import { Badge } from "@/components/ui/badge";
@@ -249,11 +249,19 @@ export default async function CarDetailPage(props: Props) {
                 <span className="font-medium text-foreground">non-CIF</span> placeholder only. Adjust to the valuation you will declare.
               </p>
               <div className="mt-4">
-                <DutyCalculatorPanel
-                  defaultYear={car.year}
-                  defaultCifGhs={listPriceAsCifHintGhs}
-                  defaultPowertrain={car.engineType}
+                <DutyIntelligenceCalculator
                   compact
+                  prefill={{
+                    carId: car.id,
+                    manufacturer: car.brand,
+                    model: car.model,
+                    year: car.year,
+                    vin: car.vin ?? undefined,
+                    fuelType: car.engineType,
+                    fobAmount: Number(car.basePriceAmount) > 0 ? Number(car.basePriceAmount) : listPriceAsCifHintGhs,
+                    fobCurrency: car.basePriceCurrency || "USD",
+                    seaShippingFeeGhs: car.seaShippingFeeGhs != null ? Number(car.seaShippingFeeGhs) : undefined,
+                  }}
                 />
               </div>
             </div>

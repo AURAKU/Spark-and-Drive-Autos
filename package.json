@@ -26,6 +26,7 @@
     "validate:full": "npm run validate && npm run build",
     "env:validate:prod": "node scripts/validate-env.mjs",
     "test:parts-finder": "tsx --test tests/parts-finder/*.test.ts",
+    "test:duty": "tsx --test tests/duty/*.test.ts",
     "start": "node scripts/start.mjs",
     "worker:parts-finder": "tsx src/workers/parts-finder-worker.ts",
     "docker:up": "docker compose up -d --wait",
