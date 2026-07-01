@@ -9,6 +9,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      AUTH_SECRET: ci-placeholder-auth-secret-min-32-chars!!
+      NEXTAUTH_SECRET: ci-placeholder-auth-secret-min-32-chars!!
     steps:
       - name: Checkout
         uses: actions/checkout@v4

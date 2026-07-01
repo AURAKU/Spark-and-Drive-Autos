@@ -2,7 +2,6 @@ import type {
   DutyChargeCategory,
   DutyCountryCode,
   DutyVehicleCategory,
-  EngineType,
 } from "@prisma/client";
 import { EngineType as EngineTypeEnum } from "@prisma/client";
 import { z } from "zod";

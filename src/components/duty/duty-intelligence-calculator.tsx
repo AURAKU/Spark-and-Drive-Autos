@@ -64,13 +64,6 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave }: Props
   const [expanded, setExpanded] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [shippingLines, setShippingLines] = useState<{ code: string; name: string }[]>([]);
-
-  useEffect(() => {
-    fetch("/api/duty-intelligence/exchange-rates?from=USD")
-      .then((r) => r.json())
-      .catch(() => null);
-  }, []);
 
   useEffect(() => {
     if (prefill?.fuelType) setFuelType(prefill.fuelType);
@@ -189,8 +182,16 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave }: Props
           <input value={model} onChange={(e) => setModel(e.target.value)} className={inputCls} placeholder="RAV4" />
         </label>
         <label className="block text-xs text-muted-foreground">
+          Trim
+          <input value={trim} onChange={(e) => setTrim(e.target.value)} className={inputCls} placeholder="XLE Premium" />
+        </label>
+        <label className="block text-xs text-muted-foreground">
           Year
           <input value={year} onChange={(e) => setYear(e.target.value)} inputMode="numeric" className={inputCls} />
+        </label>
+        <label className="block text-xs text-muted-foreground">
+          VIN (optional)
+          <input value={vin} onChange={(e) => setVin(e.target.value)} className={inputCls} placeholder="17-character VIN" />
         </label>
         <label className="block text-xs text-muted-foreground">
           Vehicle type

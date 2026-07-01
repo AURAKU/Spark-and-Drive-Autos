@@ -15,7 +15,7 @@ export type DutyAnalyticsSnapshot = {
 };
 
 export async function getDutyAnalytics(countryConfigId: string): Promise<DutyAnalyticsSnapshot> {
-  const [calcCount, verifiedCount, verified, calculations, rates] = await Promise.all([
+  const [calcCount, verifiedCount, verified, rates] = await Promise.all([
     prisma.dutyCalculation.count({ where: { countryConfigId, status: "SAVED" } }),
     prisma.dutyVerifiedImport.count({ where: { countryConfigId, status: "VERIFIED" } }),
     prisma.dutyVerifiedImport.findMany({
@@ -34,12 +34,6 @@ export async function getDutyAnalytics(countryConfigId: string): Promise<DutyAna
       },
       orderBy: { verifiedAt: "desc" },
       take: 500,
-    }),
-    prisma.dutyCalculation.findMany({
-      where: { countryConfigId },
-      select: { totalLandedCostGhs: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 200,
     }),
     prisma.dutyExchangeRate.findMany({
       where: { countryConfigId, fromCurrency: "USD", toCurrency: "GHS" },

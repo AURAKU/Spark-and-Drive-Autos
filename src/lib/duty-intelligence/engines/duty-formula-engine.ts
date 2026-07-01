@@ -128,7 +128,7 @@ export function runDutyFormulaEngine(params: {
   for (const rule of dutyRules) {
     if (rule.code === "VAT") continue; // VAT computed after levies
 
-    const { rate, note } = resolveRate(rule, ctx);
+    const { rate } = resolveRate(rule, ctx);
     const basis = basisAmount(rule, ctx);
     let amount = rule.rateType === "FIXED" ? rule.rateValue : round2(basis * rate);
     const calFactor = params.calibrationFactors[rule.code] ?? 1;

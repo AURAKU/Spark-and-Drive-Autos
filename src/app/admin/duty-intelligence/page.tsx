@@ -8,6 +8,8 @@ export const metadata = {
   title: "Duty Intelligence Center | Admin",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDutyIntelligencePage() {
   const data = await getDutyIntelligenceDashboardData();
 
