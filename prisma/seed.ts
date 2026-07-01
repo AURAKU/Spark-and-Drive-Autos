@@ -14,6 +14,8 @@ import {
 } from "@prisma/client";
 import { hash } from "bcryptjs";
 
+import { seedDutyIntelligence } from "./seed-duty-intelligence";
+
 const prisma = new PrismaClient();
 
 /** Local bundled assets only — avoids brittle upstream hotlinks (404 spam in production logs). */
@@ -403,6 +405,9 @@ async function main() {
       });
     }
   });
+
+  await seedDutyIntelligence(prisma);
+  console.log("Duty Intelligence Engine seeded (Ghana config, formulas, HS codes, shipping lines).");
 
   console.log("Seed complete. Demo admin:", "admin@sparkdriveautos.com / DemoAdmin2026!");
   console.log("Demo customer:", "customer@sparkdriveautos.com / DemoUser2026!");

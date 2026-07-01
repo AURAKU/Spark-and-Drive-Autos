@@ -688,6 +688,12 @@ model User {
   userVehicles                     UserVehicle[]
   verifiedPartRequests             VerifiedPartRequest[] @relation("VerifiedPartRequestUser")
   verifiedPartRequestsAssigned     VerifiedPartRequest[] @relation("VerifiedPartRequestAssignee")
+  dutyCalculationsCreated          DutyCalculation[]              @relation("DutyCalculationCreatedBy")
+  dutyVerifiedImportsCreated       DutyVerifiedImport[]           @relation("DutyVerifiedImportCreatedBy")
+  dutyExchangeRatesCreated         DutyExchangeRate[]             @relation("DutyExchangeRateCreatedBy")
+  dutyFormulaRulesUpdated          DutyFormulaRule[]              @relation("DutyFormulaRuleUpdatedBy")
+  dutyFormulaRuleHistory           DutyFormulaRuleHistory[]       @relation("DutyFormulaRuleHistoryActor")
+  dutyIntelligenceAuditLogs        DutyIntelligenceAuditLog[]     @relation("DutyIntelligenceAuditActor")
 
   @@index([role])
   @@index([ghanaCardVerificationStatus])
@@ -854,6 +860,7 @@ model Car {
   chats     ChatThread[]
   quotes    Quote[]
   vehicleImportEstimates VehicleImportEstimate[]
+  dutyCalculations       DutyCalculation[]
 
   @@index([brand, model])
   @@index([listingState, featured])
@@ -2664,4 +2671,405 @@ model SecurityObservation {
   @@index([severity, createdAt])
   @@index([userId])
   @@index([ipAddress])
+}
+
+// ─── Duty Intelligence Engine ───────────────────────────────────────────────
+
+enum DutyCountryCode {
+  GH
+}
+
+enum DutyVehicleCategory {
+  SUV
+  SEDAN
+  PICKUP
+  TRUCK
+  BUS
+  VAN
+}
+
+enum DutyShippingMethod {
+  CONTAINER
+  RORO
+  AIR_FREIGHT
+  SEA_FREIGHT
+}
+
+enum DutyExchangeRateSource {
+  BANK_OF_GHANA
+  CUSTOMS
+  MANUAL_OVERRIDE
+  GLOBAL_CURRENCY
+}
+
+enum DutyFormulaBasis {
+  CIF
+  CUSTOMS_VALUE
+  IMPORT_DUTY
+  LEVY_SUBTOTAL
+  VAT_BASE
+  FOB
+  FIXED
+}
+
+enum DutyFormulaRateType {
+  PERCENTAGE
+  FIXED
+  BLENDED
+}
+
+enum DutyChargeCategory {
+  PORT
+  SHIPPING_LINE
+  AGENT
+}
+
+enum DutyVerifiedImportStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  DISPUTED
+  ARCHIVED
+}
+
+enum DutyDocumentType {
+  BILL_OF_ENTRY
+  BILL_OF_LADING
+  COMMERCIAL_INVOICE
+  PACKING_LIST
+  DUTY_RECEIPT
+  INSPECTION_REPORT
+  CONTAINER_DETAILS
+  VEHICLE_PHOTO
+  VIN_PHOTO
+  RECEIPT
+  OTHER
+}
+
+enum DutyCalculationStatus {
+  DRAFT
+  SAVED
+  ARCHIVED
+}
+
+/// Country-level configuration for extensible multi-country support.
+model DutyCountryConfig {
+  id           String          @id @default(cuid())
+  countryCode  DutyCountryCode @unique
+  name         String
+  currency     String          @default("GHS") @db.VarChar(3)
+  active       Boolean         @default(true)
+  configJson   Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  formulaRules    DutyFormulaRule[]
+  hsCodes         DutyHsCode[]
+  exchangeRates   DutyExchangeRate[]
+  shippingLines   DutyShippingLine[]
+  chargeTemplates DutyChargeTemplate[]
+  calculations    DutyCalculation[]
+  verifiedImports DutyVerifiedImport[]
+  calibrations    DutyCalibrationFactor[]
+}
+
+/// Configurable duty/tax/levy formula — never hardcoded in application logic.
+model DutyFormulaRule {
+  id              String              @id @default(cuid())
+  countryConfigId String
+  code            String              @db.VarChar(64)
+  label           String
+  basis           DutyFormulaBasis
+  rateType        DutyFormulaRateType
+  /// Primary rate (e.g. 0.15 for 15%) or fixed amount in GHS when rateType = FIXED.
+  rateValue       Decimal             @db.Decimal(18, 8)
+  /// Optional JSON conditions: powertrain, age bands, vehicle type, HS code prefix, etc.
+  conditionsJson  Json?
+  formulaNote     String?             @db.Text
+  version         Int                 @default(1)
+  sortOrder       Int                 @default(0)
+  active          Boolean             @default(true)
+  effectiveFrom   DateTime            @default(now())
+  updatedById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  countryConfig DutyCountryConfig        @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  updatedBy     User?                    @relation("DutyFormulaRuleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  history       DutyFormulaRuleHistory[]
+
+  @@unique([countryConfigId, code, version])
+  @@index([countryConfigId, active, sortOrder])
+  @@index([code])
+}
+
+/// Immutable version history for formula rules — audit trail.
+model DutyFormulaRuleHistory {
+  id            String   @id @default(cuid())
+  ruleId        String
+  version       Int
+  snapshotJson  Json
+  changeNote    String?  @db.Text
+  actorId       String?
+  createdAt     DateTime @default(now())
+
+  rule  DutyFormulaRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  actor User?           @relation("DutyFormulaRuleHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([ruleId, version])
+  @@index([createdAt])
+}
+
+/// Editable HS code library with vehicle classification rules.
+model DutyHsCode {
+  id              String               @id @default(cuid())
+  countryConfigId String
+  hsCode          String               @db.VarChar(16)
+  description     String
+  vehicleCategory DutyVehicleCategory?
+  fuelType        EngineType?
+  engineCcMin     Int?
+  engineCcMax     Int?
+  grossWeightMin  Int?
+  grossWeightMax  Int?
+  isCommercial    Boolean?
+  dutyRateHint    Decimal?             @db.Decimal(8, 6)
+  active          Boolean              @default(true)
+  notes           String?              @db.Text
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+
+  @@index([countryConfigId, hsCode])
+  @@index([countryConfigId, active])
+  @@index([fuelType, vehicleCategory])
+}
+
+/// Historical exchange rates — Bank of Ghana, Customs, manual overrides.
+model DutyExchangeRate {
+  id              String                 @id @default(cuid())
+  countryConfigId String
+  source          DutyExchangeRateSource
+  fromCurrency    String                 @db.VarChar(3)
+  toCurrency      String                 @default("GHS") @db.VarChar(3)
+  rate            Decimal                @db.Decimal(18, 8)
+  effectiveDate   DateTime
+  isOverride      Boolean                @default(false)
+  createdById     String?
+  createdAt       DateTime               @default(now())
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  createdBy     User?             @relation("DutyExchangeRateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([countryConfigId, fromCurrency, toCurrency, effectiveDate])
+  @@index([source, effectiveDate])
+}
+
+/// Shipping line registry (MSC, Maersk, etc.).
+model DutyShippingLine {
+  id              String          @id @default(cuid())
+  countryConfigId String
+  code            String          @db.VarChar(32)
+  name            String
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  countryConfig   DutyCountryConfig    @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  chargeTemplates DutyChargeTemplate[]
+
+  @@unique([countryConfigId, code])
+  @@index([countryConfigId, active])
+}
+
+/// Port, shipping line, and agent charge templates with historical averages.
+model DutyChargeTemplate {
+  id              String             @id @default(cuid())
+  countryConfigId String
+  category        DutyChargeCategory
+  subcategory     String             @db.VarChar(64)
+  label           String
+  amountGhs       Decimal?           @db.Decimal(14, 2)
+  amountUsd       Decimal?           @db.Decimal(14, 2)
+  /// PERCENTAGE of CIF or FIXED
+  calculationType String             @default("FIXED") @db.VarChar(24)
+  rateValue       Decimal?           @db.Decimal(18, 8)
+  shippingLineId  String?
+  sampleCount     Int                @default(0)
+  active          Boolean            @default(true)
+  notes           String?            @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  shippingLine  DutyShippingLine? @relation(fields: [shippingLineId], references: [id], onDelete: SetNull)
+
+  @@index([countryConfigId, category, active])
+  @@index([shippingLineId])
+}
+
+/// Saved duty intelligence calculations — full pipeline snapshot.
+model DutyCalculation {
+  id                String                @id @default(cuid())
+  countryConfigId   String
+  referenceNumber   String                @unique @db.VarChar(32)
+  status            DutyCalculationStatus @default(DRAFT)
+  carId             String?
+  createdById       String?
+  /// Full input: vehicle, purchase, shipping, overrides.
+  inputJson         Json
+  /// Full pipeline output with every stage, line item, explanation.
+  resultJson        Json
+  formulaVersion    String                @db.VarChar(64)
+  confidenceScore   Decimal?              @db.Decimal(5, 2)
+  confidenceLabel   String?               @db.VarChar(32)
+  similarImportCount Int                  @default(0)
+  totalLandedCostGhs Decimal              @db.Decimal(14, 2)
+  totalGraTaxesGhs   Decimal              @db.Decimal(14, 2)
+  totalPortChargesGhs Decimal             @db.Decimal(14, 2)
+  cifGhs            Decimal               @db.Decimal(14, 2)
+  customsValueGhs   Decimal               @db.Decimal(14, 2)
+  hsCode            String?               @db.VarChar(16)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  car           Car?              @relation(fields: [carId], references: [id], onDelete: SetNull)
+  createdBy     User?             @relation("DutyCalculationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([countryConfigId, createdAt])
+  @@index([carId])
+  @@index([status, createdAt])
+  @@index([hsCode])
+}
+
+/// Verified import shipment — permanent training data (soft-delete via ARCHIVED only).
+model DutyVerifiedImport {
+  id                  String                   @id @default(cuid())
+  countryConfigId     String
+  status              DutyVerifiedImportStatus @default(PENDING_VERIFICATION)
+  createdById         String?
+  /// Vehicle identification
+  manufacturer        String?
+  model               String?
+  trim                String?
+  year                Int?
+  vin                 String?                  @db.VarChar(32)
+  chassis             String?                  @db.VarChar(64)
+  countryOfOrigin     String?
+  vehicleCategory     DutyVehicleCategory?
+  fuelType            EngineType?
+  engineCc            Int?
+  batteryKwh          Decimal?                 @db.Decimal(8, 2)
+  horsepower          Int?
+  grossWeightKg       Int?
+  seatingCapacity     Int?
+  hsCode              String?                  @db.VarChar(16)
+  /// Financial actuals
+  fobAmount           Decimal?                 @db.Decimal(14, 2)
+  fobCurrency         String?                  @db.VarChar(3)
+  freightGhs          Decimal?                 @db.Decimal(14, 2)
+  insuranceGhs        Decimal?                 @db.Decimal(14, 2)
+  exchangeRate        Decimal?                 @db.Decimal(18, 8)
+  cifGhs              Decimal?                 @db.Decimal(14, 2)
+  customsValueGhs     Decimal?                 @db.Decimal(14, 2)
+  importDutyGhs       Decimal?                 @db.Decimal(14, 2)
+  vatGhs              Decimal?                 @db.Decimal(14, 2)
+  nhilGhs             Decimal?                 @db.Decimal(14, 2)
+  getfundGhs          Decimal?                 @db.Decimal(14, 2)
+  specialLevyGhs      Decimal?                 @db.Decimal(14, 2)
+  eximLevyGhs         Decimal?                 @db.Decimal(14, 2)
+  ecowasLevyGhs       Decimal?                 @db.Decimal(14, 2)
+  auLevyGhs           Decimal?                 @db.Decimal(14, 2)
+  inspectionFeeGhs    Decimal?                 @db.Decimal(14, 2)
+  processingFeeGhs    Decimal?                 @db.Decimal(14, 2)
+  networkChargesGhs   Decimal?                 @db.Decimal(14, 2)
+  shippingLineGhs     Decimal?                 @db.Decimal(14, 2)
+  portChargesGhs      Decimal?                 @db.Decimal(14, 2)
+  agentFeesGhs        Decimal?                 @db.Decimal(14, 2)
+  totalDutyGhs        Decimal?                 @db.Decimal(14, 2)
+  totalLandedCostGhs  Decimal?                 @db.Decimal(14, 2)
+  clearanceDays       Int?
+  shippingLine        String?
+  containerNumber     String?
+  billOfEntryNumber   String?
+  billOfLading        String?
+  /// Original estimate for self-learning comparison
+  estimatedDutyGhs    Decimal?                 @db.Decimal(14, 2)
+  predictionErrorPct  Decimal?                 @db.Decimal(8, 4)
+  notes               String?                  @db.Text
+  /// Full line-item breakdown from documents
+  breakdownJson       Json?
+  verifiedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  countryConfig DutyCountryConfig            @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  createdBy     User?                        @relation("DutyVerifiedImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents     DutyVerifiedImportDocument[]
+
+  @@index([countryConfigId, status, createdAt])
+  @@index([manufacturer, model, year])
+  @@index([vin])
+  @@index([hsCode])
+  @@index([fuelType, vehicleCategory])
+}
+
+/// Import documents — never physically deleted; archive only.
+model DutyVerifiedImportDocument {
+  id               String           @id @default(cuid())
+  verifiedImportId String
+  documentType     DutyDocumentType
+  fileName         String
+  fileUrl          String
+  filePublicId     String?
+  /// OCR-extracted fields with confidence scores
+  ocrExtractedJson Json?
+  ocrStatus        String           @default("PENDING") @db.VarChar(24)
+  ocrCorrectedJson Json?
+  archived         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  verifiedImport DutyVerifiedImport @relation(fields: [verifiedImportId], references: [id], onDelete: Cascade)
+
+  @@index([verifiedImportId, documentType])
+  @@index([ocrStatus])
+}
+
+/// Self-learning calibration factors per charge category.
+model DutyCalibrationFactor {
+  id              String   @id @default(cuid())
+  countryConfigId String
+  category        String   @db.VarChar(64)
+  factor          Decimal  @db.Decimal(8, 6)
+  sampleCount     Int      @default(0)
+  avgErrorPct     Decimal? @db.Decimal(8, 4)
+  lastCalibratedAt DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([countryConfigId, category])
+  @@index([countryConfigId])
+}
+
+/// Audit log for duty intelligence configuration changes.
+model DutyIntelligenceAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  action       String
+  entityType   String
+  entityId     String?
+  beforeJson   Json?
+  afterJson    Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation("DutyIntelligenceAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([actorId])
 }
