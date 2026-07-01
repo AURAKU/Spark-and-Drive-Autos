@@ -40,10 +40,6 @@ function similarityScore(params: {
     const pct = Math.abs(row.engineCc - input.vehicle.engineCc) / input.vehicle.engineCc;
     if (pct < 0.1) score += 5;
   }
-  if (row.grossWeightKg != null && input.vehicle.grossWeightKg != null) {
-    const pct = Math.abs(row.grossWeightKg - input.vehicle.grossWeightKg) / input.vehicle.grossWeightKg;
-    if (pct < 0.15) score += 5;
-  }
 
   // FOB range proximity
   if (row.fobAmount != null && input.purchase.fobAmount > 0) {

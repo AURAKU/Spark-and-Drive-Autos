@@ -1,63 +1,89 @@
+import { z } from "zod";
+
 import type {
   DutyChargeCategory,
   DutyCountryCode,
+  DutyExportCountry,
   DutyVehicleCategory,
 } from "@prisma/client";
 import { EngineType as EngineTypeEnum } from "@prisma/client";
-import { z } from "zod";
 
-export const dutyVehicleInputSchema = z.object({
-  manufacturer: z.string().trim().min(1).max(120).optional(),
-  model: z.string().trim().min(1).max(120).optional(),
-  trim: z.string().trim().max(120).optional(),
-  year: z.number().int().min(1980).max(new Date().getFullYear() + 1),
-  vin: z.string().trim().max(32).optional(),
-  chassis: z.string().trim().max(64).optional(),
-  countryOfOrigin: z.string().trim().max(80).optional(),
-  vehicleCategory: z.nativeEnum({
-    SUV: "SUV",
-    SEDAN: "SEDAN",
-    PICKUP: "PICKUP",
-    TRUCK: "TRUCK",
-    BUS: "BUS",
-    VAN: "VAN",
-  } as const satisfies Record<DutyVehicleCategory, DutyVehicleCategory>).optional(),
-  fuelType: z.nativeEnum(EngineTypeEnum).default(EngineTypeEnum.GASOLINE_PETROL),
-  engineCc: z.number().int().positive().max(30_000).optional(),
-  batteryKwh: z.number().positive().max(500).optional(),
-  horsepower: z.number().int().positive().max(5000).optional(),
-  grossWeightKg: z.number().int().positive().max(100_000).optional(),
-  seatingCapacity: z.number().int().positive().max(80).optional(),
-  transmission: z.string().trim().max(40).optional(),
-  driveType: z.string().trim().max(40).optional(),
-  isCommercial: z.boolean().optional(),
-  applyEvDutyWaiver: z.boolean().default(false),
-});
+export const EXPORT_COUNTRIES = [
+  "CHINA",
+  "JAPAN",
+  "USA",
+  "UK",
+  "GERMANY",
+  "KOREA",
+  "DUBAI",
+  "SINGAPORE",
+  "THAILAND",
+  "MALAYSIA",
+] as const satisfies readonly DutyExportCountry[];
+
+export const SUPPORTED_CURRENCIES = ["USD", "CNY", "EUR", "GBP", "AED", "JPY", "KRW", "GHS"] as const;
+
+const vehicleCategoryEnum = z.nativeEnum({
+  SUV: "SUV",
+  SEDAN: "SEDAN",
+  PICKUP: "PICKUP",
+  TRUCK: "TRUCK",
+  BUS: "BUS",
+  VAN: "VAN",
+} as const satisfies Record<DutyVehicleCategory, DutyVehicleCategory>);
+
+const shippingMethodEnum = z.nativeEnum({
+  CONTAINER: "CONTAINER",
+  RORO: "RORO",
+  AIR_FREIGHT: "AIR_FREIGHT",
+  SEA_FREIGHT: "SEA_FREIGHT",
+} as const);
+
+const exportCountryEnum = z.enum(EXPORT_COUNTRIES);
+
+export const dutyVehicleInputSchema = z
+  .object({
+    manufacturer: z.string().trim().min(1, "Manufacturer is required").max(120),
+    model: z.string().trim().min(1, "Model is required").max(120),
+    year: z
+      .number()
+      .int()
+      .min(1980)
+      .max(new Date().getFullYear(), "Year cannot be in the future"),
+    vin: z
+      .string()
+      .trim()
+      .max(17)
+      .optional()
+      .refine((v) => !v || v.length === 17, { message: "VIN must be 17 characters when provided" }),
+    countryOfOrigin: exportCountryEnum,
+    vehicleCategory: vehicleCategoryEnum,
+    fuelType: z.nativeEnum(EngineTypeEnum),
+    engineCc: z.number().int().positive("Engine capacity must be greater than zero").max(30_000).optional(),
+    transmission: z.string().trim().max(40).optional(),
+    driveType: z.string().trim().max(40).optional(),
+    batteryKwh: z.number().positive().max(500).optional(),
+    applyEvDutyWaiver: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    const iceFuels = ["GASOLINE_PETROL", "GASOLINE_DIESEL", "HYBRID", "PLUGIN_HYBRID"] as const;
+    if (iceFuels.includes(data.fuelType as (typeof iceFuels)[number]) && !data.engineCc) {
+      ctx.addIssue({ code: "custom", message: "Engine capacity (CC) is required for this fuel type", path: ["engineCc"] });
+    }
+  });
 
 export const dutyPurchaseInputSchema = z.object({
-  fobAmount: z.number().nonnegative(),
-  fobCurrency: z.string().trim().length(3).default("USD"),
-  supplier: z.string().trim().max(160).optional(),
-  supplierCountry: z.string().trim().max(80).optional(),
-  purchaseDate: z.string().datetime().optional(),
-  invoiceNumber: z.string().trim().max(80).optional(),
+  fobAmount: z.number().positive("FOB amount must be greater than zero"),
+  fobCurrency: z.enum(SUPPORTED_CURRENCIES).default("USD"),
 });
 
 export const dutyShippingInputSchema = z.object({
-  shippingMethod: z.nativeEnum({
-    CONTAINER: "CONTAINER",
-    RORO: "RORO",
-    AIR_FREIGHT: "AIR_FREIGHT",
-    SEA_FREIGHT: "SEA_FREIGHT",
-  } as const).default("SEA_FREIGHT"),
-  shippingLineCode: z.string().trim().max(32).optional(),
-  portOfLoading: z.string().trim().max(120).optional(),
-  destinationPort: z.string().trim().max(120).optional(),
-  freightGhs: z.number().nonnegative().optional(),
-  insuranceGhs: z.number().nonnegative().optional(),
-  otherShippingChargesGhs: z.number().nonnegative().default(0),
+  shippingMethod: shippingMethodEnum.default("SEA_FREIGHT"),
   containerType: z.string().trim().max(40).optional(),
-  containerNumber: z.string().trim().max(40).optional(),
+  /** Admin-only overrides — not entered by customers. */
+  freightGhsOverride: z.number().nonnegative().optional(),
+  insuranceGhsOverride: z.number().nonnegative().optional(),
+  otherShippingChargesGhs: z.number().nonnegative().default(0),
 });
 
 export const dutyCalculationInputSchema = z.object({
@@ -65,7 +91,6 @@ export const dutyCalculationInputSchema = z.object({
   vehicle: dutyVehicleInputSchema,
   purchase: dutyPurchaseInputSchema,
   shipping: dutyShippingInputSchema,
-  /** Direct CIF override in GHS — skips FOB conversion when set. */
   cifGhsOverride: z.number().positive().optional(),
   hsCodeOverride: z.string().trim().max(16).optional(),
   exchangeRateOverride: z.number().positive().optional(),
@@ -99,6 +124,15 @@ export type ConfidenceResult = {
   label: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
   similarImportCount: number;
   basisNote: string;
+  reasons: string[];
+};
+
+export type HistoricalComparison = {
+  similarImportCount: number;
+  avgActualDutyGhs: number | null;
+  estimatedDutyGhs: number;
+  differencePct: number | null;
+  note: string;
 };
 
 export type DutyIntelligenceResult = {
@@ -122,10 +156,18 @@ export type DutyIntelligenceResult = {
   hsCode: string;
   hsCodeResolution: { code: string; description: string; method: string };
   exchangeRate: { rate: number; source: string; fromCurrency: string; effectiveDate: string };
-  vehicleClassification: { category: DutyVehicleCategory | null; ageYears: number; commercial: boolean };
+  vehicleClassification: { category: DutyVehicleCategory | null; ageYears: number; commercial: boolean; profile: string };
   confidence: ConfidenceResult;
+  historicalComparison: HistoricalComparison | null;
   predictionAdjustments: { category: string; factor: number; note: string }[];
   methodologyNote: string;
+};
+
+export type DutyPipelineError = {
+  code: "CONFIG_UNAVAILABLE";
+  message: string;
+  adminHint?: string;
+  health?: import("./config-bootstrap").DutyConfigHealth;
 };
 
 export type LoadedFormulaRule = {

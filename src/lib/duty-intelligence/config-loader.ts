@@ -10,11 +10,18 @@ function toNum(v: unknown): number {
   return typeof v === "number" ? v : Number(v);
 }
 
-export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Promise<CountryConfigBundle> {
-  const cacheKey = dutyCacheKey("config", countryCode);
-  const cached = await dutyCacheGet<CountryConfigBundle>(cacheKey);
-  if (cached) return cached;
+export class DutyConfigNotFoundError extends Error {
+  readonly code = "CONFIG_UNAVAILABLE" as const;
+  readonly countryCode: DutyCountryCode;
 
+  constructor(countryCode: DutyCountryCode) {
+    super(`Duty country config not found for ${countryCode}`);
+    this.name = "DutyConfigNotFoundError";
+    this.countryCode = countryCode;
+  }
+}
+
+async function fetchCountryBundle(countryCode: DutyCountryCode): Promise<CountryConfigBundle | null> {
   const country = await prisma.dutyCountryConfig.findUnique({
     where: { countryCode },
     include: {
@@ -26,9 +33,7 @@ export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Pr
     },
   });
 
-  if (!country) {
-    throw new Error(`Duty country config not found for ${countryCode}. Run seed or migration.`);
-  }
+  if (!country) return null;
 
   const formulaRules: LoadedFormulaRule[] = country.formulaRules.map((r) => ({
     id: r.id,
@@ -66,7 +71,7 @@ export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Pr
     calibrationFactors[cal.category] = toNum(cal.factor);
   }
 
-  const bundle: CountryConfigBundle = {
+  return {
     countryConfigId: country.id,
     countryCode: country.countryCode,
     currency: country.currency,
@@ -76,8 +81,25 @@ export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Pr
     calibrationFactors,
     shippingLines: country.shippingLines.map((s) => ({ id: s.id, code: s.code, name: s.name })),
   };
+}
 
-  await dutyCacheSet(cacheKey, bundle);
+/** Load country config — returns null instead of throwing when missing. */
+export async function loadCountryConfigSafe(
+  countryCode: DutyCountryCode = "GH",
+): Promise<CountryConfigBundle | null> {
+  const cacheKey = dutyCacheKey("config", countryCode);
+  const cached = await dutyCacheGet<CountryConfigBundle>(cacheKey);
+  if (cached) return cached;
+
+  const bundle = await fetchCountryBundle(countryCode);
+  if (bundle) await dutyCacheSet(cacheKey, bundle);
+  return bundle;
+}
+
+/** Load country config — throws DutyConfigNotFoundError when missing (internal use after health check). */
+export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Promise<CountryConfigBundle> {
+  const bundle = await loadCountryConfigSafe(countryCode);
+  if (!bundle) throw new DutyConfigNotFoundError(countryCode);
   return bundle;
 }
 
@@ -102,4 +124,13 @@ export async function getLatestExchangeRate(params: {
     source: row.source,
     effectiveDate: row.effectiveDate,
   };
+}
+
+/** Supported FOB currencies with fallback rates when duty exchange table has no row. */
+export const SUPPORTED_FOB_CURRENCIES = ["USD", "CNY", "EUR", "GBP", "AED", "JPY", "KRW", "GHS"] as const;
+
+export type SupportedFobCurrency = (typeof SUPPORTED_FOB_CURRENCIES)[number];
+
+export function isSupportedFobCurrency(c: string): c is SupportedFobCurrency {
+  return (SUPPORTED_FOB_CURRENCIES as readonly string[]).includes(c.toUpperCase());
 }

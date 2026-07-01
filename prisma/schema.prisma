@@ -694,6 +694,7 @@ model User {
   dutyFormulaRulesUpdated          DutyFormulaRule[]              @relation("DutyFormulaRuleUpdatedBy")
   dutyFormulaRuleHistory           DutyFormulaRuleHistory[]       @relation("DutyFormulaRuleHistoryActor")
   dutyIntelligenceAuditLogs        DutyIntelligenceAuditLog[]     @relation("DutyIntelligenceAuditActor")
+  dutyOverrides                    DutyOverride[]                 @relation("DutyOverrideActor")
 
   @@index([role])
   @@index([ghanaCardVerificationStatus])
@@ -2762,14 +2763,93 @@ model DutyCountryConfig {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  formulaRules    DutyFormulaRule[]
-  hsCodes         DutyHsCode[]
-  exchangeRates   DutyExchangeRate[]
-  shippingLines   DutyShippingLine[]
-  chargeTemplates DutyChargeTemplate[]
-  calculations    DutyCalculation[]
-  verifiedImports DutyVerifiedImport[]
-  calibrations    DutyCalibrationFactor[]
+  formulaRules       DutyFormulaRule[]
+  hsCodes            DutyHsCode[]
+  exchangeRates      DutyExchangeRate[]
+  shippingLines      DutyShippingLine[]
+  chargeTemplates    DutyChargeTemplate[]
+  calculations       DutyCalculation[]
+  verifiedImports    DutyVerifiedImport[]
+  calibrations       DutyCalibrationFactor[]
+  shippingCostMatrix DutyShippingCostMatrix[]
+  insuranceRules     DutyInsuranceRule[]
+  overrides          DutyOverride[]
+}
+
+/// Origin country codes for shipping cost matrix lookups.
+enum DutyExportCountry {
+  CHINA
+  JAPAN
+  USA
+  UK
+  GERMANY
+  KOREA
+  DUBAI
+  SINGAPORE
+  THAILAND
+  MALAYSIA
+  OTHER
+}
+
+/// Admin-configurable freight rates by origin, vehicle type, and shipping method.
+model DutyShippingCostMatrix {
+  id              String               @id @default(cuid())
+  countryConfigId String
+  originCountry   DutyExportCountry
+  vehicleCategory DutyVehicleCategory?
+  shippingMethod  DutyShippingMethod
+  containerType   String?              @db.VarChar(40)
+  freightGhs      Decimal              @db.Decimal(14, 2)
+  transitDays     Int?
+  active          Boolean              @default(true)
+  notes           String?              @db.Text
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([countryConfigId, originCountry, vehicleCategory, shippingMethod, containerType])
+  @@index([countryConfigId, originCountry, active])
+  @@index([countryConfigId, shippingMethod, active])
+}
+
+/// Configurable marine/cargo insurance rules — percentage of (FOB + freight).
+model DutyInsuranceRule {
+  id              String              @id @default(cuid())
+  countryConfigId String
+  originCountry   DutyExportCountry?
+  shippingMethod  DutyShippingMethod?
+  percentageRate  Decimal             @db.Decimal(8, 6)
+  minimumGhs      Decimal?            @db.Decimal(14, 2)
+  active          Boolean             @default(true)
+  notes           String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+
+  @@index([countryConfigId, active])
+}
+
+/// Admin overrides on duty calculations with required audit trail.
+model DutyOverride {
+  id              String   @id @default(cuid())
+  countryConfigId String
+  calculationId   String?
+  actorId         String?
+  overrideType    String   @db.VarChar(32)
+  fieldKey        String   @db.VarChar(64)
+  originalValue   Decimal? @db.Decimal(18, 8)
+  overrideValue   Decimal  @db.Decimal(18, 8)
+  reason          String   @db.Text
+  createdAt       DateTime @default(now())
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  actor         User?             @relation("DutyOverrideActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([countryConfigId, createdAt])
+  @@index([calculationId])
+  @@index([actorId])
 }
 
 /// Configurable duty/tax/levy formula — never hardcoded in application logic.
