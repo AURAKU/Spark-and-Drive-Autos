@@ -12,9 +12,12 @@ import { getCarDisplayPrice, getGlobalCurrencySettings, parseDisplayCurrency } f
 import { attachCarVideoPreview, getHomeSpotlightCached } from "@/lib/landing-spotlight";
 import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import type { SpotlightEntry } from "@/lib/landing-spotlight";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { PartsFinderCtaLink } from "@/components/parts-finder/parts-finder-cta-link";
 import { PARTS_FINDER_HERO_LINE } from "@/lib/parts-finder/marketing-copy";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
+import { STOREFRONT_CAR_CARD_SELECT } from "@/lib/storefront-car-card-select";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +57,9 @@ export default async function HomePage() {
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
+  const session = await safeAuth();
+  const userId = session?.user?.id;
+  const publicAppUrl = getPublicAppUrl();
 
   let spotlight = await getHomeSpotlightCached().catch((e) => {
     console.error("[HomePage] spotlight", e);
@@ -71,20 +77,7 @@ export default async function HomePage() {
         where: { listingState: "PUBLISHED" },
         take: 3,
         orderBy: { updatedAt: "desc" },
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          brand: true,
-          model: true,
-          year: true,
-          location: true,
-          sourceType: true,
-          availabilityStatus: true,
-          listingState: true,
-          coverImageUrl: true,
-          basePriceRmb: true,
-        },
+        select: { ...STOREFRONT_CAR_CARD_SELECT, basePriceRmb: true },
       });
       const fallbackWithVideo = await attachCarVideoPreview(fallback);
       spotlight = {
@@ -97,6 +90,19 @@ export default async function HomePage() {
       console.error("[HomePage] prisma fallback", e);
     }
   }
+
+  const spotlightCarIds = spotlight.entries.filter((e) => e.kind === "car").map((e) => e.car.id);
+  const favoriteCarIds =
+    userId && spotlightCarIds.length > 0
+      ? new Set(
+          (
+            await prisma.favorite.findMany({
+              where: { userId, carId: { in: spotlightCarIds } },
+              select: { carId: true },
+            })
+          ).map((f) => f.carId),
+        )
+      : new Set<string>();
 
   return (
     <div>
@@ -200,7 +206,7 @@ export default async function HomePage() {
             <BuyPartsCtaLink href="/parts" size="compact" />
           </div>
         </div>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {spotlight.entries.length === 0 ? (
             <p className="text-sm text-zinc-500">
               No listings to highlight yet. Ensure Docker Postgres is up, then run{" "}
@@ -215,6 +221,9 @@ export default async function HomePage() {
                   car={entry.car}
                   displayAmount={getCarDisplayPrice(Number(entry.car.basePriceRmb), displayCurrency, fx)}
                   displayCurrency={displayCurrency}
+                  shareUrl={`${publicAppUrl}/cars/${entry.car.slug}`}
+                  isSignedIn={Boolean(userId)}
+                  initialFavorite={favoriteCarIds.has(entry.car.id)}
                   videoTeaser={
                     entry.car.videoPreview
                       ? {

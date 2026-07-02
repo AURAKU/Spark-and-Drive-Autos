@@ -518,3 +518,30 @@
     transform: translateX(-100%);
   }
 }
+
+/* Premium vehicle inventory cards — light/dark marketplace surfaces */
+.premium-inventory-page {
+  --premium-page-bg: #f8fafc;
+  --premium-card-bg: #ffffff;
+  --premium-card-border: #e5e7eb;
+  --premium-text-secondary: #64748b;
+}
+
+.dark .premium-inventory-page {
+  --premium-page-bg: #0f1115;
+  --premium-card-bg: #181c22;
+  --premium-card-border: #2a313c;
+  --premium-text-secondary: #b7c0cc;
+}
+
+.premium-vehicle-card {
+  background: var(--premium-card-bg);
+  border-color: var(--premium-card-border);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .premium-vehicle-card {
+    will-change: transform, box-shadow;
+  }
+}
+

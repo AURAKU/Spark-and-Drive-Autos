@@ -54,6 +54,20 @@ export function isCloudinaryMediaUrl(url: string): boolean {
 /**
  * Returns a transformed Cloudinary URL, or the original string if not Cloudinary or not transformable.
  */
+/** Tiny blurred frame for progressive card blur-up (no secrets; client-safe). */
+export function cloudinaryBlurPlaceholderUrl(url: string): string | null {
+  if (!url?.trim() || !isCloudinaryMediaUrl(url)) return null;
+  const u = url.trim();
+  if (u.includes("/raw/upload/")) return null;
+  const m = u.match(/^(https:\/\/res\.cloudinary\.com\/[^/]+\/(?:image|video)\/upload\/)(.+)$/i);
+  if (!m) return null;
+  const prefix = m[1];
+  const pathAfterUpload = m[2];
+  const firstSeg = pathAfterUpload.split("/")[0] ?? "";
+  if (firstSeg.includes(",")) return null;
+  return `${prefix}c_limit,w_48,e_blur:800,q_1,f_auto/${pathAfterUpload}`;
+}
+
 export function optimizeCloudinaryUrl(url: string, preset: CloudinaryDeliveryPreset): string {
   if (preset === "none" || !url?.trim()) return url;
   const u = url.trim();
