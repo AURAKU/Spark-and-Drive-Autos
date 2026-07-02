@@ -1,0 +1,541 @@
+import { OrderKind, PaymentType, Prisma } from "@prisma/client";
+import { nanoid } from "nanoid";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import {
+  getDefaultPaymentProvider,
+  getPaystackCallbackOrigin,
+  getPaystackSecrets,
+} from "@/lib/payment-provider-registry";
+import {
+  customerCheckoutBlockedMessage,
+  getCarCheckoutIneligibleReason,
+  isVehicleListingMarkedSold,
+} from "@/lib/checkout-eligibility";
+import { isCheckoutConflictError, throwCheckoutConflict } from "@/lib/checkout-transaction-errors";
+import { globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
+import { getGlobalCurrencySettings } from "@/lib/currency";
+import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
+import { writeLegalAuditLog } from "@/lib/legal-audit";
+import { ACCEPTANCE_CONTEXT, recordUserContractAcceptance, recordUserPolicyAcceptance } from "@/lib/legal-acceptance";
+import {
+  assertVehicleCheckoutLegalVersions,
+  getActiveRiskPolicyRow,
+  getActiveSourcingContractRow,
+  POLICY_KEYS,
+  requiresRiskAcknowledgement,
+  requiresSourcingContract,
+} from "@/lib/legal-enforcement";
+import { getUserRiskTags } from "@/lib/legal-risk-controls";
+import { hasAcceptedContract } from "@/lib/legal-backend-helpers";
+import { logRiskEvent } from "@/lib/risk-engine";
+import { safeAuth } from "@/lib/safe-auth";
+import { paystackInitialize } from "@/lib/paystack";
+import { prisma } from "@/lib/prisma";
+import { getRequestIp } from "@/lib/client-ip";
+import { rateLimitPayment } from "@/lib/rate-limit";
+import { recordSecurityObservation } from "@/lib/security-observation";
+import {
+  computeDepositCheckoutSnapshot,
+  resolveOrderStorageAnchors,
+  resolveVehicleListPriceGhs,
+} from "@/lib/vehicle-deposit-pricing";
+import { requireVerification } from "@/lib/identity-verification";
+
+const schema = z.object({
+  motorcycleId: z.string().cuid(),
+  paymentType: z.nativeEnum(PaymentType),
+  agreementAccepted: z.boolean(),
+  agreementVersion: z.string().min(1).max(40),
+  contractAccepted: z.boolean().optional(),
+  contractVersion: z.string().min(1).max(40).optional(),
+  riskAccepted: z.boolean().optional(),
+  riskVersion: z.string().min(1).max(40).optional(),
+});
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  const ip = getRequestIp(req);
+  const userAgent = req.headers.get("user-agent");
+  const rl = await rateLimitPayment(`init:${ip}`);
+  if (!rl.success) {
+    await recordSecurityObservation({
+      severity: "HIGH",
+      channel: "RATE_LIMIT",
+      title: "Vehicle checkout payment init rate-limited",
+      ipAddress: ip,
+      userAgent,
+      path: "/api/payments/initialize",
+    });
+    return NextResponse.json({ error: "Too many payment attempts" }, { status: 429 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Validation failed" }, { status: 400 });
+  }
+
+  const session = await safeAuth();
+  if (!session?.user?.id) {
+    await recordSecurityObservation({
+      severity: "MEDIUM",
+      channel: "PAYMENT",
+      title: "Payment initialize without session",
+      ipAddress: ip,
+      userAgent,
+      path: "/api/payments/initialize",
+    });
+    return NextResponse.json(
+      { error: "Sign in to complete payment", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+  }
+  const email = session.user.email;
+  if (!email) {
+    return NextResponse.json({ error: "Account email missing" }, { status: 400 });
+  }
+  const legalBlock = await assertProfileLegalCompleteOrResponse(session.user.id);
+  if (legalBlock) return legalBlock;
+  const risk = await getUserRiskTags(session.user.id);
+  if (risk.includes("FRAUD_RISK_REVIEW") || risk.includes("MANUAL_REVIEW_REQUIRED")) {
+    await logRiskEvent({
+      userId: session.user.id,
+      type: "blocked_checkout_manual_review_required",
+      severity: "high",
+      meta: { route: "/api/payments/initialize" },
+    });
+    return NextResponse.json(
+      { error: "Your account is under manual review. Contact support to continue payment.", code: "MANUAL_REVIEW_REQUIRED" },
+      { status: 423 },
+    );
+  }
+
+  const motorcycle = await prisma.motorcycle.findUnique({ where: { id: parsed.data.motorcycleId } });
+  if (!motorcycle) {
+    return NextResponse.json({ error: "Motorcycle not found" }, { status: 404 });
+  }
+  const ineligible = getCarCheckoutIneligibleReason(motorcycle);
+  if (ineligible) {
+    return NextResponse.json(
+      {
+        error: customerCheckoutBlockedMessage(ineligible),
+        code: ineligible,
+      },
+      { status: 409 },
+    );
+  }
+  if (requiresSourcingContract(motorcycle.sourceType)) {
+    const acceptedContract = await hasAcceptedContract(session.user.id, "VEHICLE_PARTS_SOURCING_CONTRACT");
+    if (!acceptedContract) {
+      await logRiskEvent({
+        userId: session.user.id,
+        type: "missing_contract_acceptance_attempt",
+        severity: "medium",
+        meta: { sourceType: motorcycle.sourceType, motorcycleId: motorcycle.id },
+      });
+      return NextResponse.json(
+        { error: "Accept pending legal updates in your profile before payment.", code: "REQUIRE_ACCEPTANCE" },
+        { status: 409 },
+      );
+    }
+  }
+  const legalOk = await assertVehicleCheckoutLegalVersions({
+    agreementVersion: parsed.data.agreementVersion,
+    contractVersion: parsed.data.contractVersion,
+    riskVersion: parsed.data.riskVersion,
+    sourceType: motorcycle.sourceType,
+  });
+  if (!legalOk.ok) {
+    return NextResponse.json(
+      {
+        error: "Terms on this page are out of date. Refresh checkout and accept the latest agreements.",
+        code: legalOk.code,
+      },
+      { status: 409 },
+    );
+  }
+
+  const settings = await getGlobalCurrencySettings();
+  const depositPctStored =
+    motorcycle.reservationDepositPercent != null ? Number(motorcycle.reservationDepositPercent) : null;
+  const globalDepositPct = globalReservationDepositPercentFromSettings(settings);
+
+  let previewAmount: number;
+  if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+    const snapPreview = computeDepositCheckoutSnapshot(motorcycle, settings, depositPctStored, globalDepositPct);
+    if (!snapPreview || snapPreview.depositGhs <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Reservation deposit could not be calculated. Check the vehicle base selling price and deposit percentage settings.",
+          code: "INVALID_DEPOSIT_AMOUNT",
+        },
+        { status: 409 },
+      );
+    }
+    previewAmount = snapPreview.depositGhs;
+  } else {
+    const listResolution = resolveVehicleListPriceGhs(motorcycle, settings);
+    const fullListGhsRounded = Math.round(Math.max(0, listResolution.fullListGhs) * 100) / 100;
+    if (fullListGhsRounded <= 0) {
+      return NextResponse.json(
+        {
+          error: "This vehicle does not have a valid list price for payment. Contact support.",
+          code: "INVALID_VEHICLE_PRICE",
+        },
+        { status: 409 },
+      );
+    }
+    previewAmount = fullListGhsRounded;
+  }
+  try {
+    await requireVerification({
+      userId: session.user.id,
+      context: "VEHICLE_PURCHASE",
+      amountGhs: previewAmount,
+      ipAddress: ip,
+      userAgent,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_VERIFICATION_REQUIRED") {
+      return NextResponse.json(
+        {
+          error:
+            "Identity verification is required before this payment can continue. Visit Dashboard → Verification to submit your Ghana Card or valid ID.",
+          code: "IDENTITY_VERIFICATION_REQUIRED",
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+
+  const reference = `SDA-${nanoid(12).toUpperCase()}`;
+  const selectedProvider = await getDefaultPaymentProvider();
+  if (selectedProvider !== "PAYSTACK") {
+    return NextResponse.json({ error: "Configured default provider is not supported for this checkout yet." }, { status: 409 });
+  }
+
+  const { secretKey } = await getPaystackSecrets();
+  if (!secretKey) {
+    return NextResponse.json(
+      {
+        error:
+          "Paystack is not configured. Add a secret key under Admin → API providers (or set PAYSTACK_SECRET_KEY).",
+      },
+      { status: 500 },
+    );
+  }
+  const callbackOrigin = await getPaystackCallbackOrigin();
+  const callbackUrl = `${callbackOrigin}/checkout/return?reference=${encodeURIComponent(reference)}`;
+
+  let order: { id: string; currency: string };
+  let payment: { id: string };
+  let amount: number;
+  try {
+    const created = await prisma.$transaction(
+      async (tx) => {
+        const motoFresh = await tx.motorcycle.findUnique({ where: { id: parsed.data.motorcycleId } });
+        if (!motoFresh) throwCheckoutConflict("MOTORCYCLE_NOT_FOUND");
+        const block = getCarCheckoutIneligibleReason(motoFresh);
+        if (block) throwCheckoutConflict("INELIGIBLE", block);
+        const paidRows = await tx.payment.findMany({
+          where: {
+            status: "SUCCESS",
+            order: { motorcycleId: motoFresh.id, kind: OrderKind.MOTORCYCLE },
+          },
+          select: { paymentType: true },
+        });
+        const hasFullPaid = paidRows.some((p) => p.paymentType === PaymentType.FULL);
+        const hasDepositPaid = paidRows.some((p) => p.paymentType === PaymentType.RESERVATION_DEPOSIT);
+        if (hasFullPaid && isVehicleListingMarkedSold(motoFresh)) throwCheckoutConflict("ALREADY_PURCHASED");
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT && hasDepositPaid) {
+          throwCheckoutConflict("DEPOSIT_ALREADY_PAID");
+        }
+        if (parsed.data.paymentType === PaymentType.FULL && hasDepositPaid) {
+          throwCheckoutConflict("BALANCE_PAYMENT_ONLINE_UNAVAILABLE");
+        }
+        const depPct =
+          motoFresh.reservationDepositPercent != null ? Number(motoFresh.reservationDepositPercent) : null;
+        let amountTx: number;
+        const baseOrderData = {
+          reference,
+          userId: session.user.id,
+          motorcycleId: motoFresh.id,
+          kind: OrderKind.MOTORCYCLE,
+          orderStatus: "PENDING_PAYMENT" as const,
+          paymentType: parsed.data.paymentType,
+        };
+        if (parsed.data.paymentType === PaymentType.RESERVATION_DEPOSIT) {
+          const snap = computeDepositCheckoutSnapshot(motoFresh, settings, depPct, globalDepositPct);
+          if (!snap || snap.depositGhs <= 0) throwCheckoutConflict("INVALID_DEPOSIT_AMOUNT");
+          const anchors = resolveOrderStorageAnchors(motoFresh, snap.resolution);
+          amountTx = snap.depositGhs;
+          const ord = await tx.order.create({
+            data: {
+              ...baseOrderData,
+              currency: "GHS",
+              amount: amountTx,
+              depositAmount: snap.depositGhs,
+              remainingBalance: snap.remainingBalance,
+              orderDepositPercentSnapshot: snap.depositPercentApplied,
+              currencyBase: snap.resolution.currencyBase,
+              exchangeRateUsed: snap.resolution.exchangeRateUsed,
+              vehicleListPriceGhs: anchors.vehicleListPriceGhs,
+              baseAmount: anchors.baseAmount ?? undefined,
+              reservedAt: new Date(),
+            },
+          });
+          const pay = await tx.payment.create({
+            data: {
+              orderId: ord.id,
+              userId: session.user.id,
+              provider: "PAYSTACK",
+              settlementMethod: "PAYSTACK",
+              providerReference: reference,
+              amount: amountTx,
+              currency: "GHS",
+              status: "PENDING",
+              paymentType: parsed.data.paymentType,
+              idempotencyKey: reference,
+            },
+          });
+          return { order: ord, payment: pay, amount: amountTx };
+        }
+        const fullResolution = resolveVehicleListPriceGhs(motoFresh, settings);
+        const anchorsFull = resolveOrderStorageAnchors(motoFresh, fullResolution);
+        amountTx = Math.round(Math.max(0, fullResolution.fullListGhs) * 100) / 100;
+        const ord = await tx.order.create({
+          data: {
+            ...baseOrderData,
+            currency: "GHS",
+            amount: amountTx,
+            currencyBase: fullResolution.currencyBase,
+            exchangeRateUsed: fullResolution.exchangeRateUsed ?? undefined,
+            vehicleListPriceGhs: anchorsFull.vehicleListPriceGhs,
+            baseAmount: anchorsFull.baseAmount ?? undefined,
+          },
+        });
+        const pay = await tx.payment.create({
+          data: {
+            orderId: ord.id,
+            userId: session.user.id,
+            provider: "PAYSTACK",
+            settlementMethod: "PAYSTACK",
+            providerReference: reference,
+            amount: amountTx,
+            currency: "GHS",
+            status: "PENDING",
+            paymentType: parsed.data.paymentType,
+            idempotencyKey: reference,
+          },
+        });
+        return { order: ord, payment: pay, amount: amountTx };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 20_000,
+      },
+    );
+    order = created.order;
+    payment = created.payment;
+    amount = created.amount;
+  } catch (e: unknown) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return NextResponse.json(
+        { error: "Checkout is busy for this vehicle. Please try again in a moment.", code: "SERIALIZATION_RETRY" },
+        { status: 409 },
+      );
+    }
+    if (isCheckoutConflictError(e)) {
+      if (e.checkoutCode === "MOTORCYCLE_NOT_FOUND") {
+        return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+      }
+      if (e.checkoutCode === "INELIGIBLE" && e.checkoutReason) {
+        return NextResponse.json(
+          { error: customerCheckoutBlockedMessage(e.checkoutReason), code: e.checkoutReason },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "ALREADY_PURCHASED") {
+        return NextResponse.json(
+          { error: customerCheckoutBlockedMessage("VEHICLE_SOLD"), code: "VEHICLE_SOLD" },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "DEPOSIT_ALREADY_PAID") {
+        return NextResponse.json(
+          {
+            error:
+              "A reservation deposit for this vehicle is already on file. Open your orders or contact support to complete the remaining balance.",
+            code: "DEPOSIT_ALREADY_PAID",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "BALANCE_PAYMENT_ONLINE_UNAVAILABLE") {
+        return NextResponse.json(
+          {
+            error:
+              "This vehicle has an active reservation deposit. Complete the remaining balance with our team — online full payment cannot replace that flow yet.",
+            code: "BALANCE_PAYMENT_ONLINE_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
+      if (e.checkoutCode === "INVALID_DEPOSIT_AMOUNT") {
+        return NextResponse.json(
+          {
+            error:
+              "Reservation deposit could not be calculated. Check the vehicle list price and deposit percentage settings.",
+            code: "INVALID_DEPOSIT_AMOUNT",
+          },
+          { status: 409 },
+        );
+      }
+    }
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Unable to start payment", code: "SERVER_ERROR" },
+      { status: 500 },
+    );
+  }
+
+  let init: { authorization_url: string; reference: string };
+  try {
+    init = await paystackInitialize({
+      email,
+      amountMinorUnits: Math.round(amount * 100),
+      reference,
+      currency: "GHS",
+      metadata: {
+        orderId: order.id,
+        paymentId: payment.id,
+        motorcycleId: parsed.data.motorcycleId,
+      },
+      callbackUrl,
+      secretKey,
+    });
+  } catch (e) {
+    console.error("[payments/initialize] paystack", e);
+    return NextResponse.json(
+      {
+        error:
+          e instanceof Error
+            ? e.message
+            : "Could not open Paystack. Check configuration or try again in a moment.",
+        code: "PAYSTACK_ERROR",
+      },
+      { status: 502 },
+    );
+  }
+
+  const checkoutPv = await prisma.policyVersion.findFirst({
+    where: { policyKey: POLICY_KEYS.CHECKOUT_AGREEMENT, isActive: true },
+    orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }],
+  });
+  const riskPv =
+    requiresRiskAcknowledgement(motorcycle.sourceType) && parsed.data.riskAccepted ? await getActiveRiskPolicyRow() : null;
+  const activeContractRow = requiresSourcingContract(motorcycle.sourceType) ? await getActiveSourcingContractRow() : null;
+
+  const checkoutSnap =
+    checkoutPv?.title || checkoutPv?.content
+      ? `${checkoutPv.title ?? ""}\n\nVersion ${checkoutPv.version}\n\n${checkoutPv.content ?? ""}`.trim()
+      : null;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.agreementLog.create({
+        data: {
+          userId: session.user.id,
+          orderId: order.id,
+          agreementVersion: parsed.data.agreementVersion,
+          policyIds: [parsed.data.agreementVersion],
+          accepted: true,
+          ipAddress: ip,
+          userAgent,
+          acceptanceTextSnapshot: checkoutSnap,
+        },
+      });
+      if (checkoutPv) {
+        await recordUserPolicyAcceptance({
+          userId: session.user.id,
+          policyVersionId: checkoutPv.id,
+          context: ACCEPTANCE_CONTEXT.CHECKOUT,
+          ipAddress: ip,
+          userAgent,
+          tx,
+        });
+      }
+      if (riskPv && parsed.data.riskVersion) {
+        await recordUserPolicyAcceptance({
+          userId: session.user.id,
+          policyVersionId: riskPv.id,
+          context: ACCEPTANCE_CONTEXT.CHECKOUT,
+          ipAddress: ip,
+          userAgent,
+          tx,
+        });
+      }
+      if (requiresSourcingContract(motorcycle.sourceType) && parsed.data.contractAccepted && parsed.data.contractVersion) {
+        await recordUserContractAcceptance({
+          userId: session.user.id,
+          contractId: activeContractRow?.id ?? null,
+          orderId: order.id,
+          contractVersion: parsed.data.contractVersion,
+          context: "CAR_SOURCING",
+          ipAddress: ip,
+          userAgent,
+          tx,
+        });
+      }
+      if (requiresRiskAcknowledgement(motorcycle.sourceType) && parsed.data.riskAccepted && parsed.data.riskVersion) {
+        await tx.riskAcknowledgement.create({
+          data: {
+            userId: session.user.id,
+            orderId: order.id,
+            acknowledgementVersion: parsed.data.riskVersion,
+            context: motorcycle.sourceType,
+          },
+        });
+      }
+    });
+    await writeLegalAuditLog({
+      actorId: session.user.id,
+      targetUserId: session.user.id,
+      action: "USER_ACCEPTED_CHECKOUT_LEGAL",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: {
+        agreementVersion: parsed.data.agreementVersion,
+        contractVersion: parsed.data.contractVersion ?? null,
+        riskVersion: parsed.data.riskVersion ?? null,
+      },
+      ipAddress: ip,
+      userAgent,
+    });
+  } catch (e) {
+    console.error("[payments/initialize] agreement persistence", e);
+    return NextResponse.json(
+      {
+        error: "We could not save your agreement acceptances. Please try again or contact support.",
+        code: "AGREEMENT_PERSIST_ERROR",
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    authorizationUrl: init.authorization_url,
+    reference: init.reference,
+  });
+}

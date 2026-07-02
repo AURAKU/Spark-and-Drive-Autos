@@ -12,6 +12,7 @@ const fullAdminLinks: AdminNavLink[] = [
   { href: "/admin", label: "Command Center" },
   { href: "/admin/users", label: "All Users" },
   { href: "/admin/cars", label: "Cars Inventory" },
+  { href: "/admin/motorcycles", label: "Motorcycle Inventory" },
   { href: "/admin/parts", label: "Parts Management" },
   { href: "/admin/orders", label: "All Orders" },
   { href: "/admin/deposit-balances", label: "Deposit balances" },

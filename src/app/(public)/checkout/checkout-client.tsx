@@ -14,6 +14,7 @@ import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links"
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  checkoutUrlForVehicle,
   clearCheckoutIntent,
   persistCheckoutIntent,
   readCheckoutIntent,
@@ -67,10 +68,14 @@ let paymentInitializeInFlight = false;
 let resumePipelineToken: string | null = null;
 
 export function CheckoutClient({
+  vehicleKind,
+  vehicleId,
   checkoutSummary,
   checkoutBlock,
   legalRequirements,
 }: {
+  vehicleKind: "car" | "motorcycle" | null;
+  vehicleId: string | null;
   checkoutSummary: VehiclePricePreview | null;
   checkoutBlock?: { message: string; title: string } | null;
   legalRequirements: {
@@ -89,6 +94,10 @@ export function CheckoutClient({
   const router = useRouter();
   const { data: session, status } = useSession();
   const carId = sp.get("carId");
+  const motorcycleId = sp.get("motorcycleId");
+  const resolvedKind: "car" | "motorcycle" | null =
+    vehicleKind ?? (carId ? "car" : motorcycleId ? "motorcycle" : null);
+  const resolvedVehicleId = vehicleId ?? carId ?? motorcycleId;
   const type: CheckoutIntent["type"] =
     sp.get("type") === "RESERVATION_DEPOSIT" ? "RESERVATION_DEPOSIT" : "FULL";
   const [loading, setLoading] = useState(false);
@@ -113,11 +122,9 @@ export function CheckoutClient({
   const [paystackHandoff, setPaystackHandoff] = useState<{ authorizationUrl: string; reference: string } | null>(null);
 
   const returnToCheckout = useMemo(() => {
-    const q = new URLSearchParams();
-    if (carId) q.set("carId", carId);
-    q.set("type", type);
-    return `/checkout?${q.toString()}`;
-  }, [carId, type]);
+    if (!resolvedVehicleId || !resolvedKind) return "/checkout";
+    return checkoutUrlForVehicle({ vehicleKind: resolvedKind, vehicleId: resolvedVehicleId, type });
+  }, [resolvedVehicleId, resolvedKind, type]);
 
   /** After sign-in/register, land here with `resume=1` to continue without an extra tap. */
   const returnToCheckoutResume = useMemo(() => `${returnToCheckout}&resume=1`, [returnToCheckout]);
@@ -165,20 +172,25 @@ export function CheckoutClient({
   }
 
   const initiatePayment = useCallback(async () => {
-    if (!carId) {
+    if (!resolvedVehicleId || !resolvedKind) {
       toast.error("Missing vehicle.");
       return;
     }
     if (paymentInitializeInFlight) return;
     paymentInitializeInFlight = true;
     setLoading(true);
+    const initUrl =
+      resolvedKind === "motorcycle" ? "/api/payments/initialize-motorcycle" : "/api/payments/initialize";
+    const bodyPayload =
+      resolvedKind === "motorcycle"
+        ? { motorcycleId: resolvedVehicleId, paymentType: type }
+        : { carId: resolvedVehicleId, paymentType: type };
     try {
-      const res = await fetch("/api/payments/initialize", {
+      const res = await fetch(initUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          carId,
-          paymentType: type,
+          ...bodyPayload,
           agreementAccepted,
           agreementVersion: legalRequirements.agreementVersion,
           contractAccepted,
@@ -234,7 +246,8 @@ export function CheckoutClient({
     }
   }, [
     agreementAccepted,
-    carId,
+    resolvedVehicleId,
+    resolvedKind,
     contractAccepted,
     legalRequirements.agreementVersion,
     legalRequirements.contractVersion,
@@ -247,26 +260,26 @@ export function CheckoutClient({
 
   /** Restore /checkout from sessionStorage when the URL lost query params (refresh edge cases). */
   useEffect(() => {
-    if (carId) return;
+    if (resolvedVehicleId) return;
     const intent = readCheckoutIntent();
     if (!intent) return;
-    router.replace(`/checkout?carId=${encodeURIComponent(intent.carId)}&type=${encodeURIComponent(intent.type)}`);
-  }, [carId, router]);
+    router.replace(checkoutUrlForVehicle(intent));
+  }, [resolvedVehicleId, router]);
 
   /** Keep sessionStorage aligned with the current URL selection. */
   useEffect(() => {
-    if (!carId) return;
-    persistCheckoutIntent({ carId, type });
-  }, [carId, type]);
+    if (!resolvedVehicleId || !resolvedKind) return;
+    persistCheckoutIntent({ vehicleKind: resolvedKind, vehicleId: resolvedVehicleId, type });
+  }, [resolvedVehicleId, resolvedKind, type]);
 
   /** Guest: gate with modal. Signed-in: go straight to Paystack. */
   async function pay() {
-    if (!carId) {
+    if (!resolvedVehicleId || !resolvedKind) {
       toast.error("Missing vehicle.");
       return;
     }
     if (status === "unauthenticated" || !session?.user) {
-      persistCheckoutIntent({ carId, type });
+      persistCheckoutIntent({ vehicleKind: resolvedKind, vehicleId: resolvedVehicleId, type });
       setAuthGateOpen(true);
       return;
     }
@@ -294,9 +307,9 @@ export function CheckoutClient({
       resumePipelineToken = null;
       return;
     }
-    if (status !== "authenticated" || !session?.user?.id || !carId) return;
+    if (status !== "authenticated" || !session?.user?.id || !resolvedVehicleId) return;
 
-    const token = `${carId}|${type}|resume`;
+    const token = `${resolvedKind}|${resolvedVehicleId}|${type}|resume`;
     if (resumePipelineToken === token) return;
     resumePipelineToken = token;
 
@@ -320,7 +333,8 @@ export function CheckoutClient({
     checkoutBlock,
     status,
     session,
-    carId,
+    resolvedVehicleId,
+    resolvedKind,
     type,
     sp,
     router,
@@ -333,7 +347,7 @@ export function CheckoutClient({
     legalRequirements.profileLegalComplete,
   ]);
 
-  if (!carId) {
+  if (!resolvedVehicleId) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <p className="text-base leading-relaxed text-zinc-400">
@@ -607,11 +621,11 @@ export function CheckoutClient({
         </>
       ) : null}
 
-      {carId && !checkoutBlock ? (
+      {resolvedKind === "car" && resolvedVehicleId && !checkoutBlock ? (
         <p className="mt-8 text-base leading-relaxed text-zinc-500">
           Prefer bank transfer, Alipay transfer, mobile money, or cash at our designated office?{" "}
           <Link
-            href={`/checkout/manual?carId=${encodeURIComponent(carId)}&type=${encodeURIComponent(type)}`}
+            href={`/checkout/manual?carId=${encodeURIComponent(resolvedVehicleId)}&type=${encodeURIComponent(type)}`}
             className="font-semibold text-[var(--brand)] hover:underline"
           >
             Arrange an offline payment

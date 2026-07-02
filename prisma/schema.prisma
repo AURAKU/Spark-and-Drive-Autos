@@ -143,6 +143,7 @@ enum OrderStatus {
 enum OrderKind {
   CAR
   PARTS
+  MOTORCYCLE
 }
 
 /// Vehicle deposit balance lifecycle (outstanding balance after reservation deposit).
@@ -610,6 +611,8 @@ model User {
   legalAcceptedUserAgent String?   @db.VarChar(512)
 
   favorites                    Favorite[]
+  motorcycleFavorites          MotorcycleFavorite[]
+  motorcycleViews              MotorcycleView[]
   inquiries                    Inquiry[]
   carRequests                  CarRequest[]
   partSourcingRequests         PartSourcingRequest[]
@@ -914,6 +917,181 @@ model CarSpecification {
   @@index([carId])
 }
 
+enum MotorcycleType {
+  SPORT
+  NAKED
+  CRUISER
+  SCOOTER
+  ADVENTURE
+  TOURING
+  DIRT
+  DELIVERY
+  ELECTRIC_BIKE
+  E_BICYCLE
+  ATV
+  OTHER
+}
+
+/// Motorcycle & e-bike inventory — mirrors Car architecture.
+model Motorcycle {
+  id                 String             @id @default(cuid())
+  slug               String             @unique
+  title              String
+  brand              String
+  model              String
+  year               Int
+  variant            String?
+  motorcycleType     MotorcycleType
+  engineType         EngineType
+  transmission       String?
+  driveType          String?
+  mileage            Int?
+  color              String?
+  vin                String?
+  frameNumber        String?
+  engineNumber       String?
+  engineCc           Int?
+  condition          String?
+  sourceType         SourceType
+  availabilityStatus AvailabilityStatus @default(AVAILABLE)
+  inspectionStatus   String?
+  estimatedDelivery  String?
+  seaShippingFeeGhs  Decimal?           @db.Decimal(14, 2)
+  reservationDepositPercent Decimal?    @db.Decimal(5, 2)
+  basePriceAmount    Decimal            @default(0) @db.Decimal(14, 2)
+  basePriceCurrency  String             @default("GHS") @db.VarChar(3)
+  basePriceRmb       Decimal            @default(0) @db.Decimal(14, 2)
+  supplierCostAmount Decimal?           @db.Decimal(14, 2)
+  supplierCostCurrency String?          @db.VarChar(3)
+  supplierCostRmb    Decimal?           @db.Decimal(14, 2)
+  supplierDealerName         String?    @db.VarChar(200)
+  supplierDealerPhone        String?    @db.VarChar(40)
+  supplierDealerReference    String?    @db.Text
+  supplierDealerNotes        String?    @db.Text
+  price              Decimal            @db.Decimal(14, 2)
+  priceGhs           Decimal?           @db.Decimal(14, 2)
+  priceUsd           Decimal?           @db.Decimal(14, 2)
+  priceCny           Decimal?           @db.Decimal(14, 2)
+  currency           String             @default("GHS")
+  location           String?
+  featured           Boolean            @default(false)
+  listingState       CarListingState    @default(DRAFT)
+  featureTags        Json?
+  highlightTags      Json?
+  shortDescription   String?
+  longDescription    String?            @db.Text
+  accidentHistory    String?
+  warranty           String?
+  /// Plain-text specs (Label: Value lines) — parsed into MotorcycleSpecification rows.
+  specificationsText String?            @db.Text
+  /// Electric / performance optional fields
+  batteryCapacity    String?
+  motorPower         String?
+  electricRange      String?
+  chargingTime       String?
+  topSpeedKmh        Int?
+  horsepower         Int?
+  torque             String?
+  coolingType        String?
+  fuelTankCapacity   String?
+  weightKg           Int?
+  seatHeight         Int?
+  wheelSize          String?
+  tyreSize           String?
+  seoTitle           String?
+  seoDescription     String?
+  coverImageUrl      String?
+  coverImagePublicId String?
+  viewCount          Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  images    MotorcycleImage[]
+  videos    MotorcycleVideo[]
+  specs     MotorcycleSpecification[]
+  favorites MotorcycleFavorite[]
+  views     MotorcycleView[]
+  orders    Order[]
+
+  @@index([brand, model])
+  @@index([listingState, featured])
+  @@index([sourceType])
+  @@index([availabilityStatus])
+  @@index([motorcycleType])
+  @@index([engineType])
+}
+
+model MotorcycleImage {
+  id           String   @id @default(cuid())
+  motorcycleId String
+  url          String
+  publicId     String?
+  sortOrder    Int      @default(0)
+  altText      String?
+  isCover      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
+
+  @@index([motorcycleId, sortOrder])
+}
+
+model MotorcycleVideo {
+  id           String   @id @default(cuid())
+  motorcycleId String
+  url          String
+  publicId     String?
+  sortOrder    Int      @default(0)
+  durationSec  Int?
+  thumbnailUrl String?
+  mimeType     String?  @db.VarChar(120)
+  isFeatured   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
+
+  @@index([motorcycleId, sortOrder])
+}
+
+model MotorcycleSpecification {
+  id           String @id @default(cuid())
+  motorcycleId String
+  label        String
+  value        String
+  sortOrder    Int    @default(0)
+
+  motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
+
+  @@index([motorcycleId])
+}
+
+model MotorcycleFavorite {
+  id           String   @id @default(cuid())
+  userId       String
+  motorcycleId String
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, motorcycleId])
+  @@index([userId])
+}
+
+model MotorcycleView {
+  id           String   @id @default(cuid())
+  userId       String?
+  motorcycleId String
+  sessionId    String?  @db.VarChar(64)
+  viewedAt     DateTime @default(now())
+
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
+
+  @@index([motorcycleId, viewedAt])
+  @@index([userId, viewedAt])
+}
+
 model Inquiry {
   id         String        @id @default(cuid())
   carId      String?
@@ -1147,6 +1325,7 @@ model Order {
   id                      String      @id @default(cuid())
   userId                  String?
   carId                   String?
+  motorcycleId            String?
   leadId                  String?
   reference               String      @unique
   kind                    OrderKind   @default(CAR)
@@ -1200,6 +1379,7 @@ model Order {
 
   user                 User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   car                  Car?                  @relation(fields: [carId], references: [id], onDelete: SetNull)
+  motorcycle           Motorcycle?           @relation(fields: [motorcycleId], references: [id], onDelete: SetNull)
   lead                 Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   payments             Payment[]
   shippingUpdates      ShippingUpdate[]
@@ -1220,6 +1400,8 @@ model Order {
   @@index([orderStatus])
   @@index([reference])
   @@index([kind])
+  @@index([carId])
+  @@index([motorcycleId])
   @@index([receiptReference])
   @@index([balanceDueAt])
   @@index([balanceStatus])

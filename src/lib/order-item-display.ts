@@ -3,6 +3,7 @@ import type { Car, OrderKind, PartOrderItem } from "@prisma/client";
 type OrderRow = {
   kind: OrderKind;
   car: Pick<Car, "title"> | null;
+  motorcycle?: Pick<Car, "title"> | null;
   partItems: Array<Pick<PartOrderItem, "titleSnapshot">>;
 };
 
@@ -10,6 +11,9 @@ type OrderRow = {
 export function orderItemTitleSummary(o: OrderRow): string {
   if (o.kind === "CAR") {
     return o.car?.title?.trim() || "—";
+  }
+  if (o.kind === "MOTORCYCLE") {
+    return o.motorcycle?.title?.trim() || "—";
   }
   const items = o.partItems;
   if (items.length === 0) return "—";

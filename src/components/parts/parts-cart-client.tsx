@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { WalletTopupFlow } from "@/components/parts/wallet-topup-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { depositAmountGhsFromFull } from "@/lib/checkout-amount";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { formatOptionsLine } from "@/lib/part-variant-options";
 import type { PartStockStatus } from "@prisma/client";
@@ -49,6 +50,8 @@ type Props = {
   agreementVersion: string;
   /** True when profile already satisfies checkout + payment-notice policies (matches `/api/parts/cart/checkout` gates). */
   legalCheckoutReady?: boolean;
+  /** Global reservation deposit % for parts deposit checkout. */
+  partsDepositPercent?: number;
 };
 
 export function PartsCartClient({
@@ -58,8 +61,10 @@ export function PartsCartClient({
   addresses,
   agreementVersion,
   legalCheckoutReady = false,
+  partsDepositPercent = 5,
 }: Props) {
   const [rows, setRows] = useState(items);
+  const [paymentMethod, setPaymentMethod] = useState<"WALLET" | "PAYSTACK" | "DEPOSIT">("PAYSTACK");
   const [addressId, setAddressId] = useState(addresses.find((a) => a.isDefault)?.id ?? addresses[0]?.id ?? "");
   const [dispatchPhone, setDispatchPhone] = useState(
     () => addresses.find((a) => a.isDefault)?.phone ?? addresses[0]?.phone ?? "",
@@ -110,6 +115,14 @@ export function PartsCartClient({
     [selectedRows],
   );
   const hasFunds = walletBalance >= selectedTotal;
+  const depositDue =
+    paymentMethod === "DEPOSIT"
+      ? depositAmountGhsFromFull(selectedTotal, null, partsDepositPercent)
+      : selectedTotal;
+  const amountDueNow = paymentMethod === "DEPOSIT" ? depositDue : selectedTotal;
+  const remainingAfterDeposit =
+    paymentMethod === "DEPOSIT" ? Math.max(0, Math.round((selectedTotal - depositDue) * 100) / 100) : 0;
+  const canPayWithWallet = paymentMethod === "WALLET" && hasFunds;
 
   async function updateRow(itemId: string, payload: { quantity?: number; selected?: boolean }) {
     const res = await fetch("/api/parts/cart/items", {
@@ -231,7 +244,29 @@ export function PartsCartClient({
     const requestKey = checkoutRequestKey ?? crypto.randomUUID();
     if (!checkoutRequestKey) setCheckoutRequestKey(requestKey);
     try {
-      const res = await fetch("/api/parts/cart/checkout", {
+      if (paymentMethod === "WALLET") {
+        const res = await fetch("/api/parts/cart/checkout", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            addressId,
+            itemIds: selectedRows.map((r) => r.id),
+            requestKey,
+            agreementAccepted,
+            agreementVersion,
+            dispatchPhone: dispatchPhone.trim(),
+            deliveryInstructions: deliveryInstructions.trim() || undefined,
+            ...(hasBillableChinaSelected && chinaMode ? { chinaShippingChoice: chinaMode } : {}),
+          }),
+        });
+        const data = (await res.json()) as { orderId?: string; error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Checkout failed.");
+        toast.success("Order paid successfully.");
+        window.location.href = `/dashboard/orders/${data.orderId ?? ""}`;
+        return;
+      }
+
+      const res = await fetch("/api/parts/cart/checkout/paystack", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -240,14 +275,20 @@ export function PartsCartClient({
           requestKey,
           agreementAccepted,
           agreementVersion,
+          paymentMode: paymentMethod === "DEPOSIT" ? "DEPOSIT" : "FULL",
           dispatchPhone: dispatchPhone.trim(),
           deliveryInstructions: deliveryInstructions.trim() || undefined,
           ...(hasBillableChinaSelected && chinaMode ? { chinaShippingChoice: chinaMode } : {}),
         }),
       });
-      const data = (await res.json()) as { orderId?: string; error?: string };
+      const data = (await res.json()) as { authorizationUrl?: string; orderId?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Checkout failed.");
-      toast.success("Order paid successfully.");
+      if (data.authorizationUrl) {
+        toast.success("Redirecting to secure payment…");
+        window.location.href = data.authorizationUrl;
+        return;
+      }
+      toast.success("Order created.");
       window.location.href = `/dashboard/orders/${data.orderId ?? ""}`;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Checkout failed.");
@@ -400,9 +441,58 @@ export function PartsCartClient({
         </p>
         <p className="mt-1 text-sm text-zinc-300">
           Total due now:{" "}
-          <span className="font-semibold text-[var(--brand)]">GHS {selectedTotal.toLocaleString()}</span>
-          <span className="ml-2 text-xs text-zinc-500">(parts subtotal only)</span>
+          <span className="font-semibold text-[var(--brand)]">GHS {amountDueNow.toLocaleString()}</span>
+          {paymentMethod === "DEPOSIT" ? (
+            <span className="ml-2 text-xs text-zinc-500">
+              ({partsDepositPercent}% deposit · GHS {remainingAfterDeposit.toLocaleString()} balance later)
+            </span>
+          ) : (
+            <span className="ml-2 text-xs text-zinc-500">(parts subtotal only)</span>
+          )}
         </p>
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-semibold text-white">Payment method</p>
+          <div className="grid gap-2">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
+              <input
+                type="radio"
+                name="payMethod"
+                checked={paymentMethod === "PAYSTACK"}
+                onChange={() => setPaymentMethod("PAYSTACK")}
+              />
+              <span>
+                <span className="font-medium text-white">Pay immediately (Paystack)</span>
+                <span className="mt-0.5 block text-zinc-500">Card, mobile money, bank — via Paystack</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
+              <input
+                type="radio"
+                name="payMethod"
+                checked={paymentMethod === "WALLET"}
+                onChange={() => setPaymentMethod("WALLET")}
+              />
+              <span>
+                <span className="font-medium text-white">Pay using wallet</span>
+                <span className="mt-0.5 block text-zinc-500">Balance: GHS {walletBalance.toLocaleString()}</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
+              <input
+                type="radio"
+                name="payMethod"
+                checked={paymentMethod === "DEPOSIT"}
+                onChange={() => setPaymentMethod("DEPOSIT")}
+              />
+              <span>
+                <span className="font-medium text-white">Reservation deposit</span>
+                <span className="mt-0.5 block text-zinc-500">
+                  Pay {partsDepositPercent}% now via Paystack; settle balance with support before dispatch
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
         {chinaQuoteReference ? (
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
             China warehouse freight reference (~GHS {chinaQuoteReference.feeGhs.toLocaleString()}, {chinaQuoteReference.eta}
@@ -505,7 +595,7 @@ export function PartsCartClient({
           </div>
         ) : null}
 
-        {!hasFunds ? (
+        {!hasFunds && paymentMethod === "WALLET" ? (
           <div className="mt-4">
             <WalletTopupFlow
               walletBalance={walletBalance}
@@ -550,10 +640,21 @@ export function PartsCartClient({
         <Button
           type="button"
           className="mt-4 w-full"
-          disabled={loading || !hasFunds || addresses.length === 0 || selectedStockIssues.length > 0}
+          disabled={
+            loading ||
+            addresses.length === 0 ||
+            selectedStockIssues.length > 0 ||
+            (paymentMethod === "WALLET" && !canPayWithWallet)
+          }
           onClick={() => void checkout()}
         >
-          {loading ? "Processing..." : "Pay selected items"}
+          {loading
+            ? "Processing..."
+            : paymentMethod === "WALLET"
+              ? "Pay from wallet"
+              : paymentMethod === "DEPOSIT"
+                ? `Pay ${partsDepositPercent}% deposit`
+                : "Pay with Paystack"}
         </Button>
       </aside>
       </div>
