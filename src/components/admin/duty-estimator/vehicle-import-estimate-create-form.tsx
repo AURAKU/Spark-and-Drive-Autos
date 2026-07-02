@@ -10,6 +10,7 @@ import {
   EstimateLinkCombobox,
 } from "@/components/admin/duty-estimator/estimate-link-combobox";
 import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
+import { VEHICLE_IMPORT_ESTIMATE_NOTICE } from "@/lib/vehicle-import-estimate";
 import { useEffect, useMemo, useState } from "react";
 
 type OptionUser = { id: string; name: string | null; email: string | null };
@@ -222,7 +223,7 @@ export function VehicleImportEstimateCreateForm({ users, orders, inquiries, cars
         <textarea
           name="importantNotice"
           rows={4}
-          defaultValue="Important Notice: This document is an estimate only. Final duty and related import charges are determined by Ghana Customs and ICUMS at clearance."
+          defaultValue={VEHICLE_IMPORT_ESTIMATE_NOTICE}
           className="mt-1 w-full rounded-lg border border-amber-400/30 bg-amber-500/[0.07] px-3 py-2 text-sm text-amber-100 dark:text-amber-200"
         />
       </section>

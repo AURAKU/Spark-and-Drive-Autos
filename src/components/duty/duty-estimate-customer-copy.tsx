@@ -12,7 +12,7 @@ export function DutyEstimatesIntro() {
           <span className="font-medium text-zinc-200">Duty estimates</span> are planning documents our team prepares for{" "}
           <span className="text-zinc-200">each vehicle</span> — indicative Ghana import duty ranges and landed cost, with a
           clear disclaimer that{" "}
-          <span className="text-zinc-200">final charges are set by Ghana Customs / ICUMS</span> at clearance.
+          <span className="text-zinc-200">final charges are determined by Ghana Customs</span> at clearance. Planning figures use Spark &amp; Drive Duty Intelligence.
         </li>
         <li>
           When your vehicle is on its way and our team is ready to request{" "}

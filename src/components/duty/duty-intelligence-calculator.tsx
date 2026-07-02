@@ -15,7 +15,7 @@ import {
 import { formatMoney } from "@/lib/format";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
-import { DutyOfficialLinks } from "./duty-official-links";
+import { DutyIntelligenceSourceNote } from "./duty-intelligence-source-note";
 
 const VEHICLE_CATEGORIES = ["SUV", "SEDAN", "PICKUP", "TRUCK", "BUS", "VAN"] as const;
 const SHIPPING_METHODS = ["SEA_FREIGHT", "CONTAINER", "RORO", "AIR_FREIGHT"] as const;
@@ -174,7 +174,8 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <h3 className="text-sm font-semibold text-foreground dark:text-white">Duty Intelligence Engine V3</h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Freight, insurance, and CIF calculated automatically. Full landed cost with GRA taxes and port charges.
+            Freight, insurance, and CIF calculated automatically from Spark &amp; Drive configuration. Full landed cost
+            with import taxes, port charges, and clearing fees.
           </p>
         </div>
         {result && (
@@ -325,13 +326,18 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             <div className="flex justify-between"><span className="text-muted-foreground">HS Code</span><span className="font-mono">{result.hsCode}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Exchange rate</span><span>1 {result.exchangeRate.fromCurrency} = {result.exchangeRate.rate} GHS</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Calculation date</span><span>{new Date(result.calculatedAt).toLocaleDateString()}</span></div>
+            {result.summary.estimatedTransitDays != null ? (
+              <div className="flex justify-between"><span className="text-muted-foreground">Est. delivery</span><span>~{result.summary.estimatedTransitDays} days</span></div>
+            ) : null}
             <div className="flex justify-between"><span className="text-muted-foreground">FOB</span><span>{formatMoney(result.summary.fobGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Freight (auto)</span><span>{formatMoney(result.summary.freightGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Insurance (auto)</span><span>{formatMoney(result.summary.insuranceGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">CIF</span><span>{formatMoney(result.summary.cifGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">GRA taxes</span><span>{formatMoney(result.summary.totalGraTaxesGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Shipping (freight)</span><span>{formatMoney(result.summary.freightGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Insurance</span><span>{formatMoney(result.summary.insuranceGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">CIF value</span><span>{formatMoney(result.summary.cifGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Estimated import taxes</span><span>{formatMoney(result.summary.totalGraTaxesGhs)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Port charges</span><span>{formatMoney(result.summary.totalPortChargesGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Agent fees</span><span>{formatMoney(result.summary.agentFeesGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Shipping line charges</span><span>{formatMoney(result.summary.shippingLineChargesGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Clearing charges</span><span>{formatMoney(result.summary.agentFeesGhs)}</span></div>
           </div>
 
           {result.historicalComparison && (
@@ -394,7 +400,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
 
       <div className="mt-4 space-y-3">
         <DutyEstimateDisclosure />
-        <DutyOfficialLinks />
+        <DutyIntelligenceSourceNote compact={compact} />
       </div>
     </div>
   );

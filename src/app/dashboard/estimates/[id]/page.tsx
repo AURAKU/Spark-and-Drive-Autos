@@ -31,8 +31,8 @@ export default async function DashboardEstimateDetailPage(props: { params: Promi
         </PageHeading>
         <p className="mt-2 text-sm text-zinc-400">{estimate.vehicleName}</p>
         <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3 text-xs leading-relaxed text-amber-100/90">
-          Planning estimate only — final customs duty and payable import amounts are determined by Ghana Customs / ICUMS at
-          clearance. This document does not replace your order&apos;s clearance payment requests when operations publishes
+          Planning estimate only — final customs duty and payable import amounts are determined by Ghana Customs at
+          clearance. This document uses Spark &amp; Drive Duty Intelligence and does not replace your order&apos;s clearance payment requests when operations publishes
           them.
         </p>
       </div>

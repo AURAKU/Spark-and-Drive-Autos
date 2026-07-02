@@ -16,7 +16,7 @@ import {
 } from "@/actions/duty-admin";
 import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
 import { DutyEstimateDisclosure } from "@/components/duty/duty-estimate-disclosure";
-import { DutyOfficialLinks } from "@/components/duty/duty-official-links";
+import { DutyIntelligenceSourceNote } from "@/components/duty/duty-intelligence-source-note";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -209,8 +209,8 @@ export function AdminDutyHubClient({ rows }: Props) {
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold text-white">Recorded payable duty (GHS)</h3>
                   <p className="text-xs text-zinc-500">
-                    Operations-only figure for settlement (e.g. from your clearance paperwork or finance handoff). This
-                    is not an ICUMS certificate and does not replace official customs assessment.
+                    Operations-only figure for settlement (e.g. from your clearance paperwork or finance handoff). Final
+                    customs assessment is determined at the port by Ghana Customs.
                   </p>
                   <form
                     className="flex flex-wrap items-end gap-3"
@@ -320,7 +320,7 @@ export function AdminDutyHubClient({ rows }: Props) {
           defaultPowertrain={selected?.carEngineType ?? undefined}
           compact
         />
-        <DutyOfficialLinks compact />
+        <DutyIntelligenceSourceNote compact />
       </div>
     </div>
   );

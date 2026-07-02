@@ -128,7 +128,7 @@ export function VehicleImportEstimateEditorForm({ estimate, users, orders, inqui
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-zinc-500">Scales formula duty range; BEV aligns with ICUMS electric HS treatment (no engine cc).</p>
+          <p className="mt-1 text-[11px] text-zinc-500">Scales formula duty range; BEV uses configurable electric HS rules (no engine cc).</p>
         </div>
         <div className="md:col-span-2">
           <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">VIN</label>

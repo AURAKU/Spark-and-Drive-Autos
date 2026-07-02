@@ -9,7 +9,7 @@ import { AdminEstimatesHub } from "@/components/admin/admin-estimates-hub";
 import { PageHeading } from "@/components/typography/page-headings";
 import { AdminOperationsDateFilter } from "@/components/admin/admin-operations-date-filter";
 import { DutyEstimateDisclosure } from "@/components/duty/duty-estimate-disclosure";
-import { DutyOfficialLinks } from "@/components/duty/duty-official-links";
+import { DutyIntelligenceSourceNote } from "@/components/duty/duty-intelligence-source-note";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { appendOpsDateParams, parseOpsDateFromSearchParams } from "@/lib/admin-operations-date-filter";
 import type { AdminDutyOrderRow } from "@/lib/duty/admin-duty-types";
@@ -195,15 +195,15 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1420] to-black/60 p-6 shadow-[0_0_60px_-30px_rgba(49,182,199,0.2)]">
         <PageHeading variant="dashboard">Duty tracking</PageHeading>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
-          Manage import duty for vehicle orders arriving in Ghana. Estimates are planning aids only — final charges are
-          determined by Ghana Customs / ICUMS at clearance. Link each case to sea freight, publish customer-visible
-          updates, record assessed duty, and raise duty payment requests when ready.
+          Manage import duty for vehicle orders arriving in Ghana. Estimates come from Spark &amp; Drive Duty Intelligence
+          — final charges are determined by Ghana Customs at clearance. Link each case to sea freight, publish
+          customer-visible updates, record assessed duty, and raise duty payment requests when ready.
         </p>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
             <DutyEstimateDisclosure variant="long" />
           </div>
-          <DutyOfficialLinks compact />
+          <DutyIntelligenceSourceNote compact />
         </div>
         <p className="mt-4 text-xs text-zinc-600">
           Need the full vehicle record?{" "}

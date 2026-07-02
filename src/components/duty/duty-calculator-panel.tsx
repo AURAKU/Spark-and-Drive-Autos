@@ -15,7 +15,7 @@ import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { formatMoney } from "@/lib/format";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
-import { DutyOfficialLinks } from "./duty-official-links";
+import { DutyIntelligenceSourceNote } from "./duty-intelligence-source-note";
 
 const POWERTRAIN_OPTIONS: { value: DutyPowertrain; label: string }[] = DUTY_POWERTRAINS.map((value) => ({
   value,
@@ -79,7 +79,7 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
       <h3 className="text-sm font-semibold text-white">Duty estimate calculator</h3>
       <p className="mt-1 text-xs text-zinc-500">
         Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling — not necessarily the list price). Rates follow{" "}
-        <span className="text-zinc-400">Ghana GRA / ICUMS</span> planning references; BEV uses CET-style duty bands without engine cc.
+        <span className="text-zinc-400">Spark &amp; Drive Duty Intelligence</span> configuration; BEV uses configurable duty bands without engine cc.
       </p>
       <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
         <label className="block text-xs text-zinc-400 sm:col-span-2 lg:col-span-1">
@@ -129,7 +129,7 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
         ) : (
           <div className="flex items-end sm:col-span-2 lg:col-span-1">
             <p className="w-full rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[11px] leading-snug text-cyan-100/90">
-              Battery electric: no engine displacement. ICUMS classifies by HS (e.g. 8703 electric), VIN, and CIF — use the official calculator to confirm.
+              Battery electric: no engine displacement. Classification uses configurable HS rules, VIN, and CIF from Duty Intelligence.
             </p>
           </div>
         )}
@@ -143,8 +143,8 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
             className="mt-0.5 rounded border-white/20 bg-black/40"
           />
           <span>
-            Model <strong className="font-medium text-zinc-300">possible import duty exemption</strong> (e.g. announced relief for qualifying public-transport or assembly
-            categories). Personal-use cars may still pay standard CET — confirm with GRA before relying on this.
+            Model <strong className="font-medium text-zinc-300">possible import duty exemption</strong> (e.g. configured relief for qualifying public-transport or assembly
+            categories). Personal-use vehicles may still use standard configured duty rates.
           </span>
         </label>
       ) : null}
@@ -182,7 +182,7 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
       </div>
       {!compact ? (
         <div className="mt-5">
-          <DutyOfficialLinks />
+          <DutyIntelligenceSourceNote compact />
         </div>
       ) : null}
     </div>

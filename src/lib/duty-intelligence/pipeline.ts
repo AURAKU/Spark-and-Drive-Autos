@@ -255,7 +255,9 @@ export async function runDutyIntelligencePipeline(
       shippingLineChargesGhs,
       agentFeesGhs,
       totalLandedCostGhs,
+      estimatedTransitDays: freightEstimate.transitDays,
     },
+    calculatedAt: new Date().toISOString(),
     hsCode: hsResolution.code,
     hsCodeResolution: hsResolution,
     exchangeRate: {
@@ -269,10 +271,9 @@ export async function runDutyIntelligencePipeline(
     historicalComparison,
     predictionAdjustments,
     methodologyNote:
-      "Duty Intelligence Engine V3 — freight and insurance are calculated automatically from the shipping cost matrix and insurance rules. " +
-      "All tax rates and port charges are loaded from the database configuration. " +
-      "Estimates are for planning only; authoritative amounts are determined by GRA / ICUMS at clearance. " +
-      "Historical verified imports improve prediction accuracy over time.",
+      "Duty Intelligence Engine V3 — freight and insurance are calculated automatically from the Spark & Drive shipping cost matrix and insurance rules. " +
+      "All tax rates, levies, port charges, and clearing fees are loaded from admin-configured database rules and historical shipment records. " +
+      "Estimates are for planning only; final customs assessment is determined by Ghana Customs at clearance.",
   };
 }
 

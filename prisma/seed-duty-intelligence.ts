@@ -16,7 +16,7 @@ const GHANA_FORMULA_RULES = [
         { maxYears: 999, rate: 0.18 },
       ],
     },
-    formulaNote: "ICE age-based import duty on CIF — configurable per GRA ICUMS bands.",
+    formulaNote: "ICE age-based import duty on CIF — configurable age bands in Duty Intelligence.",
   },
   {
     code: "IMPORT_DUTY",
@@ -53,7 +53,7 @@ const GHANA_FORMULA_RULES = [
     rateValue: 0,
     sortOrder: 13,
     conditionsJson: { powertrain: "ELECTRIC", applyEvDutyWaiver: true },
-    formulaNote: "Modeled 0% for qualifying EV relief scenarios — confirm with GRA.",
+    formulaNote: "Modeled 0% for qualifying EV relief scenarios — admin-configurable.",
   },
   {
     code: "IMPORT_DUTY",
@@ -99,7 +99,7 @@ const GHANA_FORMULA_RULES = [
   { code: "EXIM_LEVY", label: "EXIM Levy", basis: "CIF" as const, rateType: "PERCENTAGE" as const, rateValue: 0.0075, sortOrder: 25, formulaNote: "0.75% EXIM levy." },
   { code: "AU_LEVY", label: "AU Levy", basis: "CIF" as const, rateType: "PERCENTAGE" as const, rateValue: 0.002, sortOrder: 26, formulaNote: "0.2% African Union levy." },
   { code: "INSPECTION_FEE", label: "Inspection Fee", basis: "FIXED" as const, rateType: "FIXED" as const, rateValue: 350, sortOrder: 30, formulaNote: "Fixed inspection fee (GHS) — update from verified imports." },
-  { code: "PROCESSING_FEE", label: "Processing Fee", basis: "FIXED" as const, rateType: "FIXED" as const, rateValue: 280, sortOrder: 31, formulaNote: "ICUMS processing fee estimate." },
+  { code: "PROCESSING_FEE", label: "Processing Fee", basis: "FIXED" as const, rateType: "FIXED" as const, rateValue: 280, sortOrder: 31, formulaNote: "Customs processing fee estimate (configurable)." },
   { code: "NETWORK_CHARGES", label: "Network Charges", basis: "FIXED" as const, rateType: "FIXED" as const, rateValue: 120, sortOrder: 32, formulaNote: "Network / system charges." },
   { code: "DISINFECTION_FEE", label: "Disinfection Fee", basis: "FIXED" as const, rateType: "FIXED" as const, rateValue: 85, sortOrder: 33, formulaNote: "Port disinfection charge." },
   { code: "VAT", label: "Import VAT", basis: "VAT_BASE" as const, rateType: "PERCENTAGE" as const, rateValue: 0.15, sortOrder: 40, formulaNote: "15% VAT on (CIF + import duty + levies)." },

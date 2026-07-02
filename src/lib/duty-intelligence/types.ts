@@ -152,7 +152,11 @@ export type DutyIntelligenceResult = {
     shippingLineChargesGhs: number;
     agentFeesGhs: number;
     totalLandedCostGhs: number;
+    /** Sea/air transit estimate from shipping cost matrix (days). */
+    estimatedTransitDays: number | null;
   };
+  /** ISO timestamp when this estimate was produced. */
+  calculatedAt: string;
   hsCode: string;
   hsCodeResolution: { code: string; description: string; method: string };
   exchangeRate: { rate: number; source: string; fromCurrency: string; effectiveDate: string };

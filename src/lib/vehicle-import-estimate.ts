@@ -2,7 +2,7 @@ import { EngineType } from "@prisma/client";
 import { z } from "zod";
 
 export const VEHICLE_IMPORT_ESTIMATE_NOTICE =
-  "Important Notice: This document is an estimate only. Final duty and related import charges are determined by Ghana Customs and ICUMS at clearance.";
+  "Important Notice: This document is an estimate only. Final duty and related import charges are determined by Ghana Customs at clearance. Figures are generated using Spark & Drive Duty Intelligence configuration and historical shipment data.";
 
 export type DutyEstimateMode = "MANUAL" | "FORMULA" | "HYBRID";
 export const vehicleImportEstimateStatusSchema = z.enum(["DRAFT", "SENT", "ACCEPTED", "EXPIRED", "SUPERSEDED"]);
@@ -226,16 +226,16 @@ export function deriveDutyEstimate(input: DutyLogicInput): DutyLogicResult {
 
   const powertrainHint =
     input.engineType === "ELECTRIC"
-      ? " Powertrain: BEV — ICUMS uses electric HS classification (no engine cc); announced duty relief may apply only to eligible categories."
+      ? " Powertrain: BEV — classified using configurable electric HS rules (no engine cc); duty relief may apply only to eligible categories."
       : input.engineType === "HYBRID" || input.engineType === "PLUGIN_HYBRID"
-        ? " Powertrain: hybrid / PHEV — confirm combined ICE/electric HS treatment and rates in ICUMS."
+        ? " Powertrain: hybrid / PHEV — combined ICE/electric treatment uses configurable Duty Intelligence rules."
         : "";
 
   const uncertaintyNote =
     (mode === "MANUAL"
-      ? "Manual admin estimate. Verify against Ghana Customs / ICUMS assessment on arrival."
+      ? "Manual admin estimate based on Spark & Drive configuration. Final payable duty is determined at Ghana Customs clearance."
       : mode === "FORMULA"
-        ? "Formula-driven planning range using CIF-based duty assumptions. Treat as directional only until official customs assessment."
+        ? "Formula-driven planning range using CIF-based duty assumptions from Duty Intelligence. Treat as directional until customs assessment."
         : "Hybrid estimate: manual + formula-derived values combined for planning. Final payable duty remains customs-determined.") + powertrainHint;
 
   return {

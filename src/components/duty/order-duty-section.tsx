@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { DutyEstimateDisclosure } from "@/components/duty/duty-estimate-disclosure";
-import { DutyOfficialLinks } from "@/components/duty/duty-official-links";
+import { DutyIntelligenceSourceNote } from "@/components/duty/duty-intelligence-source-note";
 import { PaymentStatusBadge } from "@/components/payments/payment-status-badge";
 import { formatMoney } from "@/lib/format";
 import { dutyWorkflowLabel } from "@/lib/duty/workflow";
@@ -31,19 +31,19 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
         <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
           <p className="text-sm leading-relaxed text-zinc-300">
             We have not opened a duty file for this order yet. That usually happens after your vehicle is on a sea
-            shipment and our operations team links clearance tracking to your order. You will see stage updates,
-            official references, and any duty payment requests here — not before we have something concrete to share.
+            shipment and our operations team links clearance tracking to your order. You will see stage updates and any
+            duty payment requests here — not before we have something concrete to share.
           </p>
           <p className="mt-3 text-xs text-zinc-500">
-            Nothing below is an estimate or a bill until we publish it. For general rules and portals, use the official
-            links.
+            For planning estimates before your file is open, use the Duty Intelligence calculator on vehicle listings or
+            contact support.
           </p>
         </div>
         <div className="mt-5 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3">
           <DutyEstimateDisclosure variant="short" />
         </div>
         <div className="mt-4">
-          <DutyOfficialLinks compact />
+          <DutyIntelligenceSourceNote compact />
         </div>
         <p className="mt-4 text-xs text-zinc-600">
           Questions?{" "}
@@ -111,7 +111,7 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
           <p className="mt-1 text-lg font-semibold text-emerald-100">{formatMoney(Number(duty.assessedDutyGhs), duty.currency)}</p>
           <p className="mt-2 text-xs text-emerald-100/70">
             This is the amount our team recorded for settlement in Spark &amp; Drive — not a Ghana Customs assessment
-            certificate. Final charges always follow ICUMS / your clearance paperwork.
+            certificate. Final charges follow your clearance paperwork at the port.
           </p>
         </div>
       ) : null}
@@ -139,7 +139,7 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
         <DutyEstimateDisclosure variant="short" />
       </div>
       <div className="mt-4">
-        <DutyOfficialLinks compact />
+        <DutyIntelligenceSourceNote compact />
       </div>
     </div>
   );
