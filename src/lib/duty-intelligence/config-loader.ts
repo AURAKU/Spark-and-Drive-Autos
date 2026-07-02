@@ -1,8 +1,9 @@
 import type { DutyCountryCode } from "@prisma/client";
 
+import { initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap";
 import { prisma } from "@/lib/prisma";
 
-import { dutyCacheGet, dutyCacheKey, dutyCacheSet } from "./cache";
+import { dutyCacheGet, dutyCacheInvalidate, dutyCacheKey, dutyCacheSet } from "./cache";
 import type { CountryConfigBundle, LoadedChargeTemplate, LoadedFormulaRule, LoadedHsCode } from "./types";
 
 function toNum(v: unknown): number {
@@ -15,10 +16,32 @@ export class DutyConfigNotFoundError extends Error {
   readonly countryCode: DutyCountryCode;
 
   constructor(countryCode: DutyCountryCode) {
-    super(`Duty country config not found for ${countryCode}`);
+    super(`Duty country config not found for ${countryCode} after automatic bootstrap`);
     this.name = "DutyConfigNotFoundError";
     this.countryCode = countryCode;
   }
+}
+
+let ghBootstrapInFlight: Promise<boolean> | null = null;
+
+/** Idempotently create Ghana duty configuration when the row or child data is missing. */
+async function bootstrapGhanaDutyConfigIfMissing(): Promise<boolean> {
+  if (!ghBootstrapInFlight) {
+    ghBootstrapInFlight = (async () => {
+      console.warn("[duty-intelligence] Missing Ghana (GH) duty config — running idempotent bootstrap...");
+      const result = await initializeGhanaDutyConfig();
+      if (!result.ok) {
+        console.error("[duty-intelligence] Ghana bootstrap failed:", result.error);
+        return false;
+      }
+      await dutyCacheInvalidate("duty:");
+      console.info("[duty-intelligence] Ghana duty config ready:", result.countryConfigId);
+      return true;
+    })().finally(() => {
+      ghBootstrapInFlight = null;
+    });
+  }
+  return ghBootstrapInFlight;
 }
 
 async function fetchCountryBundle(countryCode: DutyCountryCode): Promise<CountryConfigBundle | null> {
@@ -83,7 +106,12 @@ async function fetchCountryBundle(countryCode: DutyCountryCode): Promise<Country
   };
 }
 
-/** Load country config — returns null instead of throwing when missing. */
+function isGhanaBundleViable(bundle: CountryConfigBundle | null): boolean {
+  if (!bundle) return false;
+  return bundle.formulaRules.length > 0 && bundle.hsCodes.length > 0 && bundle.chargeTemplates.length > 0;
+}
+
+/** Load country config — returns null only when bootstrap also fails. */
 export async function loadCountryConfigSafe(
   countryCode: DutyCountryCode = "GH",
 ): Promise<CountryConfigBundle | null> {
@@ -91,14 +119,32 @@ export async function loadCountryConfigSafe(
   const cached = await dutyCacheGet<CountryConfigBundle>(cacheKey);
   if (cached) return cached;
 
-  const bundle = await fetchCountryBundle(countryCode);
+  let bundle = await fetchCountryBundle(countryCode);
+
+  if (countryCode === "GH" && !isGhanaBundleViable(bundle)) {
+    const bootstrapped = await bootstrapGhanaDutyConfigIfMissing();
+    if (bootstrapped) {
+      bundle = await fetchCountryBundle(countryCode);
+    }
+  }
+
   if (bundle) await dutyCacheSet(cacheKey, bundle);
   return bundle;
 }
 
-/** Load country config — throws DutyConfigNotFoundError when missing (internal use after health check). */
+/**
+ * Load country config with automatic Ghana bootstrap — preferred entry point for API routes and admin.
+ * Self-heals missing production data instead of requiring manual seed.
+ */
+export async function ensureCountryConfig(
+  countryCode: DutyCountryCode = "GH",
+): Promise<CountryConfigBundle | null> {
+  return loadCountryConfigSafe(countryCode);
+}
+
+/** Load country config — auto-bootstraps Ghana; throws only if bootstrap cannot recover. */
 export async function loadCountryConfig(countryCode: DutyCountryCode = "GH"): Promise<CountryConfigBundle> {
-  const bundle = await loadCountryConfigSafe(countryCode);
+  const bundle = await ensureCountryConfig(countryCode);
   if (!bundle) throw new DutyConfigNotFoundError(countryCode);
   return bundle;
 }

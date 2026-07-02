@@ -164,6 +164,13 @@ describe("duty intelligence engine v3", () => {
   });
 });
 
+describe("duty config bootstrap helpers", () => {
+  it("exports ensureCountryConfig loader", async () => {
+    const { ensureCountryConfig } = await import("@/lib/duty-intelligence/config-loader");
+    assert.equal(typeof ensureCountryConfig, "function");
+  });
+});
+
 describe("duty calculation input validation", () => {
   it("rejects future year and zero FOB", async () => {
     const { dutyCalculationInputSchema } = await import("@/lib/duty-intelligence/types");

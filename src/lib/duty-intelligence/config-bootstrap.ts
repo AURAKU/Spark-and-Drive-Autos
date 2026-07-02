@@ -1,6 +1,7 @@
 import type { DutyCountryCode } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache";
 import { seedDutyIntelligence } from "../../../prisma/seed-duty-intelligence";
 
 export type DutyConfigHealth = {
@@ -94,6 +95,7 @@ export async function checkDutyConfigHealth(
 export async function initializeGhanaDutyConfig(): Promise<{ ok: true; countryConfigId: string } | { ok: false; error: string }> {
   try {
     const country = await seedDutyIntelligence(prisma);
+    await dutyCacheInvalidate("duty:");
     return { ok: true, countryConfigId: country.id };
   } catch (e) {
     console.error("[initializeGhanaDutyConfig]", e);
@@ -104,4 +106,5 @@ export async function initializeGhanaDutyConfig(): Promise<{ ok: true; countryCo
 export const USER_CONFIG_UNAVAILABLE_MESSAGE =
   "Duty configuration is currently unavailable. Please contact the administrator.";
 
-export const ADMIN_CONFIG_INIT_HINT = "Click Initialize Ghana Duty Configuration.";
+export const ADMIN_CONFIG_INIT_HINT =
+  "Ghana duty configuration is being initialized automatically. Retry in a moment or run npm run seed:duty on the server.";

@@ -9,7 +9,7 @@ import {
   checkDutyConfigHealth,
   initializeGhanaDutyConfig,
 } from "@/lib/duty-intelligence/config-bootstrap";
-import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
+import { ensureCountryConfig } from "@/lib/duty-intelligence/config-loader";
 import { getDutyAnalytics } from "@/lib/duty-intelligence/analytics";
 import { processDocumentOcr } from "@/lib/duty-intelligence/ocr";
 import { isPipelineError, runDutyIntelligencePipeline, saveDutyCalculation } from "@/lib/duty-intelligence/pipeline";
@@ -167,7 +167,7 @@ export async function addExchangeRateAction(
   });
   if (!parsed.success) return { error: "Invalid exchange rate." };
 
-  const config = await loadCountryConfigSafe("GH");
+  const config = await ensureCountryConfig("GH");
   if (!config) return { error: "Ghana duty configuration not initialized." };
   await prisma.dutyExchangeRate.create({
     data: {
@@ -195,7 +195,7 @@ export async function createVerifiedImportAction(
   const parsed = verifiedImportSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: "Invalid verified import data." };
 
-  const config = await loadCountryConfigSafe("GH");
+  const config = await ensureCountryConfig("GH");
   if (!config) return { error: "Ghana duty configuration not initialized." };
   const row = await prisma.dutyVerifiedImport.create({
     data: {
@@ -341,7 +341,7 @@ export async function updateInsuranceRuleAction(
 export async function getDutyIntelligenceDashboardData() {
   await requireAdmin();
   const health = await checkDutyConfigHealth("GH");
-  const config = await loadCountryConfigSafe("GH");
+  const config = await ensureCountryConfig("GH");
 
   if (!config) {
     return {

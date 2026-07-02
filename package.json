@@ -38,6 +38,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:duty": "tsx prisma/seed-duty-only.ts",
     "seed:admin": "tsx scripts/seed-super-admin.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:studio": "prisma studio",

@@ -23,6 +23,31 @@ function scheduleDepositBalanceMaintenance(): void {
   }
 }
 
+function scheduleDutyConfigBootstrap(): void {
+  const run = () => {
+    void import("@/lib/duty-intelligence/duty-config-startup")
+      .then((m) => m.runDutyConfigStartupSync())
+      .then((result) => {
+        if (result.ok) {
+          if (result.bootstrapped) {
+            console.info("[instrumentation] Ghana duty configuration bootstrapped on startup");
+          }
+          return;
+        }
+        console.warn("[instrumentation] duty-config-startup skipped or failed:", result.reason);
+      })
+      .catch((e: unknown) => {
+        console.error("[instrumentation] duty-config-startup unexpected rejection (bug)", e);
+      });
+  };
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(run);
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
 export async function register() {
   if (typeof process === "undefined" || typeof process.versions?.node === "undefined") {
     return;
@@ -30,8 +55,9 @@ export async function register() {
 
   try {
     scheduleDepositBalanceMaintenance();
+    scheduleDutyConfigBootstrap();
   } catch (e) {
-    console.error("[instrumentation] deposit-balance schedule failed (non-fatal)", e);
+    console.error("[instrumentation] startup maintenance schedule failed (non-fatal)", e);
   }
 
   if (process.env.NODE_ENV !== "production") return;
