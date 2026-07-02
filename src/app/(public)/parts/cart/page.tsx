@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { PartsCartClient } from "@/components/parts/parts-cart-client";
 import { PageHeading } from "@/components/typography/page-headings";
+import { depositAmountGhsFromFull, globalReservationDepositPercentFromSettings } from "@/lib/checkout-amount";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import { getCheckoutLegalVersions, POLICY_KEYS } from "@/lib/legal-enforcement";
 import { getActivePolicy, hasUserAccepted } from "@/lib/legal-versioning";
@@ -101,6 +102,7 @@ export default async function PartsCartPage() {
       ? hasUserAccepted(session.user.id, POLICY_KEYS.PAYMENT_CONFIRMATION_NOTICE, payNoticePolicy.version)
       : Promise.resolve(true),
   ]);
+  const partsDepositPercent = globalReservationDepositPercentFromSettings(fx);
   const legalCheckoutReady = checkoutAgreementOk && paymentNoticeOk;
 
   return (
@@ -117,7 +119,7 @@ export default async function PartsCartPage() {
       <div className="relative z-[1] mx-auto min-w-0 max-w-6xl px-4 py-12 sm:px-6">
         <PageHeading>Parts cart</PageHeading>
         <p className="mt-2 text-sm text-zinc-300">
-          Select items ready for payment, choose delivery address, and complete wallet checkout.
+          Select items, choose a payment method (Paystack, wallet, or reservation deposit), and complete checkout.
         </p>
         <div className="parts-surface mt-8 rounded-2xl border border-red-300/20 bg-black/40 p-4 shadow-[0_0_45px_-25px_rgba(239,68,68,0.72)] sm:p-5">
           <PartsCartClient
@@ -153,6 +155,7 @@ export default async function PartsCartPage() {
             addresses={user?.addresses ?? []}
             agreementVersion={legal.agreementVersion}
             legalCheckoutReady={legalCheckoutReady}
+            partsDepositPercent={partsDepositPercent}
           />
         </div>
       </div>

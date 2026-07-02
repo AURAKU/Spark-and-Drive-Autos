@@ -17,7 +17,7 @@ const exploreLinks: readonly FooterLinkItem[] = [
   { href: "/parts-finder/entry", label: "Spark Parts Finder" },
   { href: "/chat", label: "Live Support Chat" },
   { href: "/parts", label: "Buy Parts & Accessories" },
-  { href: "/electric-bikes-motorcycles", label: "Electric bikes & motorcycles" },
+  { href: "/motorcycles", label: "Motorcycles & e-bikes" },
 ];
 
 const companyLinks = [

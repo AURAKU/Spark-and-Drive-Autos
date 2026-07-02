@@ -19,6 +19,8 @@ import { writeAuditLog } from "@/lib/audit";
 import { canUploadPaymentProof } from "@/lib/payment-status-utils";
 import { syncDutyWorkflowAfterDutyPaymentSuccessInTx } from "@/lib/duty/sync-from-payment";
 import { ensureCarSeaShipmentInTx } from "@/lib/shipping/shipment-service";
+import { finalizePartsPaystackOrder } from "@/lib/parts-checkout";
+import { syncMotorcycleInventoryAfterSuccessfulPayment } from "@/lib/sold-motorcycle";
 import { syncCarInventoryAfterSuccessfulVehiclePayment } from "@/lib/sold-vehicle";
 import {
   addDays,
@@ -83,6 +85,10 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
       await syncCarOrderReceiptPdf(payment.orderId);
     }
     await syncCarInventoryAfterSuccessfulVehiclePayment(paymentId);
+    await syncMotorcycleInventoryAfterSuccessfulPayment(paymentId);
+    if (payment.order?.kind === "PARTS" && payment.orderId) {
+      await finalizePartsPaystackOrder(payment.orderId);
+    }
     revalidatePaymentPaths(paymentId, payment.userId);
     if (payment.orderId) void revalidatePathsForOrder(payment.orderId);
     return;
@@ -124,11 +130,15 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
     });
     if (opts.toStatus === "SUCCESS" && payment.orderId) {
       const ord = payment.order;
-      const isCarDeposit =
-        payment.paymentType === PaymentType.RESERVATION_DEPOSIT && ord?.kind === "CAR";
+      const isVehicleDeposit =
+        payment.paymentType === PaymentType.RESERVATION_DEPOSIT &&
+        (ord?.kind === "CAR" || ord?.kind === "MOTORCYCLE");
+      const isPartsDeposit =
+        payment.paymentType === PaymentType.RESERVATION_DEPOSIT && ord?.kind === "PARTS";
       const isCarFull = payment.paymentType === PaymentType.FULL && ord?.kind === "CAR";
+      void (payment.paymentType === PaymentType.FULL && ord?.kind === "MOTORCYCLE");
 
-      if (isCarDeposit) {
+      if (isVehicleDeposit || isPartsDeposit) {
         const paidAt = paidAtResolved ?? new Date();
         const balanceDueAt = addDays(paidAt, BALANCE_DUE_WINDOW_DAYS);
         const rem = ord?.remainingBalance != null ? Number(ord.remainingBalance) : 0;
@@ -137,7 +147,9 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
           where: { id: payment.orderId },
           data: {
             orderStatus: OrderStatus.RESERVED_WITH_DEPOSIT,
-            receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
+            receiptReference:
+              payment.order?.receiptReference ??
+              createReceiptReference(ord?.kind === "PARTS" ? "SDA-PART-RCP" : "SDA-CAR-RCP"),
             depositAmount: Number(payment.amount),
             balanceDueAt,
             balanceStatus: bs,
@@ -159,7 +171,9 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
           where: { id: payment.orderId },
           data: {
             orderStatus: OrderStatus.PAID,
-            receiptReference: payment.order?.receiptReference ?? createReceiptReference("SDA-CAR-RCP"),
+            receiptReference: payment.order?.receiptReference ?? createReceiptReference(
+              ord?.kind === "PARTS" ? "SDA-PART-RCP" : "SDA-CAR-RCP",
+            ),
             ...carFullBalancePatch,
           },
         });
@@ -172,6 +186,7 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
             estimatedDuration: ord.car?.estimatedDelivery ?? null,
           });
         }
+        // Motorcycle shipments handled via ops workflow — no auto sea shipment hook yet.
       }
       if (payment.paymentType === "DUTY" && payment.orderId && payment.order?.kind === "CAR") {
         await syncDutyWorkflowAfterDutyPaymentSuccessInTx(tx, payment.orderId);
@@ -236,6 +251,10 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
         await syncCarOrderReceiptPdf(payment.orderId);
       }
       await syncCarInventoryAfterSuccessfulVehiclePayment(paymentId);
+      await syncMotorcycleInventoryAfterSuccessfulPayment(paymentId);
+      if (payment.order?.kind === "PARTS") {
+        await finalizePartsPaystackOrder(payment.orderId!);
+      }
     } catch (e) {
       console.error("[transitionPaymentStatus] syncCarInventory", e);
     }

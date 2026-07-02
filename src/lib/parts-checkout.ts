@@ -4,6 +4,10 @@ import { DeliveryMode, NotificationType, Prisma, ReceiptType } from "@prisma/cli
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { getGlobalCurrencySettings } from "@/lib/currency";
 import {
+  depositAmountGhsFromFull,
+  globalReservationDepositPercentFromSettings,
+} from "@/lib/checkout-amount";
+import {
   partOutOfStockCustomerMessage,
   partQuantityExceedsStockMessage,
   PartsStockError,
@@ -485,3 +489,296 @@ export async function createPartsWalletOrder(input: {
 
   return { orderId: result.id, reference: result.reference };
 }
+
+export type PartsPaystackCheckoutInput = Omit<
+  Parameters<typeof createPartsWalletOrder>[0],
+  never
+> & {
+  paymentMode: "FULL" | "DEPOSIT";
+};
+
+/** Creates a pending PARTS order + Paystack payment — stock is decremented after payment succeeds. */
+export async function createPartsPaystackPendingOrder(
+  input: PartsPaystackCheckoutInput,
+): Promise<{ orderId: string; reference: string; amountGhs: number; paymentId: string }> {
+  if (input.items.length === 0) throw new Error("Select at least one item.");
+  const legal = await getCheckoutLegalVersions();
+  if (input.agreementVersion !== legal.agreementVersion) {
+    throw new Error("STALE_CHECKOUT_AGREEMENT");
+  }
+
+  const fx = await getGlobalCurrencySettings();
+  const idempotencyRef =
+    input.requestKey && input.requestKey.trim().length > 0 ? `SDA-PART-PS-${input.requestKey.trim()}` : null;
+  if (idempotencyRef) {
+    const existing = await prisma.payment.findFirst({
+      where: { idempotencyKey: idempotencyRef, order: { kind: "PARTS" } },
+      select: { id: true, orderId: true, amount: true, order: { select: { reference: true, orderStatus: true } } },
+    });
+    if (existing?.orderId && existing.order?.orderStatus === "PENDING_PAYMENT") {
+      return {
+        orderId: existing.orderId,
+        reference: existing.order?.reference ?? idempotencyRef,
+        amountGhs: Number(existing.amount ?? 0),
+        paymentId: existing.id,
+      };
+    }
+  }
+
+  const [user, address, dbParts] = await Promise.all([
+    prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, email: true } }),
+    prisma.userAddress.findFirst({
+      where: { id: input.addressId, userId: input.userId },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        region: true,
+        city: true,
+        streetAddress: true,
+        digitalAddress: true,
+      },
+    }),
+    prisma.part.findMany({
+      where: { id: { in: input.items.map((i) => i.partId) }, listingState: "PUBLISHED" },
+      select: {
+        id: true,
+        title: true,
+        stockQty: true,
+        stockStatus: true,
+        origin: true,
+        basePriceRmb: true,
+        priceGhs: true,
+        coverImageUrl: true,
+        metaJson: true,
+      },
+    }),
+  ]);
+
+  if (!user?.email) throw new Error("Account email missing.");
+  if (!address) throw new Error("Delivery address is required.");
+  const dispatchPhone = (input.dispatchPhone?.trim() || address.phone).trim();
+  if (dispatchPhone.length < 8) {
+    throw new Error("Enter a dispatch phone number (at least 8 characters) for delivery contact.");
+  }
+
+  const partMap = new Map(dbParts.map((p) => [p.id, p]));
+  const qtyByPart = new Map<string, number>();
+  for (const it of input.items) {
+    qtyByPart.set(it.partId, (qtyByPart.get(it.partId) ?? 0) + it.quantity);
+  }
+  for (const [partId, totalQty] of qtyByPart) {
+    const part = partMap.get(partId);
+    if (!part) throw new Error("Some selected items are unavailable.");
+    if (!isChinaPreOrderPart(part)) {
+      if (part.stockQty < 1) {
+        throw new PartsStockError(
+          partOutOfStockCustomerMessage(part.title),
+          "OUT_OF_STOCK",
+          part.title,
+          0,
+          totalQty,
+        );
+      }
+      if (part.stockQty < totalQty) {
+        throw new PartsStockError(
+          partQuantityExceedsStockMessage(part.title, totalQty, part.stockQty),
+          "INSUFFICIENT_STOCK",
+          part.title,
+          part.stockQty,
+          totalQty,
+        );
+      }
+    }
+  }
+
+  const normalizedItems = input.items.map((item) => {
+    const part = partMap.get(item.partId);
+    if (!part) throw new Error("Some selected items are unavailable.");
+    if (item.quantity < 1) throw new Error("Invalid item quantity.");
+    const lists = parsePartOptionsMeta(part.metaJson);
+    const opt = item.options ?? {};
+    const v = validateSelectionAgainstPart(lists, opt);
+    if (!v.ok) throw new Error(v.error);
+    const unitPrice = getPartDisplayPrice(
+      { origin: part.origin, basePriceRmb: Number(part.basePriceRmb), priceGhs: Number(part.priceGhs) },
+      "GHS",
+      fx,
+    ).amount;
+    const lineTotal = unitPrice * item.quantity;
+    return { part, quantity: item.quantity, unitPrice, lineTotal, options: item.options, cartItemId: item.cartItemId };
+  });
+
+  const partsSubtotal = normalizedItems.reduce((sum, i) => sum + i.lineTotal, 0);
+  const billableChinaPartIds = [
+    ...new Set(
+      normalizedItems
+        .filter((i) => i.part.origin === "CHINA" && !isChinaPreOrderPart(i.part))
+        .map((i) => i.part.id),
+    ),
+  ];
+  if (billableChinaPartIds.length > 0 && !input.chinaShippingChoice) {
+    throw new Error("Select Air or Sea shipping for China in-stock parts.");
+  }
+
+  const globalPct = globalReservationDepositPercentFromSettings(fx);
+  const isDeposit = input.paymentMode === "DEPOSIT";
+  const depositGhs = isDeposit ? depositAmountGhsFromFull(partsSubtotal, null, globalPct) : partsSubtotal;
+  const chargeGhs = isDeposit ? depositGhs : partsSubtotal;
+  if (chargeGhs <= 0) throw new Error("Checkout total must be greater than zero.");
+
+  const reference = `SDA-PART-${nanoid(10).toUpperCase()}`;
+  const receiptReference = createReceiptReference();
+  const lineTitle = (i: (typeof normalizedItems)[number]) => {
+    const extra = formatOptionsLine(i.options ?? {});
+    return extra ? `${i.part.title} — ${extra}` : i.part.title;
+  };
+
+  const addressSnapshot: Prisma.InputJsonValue = {
+    fullName: address.fullName,
+    phone: address.phone,
+    region: address.region,
+    city: address.city,
+    streetAddress: address.streetAddress,
+    digitalAddress: address.digitalAddress,
+    dispatchPhone,
+    savedAddressPhone: address.phone,
+    deliveryInstructions: input.deliveryInstructions?.trim() || null,
+    cartItemIds: input.clearCartItemIds ?? [],
+  };
+
+  const hasChinaParts = normalizedItems.some((i) => i.part.origin === "CHINA");
+  const remainingBalance = isDeposit ? Math.round((partsSubtotal - depositGhs) * 100) / 100 : null;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.create({
+      data: {
+        reference,
+        kind: "PARTS",
+        userId: input.userId,
+        orderStatus: "PENDING_PAYMENT",
+        paymentType: isDeposit ? "RESERVATION_DEPOSIT" : "FULL",
+        amount: chargeGhs,
+        currency: "GHS",
+        depositAmount: isDeposit ? depositGhs : undefined,
+        remainingBalance: isDeposit ? remainingBalance ?? undefined : undefined,
+        orderDepositPercentSnapshot: isDeposit ? globalPct : undefined,
+        vehicleListPriceGhs: isDeposit ? partsSubtotal : undefined,
+        shippingFeeChargedAtCheckout: false,
+        partsIntlShippingFeeStatus: hasChinaParts ? "MANUAL_PENDING" : "NOT_APPLICABLE",
+        deliveryAddressId: address.id,
+        deliveryAddressSnapshot: addressSnapshot,
+        receiptReference,
+      },
+      select: { id: true, reference: true },
+    });
+
+    await tx.partOrderItem.createMany({
+      data: normalizedItems.map((i) => {
+        const oj = optionsToJson(i.options);
+        return {
+          orderId: order.id,
+          partId: i.part.id,
+          titleSnapshot: lineTitle(i),
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          lineTotal: i.lineTotal,
+          currency: "GHS",
+          coverImageUrl: i.part.coverImageUrl,
+          origin: i.part.origin,
+          ...(oj !== undefined ? { optionsJson: oj } : {}),
+        };
+      }),
+    });
+
+    const payment = await tx.payment.create({
+      data: {
+        orderId: order.id,
+        userId: input.userId,
+        provider: "PAYSTACK",
+        settlementMethod: "PAYSTACK",
+        providerReference: reference,
+        amount: chargeGhs,
+        currency: "GHS",
+        status: "PENDING",
+        paymentType: isDeposit ? "RESERVATION_DEPOSIT" : "FULL",
+        idempotencyKey: idempotencyRef ?? reference,
+      },
+      select: { id: true },
+    });
+
+    await tx.agreementLog.create({
+      data: {
+        userId: input.userId,
+        orderId: order.id,
+        agreementVersion: input.agreementVersion,
+        policyIds: [input.agreementVersion],
+        accepted: true,
+      },
+    });
+
+    return { order, payment };
+  });
+
+  return {
+    orderId: created.order.id,
+    reference: created.order.reference,
+    amountGhs: chargeGhs,
+    paymentId: created.payment.id,
+  };
+}
+
+/** Completes stock decrement, shipments, and cart cleanup for Paystack parts orders. */
+export async function finalizePartsPaystackOrder(orderId: string): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      partItems: { select: { partId: true, quantity: true, origin: true } },
+    },
+  });
+  if (!order || order.kind !== "PARTS") return;
+  if (order.orderStatus !== "PAID" && order.orderStatus !== "RESERVED_WITH_DEPOSIT") return;
+
+  const snapshot = order.deliveryAddressSnapshot as { cartItemIds?: string[] } | null;
+  const cartItemIds = Array.isArray(snapshot?.cartItemIds) ? snapshot!.cartItemIds.filter(Boolean) : [];
+
+  const normalizedItems = await prisma.partOrderItem.findMany({
+    where: { orderId },
+    select: { partId: true, quantity: true, origin: true },
+  });
+  const lineItems = normalizedItems.filter((i): i is typeof i & { partId: string } => Boolean(i.partId));
+  if (lineItems.length === 0) return;
+
+  const alreadyFinalized = await prisma.shipment.findFirst({ where: { orderId }, select: { id: true } });
+  if (alreadyFinalized) return;
+
+  await prisma.$transaction(async (tx) => {
+    const decByPart = new Map<string, number>();
+    for (const item of lineItems) {
+      const part = await tx.part.findUnique({
+        where: { id: item.partId },
+        select: { stockQty: true, origin: true, stockStatus: true },
+      });
+      if (!part) continue;
+      if (isChinaPreOrderPart(part)) continue;
+      decByPart.set(item.partId, (decByPart.get(item.partId) ?? 0) + item.quantity);
+    }
+    for (const [partId, dec] of decByPart) {
+      await tx.part.update({ where: { id: partId }, data: { stockQty: { decrement: dec } } });
+    }
+
+    if (order.userId && cartItemIds.length > 0) {
+      await tx.partCartItem.deleteMany({
+        where: { id: { in: cartItemIds }, cart: { userId: order.userId } },
+      });
+    }
+
+    await createShipmentsForPaidPartsOrder(tx, {
+      orderId: order.id,
+      userId: order.userId!,
+      orderReference: order.reference,
+      items: lineItems.map((i) => ({ partId: i.partId, origin: i.origin })),
+    });
+  });
+}
+

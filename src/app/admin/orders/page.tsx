@@ -117,6 +117,9 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
     return qs ? `/admin/orders?${qs}` : "/admin/orders";
   };
 
+  const kindForHref: "" | "CAR" | "PARTS" =
+    kindFilter === "CAR" || kindFilter === "PARTS" ? kindFilter : "";
+
   return (
     <div className="space-y-6">
       <Suspense
@@ -330,12 +333,12 @@ export default async function AdminOrdersPage(props: { searchParams: SearchParam
           totalItems={total}
           pageSize={PAGE_SIZE}
           itemLabel="Orders"
-          prevHref={page > 1 ? buildHref(kindFilter ?? "", page - 1, partsLineage, undefined, undefined) : null}
-          nextHref={page < totalPages ? buildHref(kindFilter ?? "", page + 1, partsLineage, undefined, undefined) : null}
+          prevHref={page > 1 ? buildHref(kindForHref, page - 1, partsLineage, undefined, undefined) : null}
+          nextHref={page < totalPages ? buildHref(kindForHref, page + 1, partsLineage, undefined, undefined) : null}
           pageHrefs={
             totalPages > 1
               ? Array.from({ length: totalPages }, (_, i) =>
-                  buildHref(kindFilter ?? "", i + 1, partsLineage, undefined, undefined),
+                  buildHref(kindForHref, i + 1, partsLineage, undefined, undefined),
                 )
               : undefined
           }

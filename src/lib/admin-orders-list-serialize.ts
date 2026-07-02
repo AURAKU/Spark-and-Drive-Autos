@@ -37,7 +37,7 @@ export type AdminOrderPreviewPayload = {
 export type AdminOrderListRowSerialized = {
   id: string;
   reference: string;
-  kind: "CAR" | "PARTS";
+  kind: "CAR" | "PARTS" | "MOTORCYCLE";
   itemTitle: string;
   itemHref: string | null;
   orderStatus: string;
@@ -58,21 +58,25 @@ export function buildAdminOrderListRow(
   const imageUrlRaw =
     o.kind === "CAR"
       ? firstCarImageUrl(o.car)
-      : o.partItems[0]
-        ? firstPartLineImageUrl(o.partItems[0])
-        : "";
+      : o.kind === "MOTORCYCLE"
+        ? firstCarImageUrl(o.motorcycle)
+        : o.partItems[0]
+          ? firstPartLineImageUrl(o.partItems[0])
+          : "";
   const imageUrl = imageUrlRaw.trim() || null;
 
   let itemHref: string | null = null;
   if (o.kind === "CAR" && o.car?.slug) {
     itemHref = `/cars/${o.car.slug}`;
+  } else if (o.kind === "MOTORCYCLE" && o.motorcycle?.slug) {
+    itemHref = `/motorcycles/${o.motorcycle.slug}`;
   } else if (o.kind === "PARTS") {
     const slug = o.partItems[0]?.part?.slug;
     if (slug) itemHref = `/parts/${slug}`;
   }
 
   const qty =
-    o.kind === "CAR"
+    o.kind === "CAR" || o.kind === "MOTORCYCLE"
       ? "1"
       : o.partItems.length === 0
         ? "0"
@@ -98,7 +102,12 @@ export function buildAdminOrderListRow(
     customerEmail: o.user?.email ?? "—",
     customerPhone: o.user?.phone?.trim() || "—",
     itemTitle: orderItemTitleSummary(o),
-    itemTypeLabel: o.kind === "CAR" ? "Vehicle (car)" : "Parts & accessories",
+    itemTypeLabel:
+      o.kind === "CAR"
+        ? "Vehicle (car)"
+        : o.kind === "MOTORCYCLE"
+          ? "Motorcycle"
+          : "Parts & accessories",
     quantityLabel: qty,
     productPrice:
       fin.fullListGhs != null ? formatMoney(fin.fullListGhs, o.currency) : formatMoney(fin.orderAmountGhs, o.currency),

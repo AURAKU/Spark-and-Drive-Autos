@@ -49,79 +49,60 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   const pageReq = readPage(sp, "page");
   const session = await safeAuth();
 
-  let parts = await prisma.part.findMany({
-    where: {
-      listingState: PartListingState.PUBLISHED,
-      AND: [
-        q
-          ? {
-              OR: [
-                { title: { contains: q, mode: "insensitive" } },
-                { shortDescription: { contains: q, mode: "insensitive" } },
-                { category: { contains: q, mode: "insensitive" } },
-              ],
-            }
-          : {},
-        category ? { category: { equals: category, mode: "insensitive" } } : {},
-        origin === "GHANA" || origin === "CHINA" ? { origin: origin as "GHANA" | "CHINA" } : {},
-      ],
-    },
-    orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
-    select: publicPartListSelect,
-  });
-  if (sort === "price_asc") {
-    parts = [...parts].sort((a, b) => {
-      const ap = getPartDisplayPrice(
-        { origin: a.origin, basePriceRmb: Number(a.basePriceRmb), priceGhs: Number(a.priceGhs) },
-        displayCurrency,
-        fx,
-      ).amount;
-      const bp = getPartDisplayPrice(
-        { origin: b.origin, basePriceRmb: Number(b.basePriceRmb), priceGhs: Number(b.priceGhs) },
-        displayCurrency,
-        fx,
-      ).amount;
-      return ap - bp;
-    });
-  } else if (sort === "price_desc") {
-    parts = [...parts].sort((a, b) => {
-      const ap = getPartDisplayPrice(
-        { origin: a.origin, basePriceRmb: Number(a.basePriceRmb), priceGhs: Number(a.priceGhs) },
-        displayCurrency,
-        fx,
-      ).amount;
-      const bp = getPartDisplayPrice(
-        { origin: b.origin, basePriceRmb: Number(b.basePriceRmb), priceGhs: Number(b.priceGhs) },
-        displayCurrency,
-        fx,
-      ).amount;
-      return bp - ap;
-    });
-  } else if (sort === "only_autoparts") {
-    parts = parts.filter((p) => {
-      const category = p.category.toLowerCase();
-      const title = p.title.toLowerCase();
-      return category === "autoparts" || category === "auto parts" || category.includes("part") || title.includes("part");
-    });
-  } else if (sort === "only_car_accessories") {
-    parts = parts.filter((p) => {
-      const category = p.category.toLowerCase();
-      const title = p.title.toLowerCase();
-      return (
-        category === "car accessories" ||
-        category === "accessories" ||
-        category.includes("accessor") ||
-        title.includes("accessor")
-      );
-    });
-  } else {
-    parts = [...parts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
+  const where = {
+    listingState: PartListingState.PUBLISHED,
+    AND: [
+      q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" as const } },
+              { shortDescription: { contains: q, mode: "insensitive" as const } },
+              { category: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {},
+      category ? { category: { equals: category, mode: "insensitive" as const } } : {},
+      origin === "GHANA" || origin === "CHINA" ? { origin: origin as "GHANA" | "CHINA" } : {},
+      sort === "only_autoparts"
+        ? {
+            OR: [
+              { category: { contains: "autopart", mode: "insensitive" as const } },
+              { category: { contains: "auto part", mode: "insensitive" as const } },
+              { title: { contains: "part", mode: "insensitive" as const } },
+            ],
+          }
+        : {},
+      sort === "only_car_accessories"
+        ? {
+            OR: [
+              { category: { contains: "accessor", mode: "insensitive" as const } },
+              { title: { contains: "accessor", mode: "insensitive" as const } },
+            ],
+          }
+        : {},
+    ],
+  };
 
-  const total = parts.length;
+  const orderBy =
+    sort === "price_asc" || sort === "price_desc"
+      ? [{ priceGhs: sort === "price_asc" ? ("asc" as const) : ("desc" as const) }]
+      : [{ featured: "desc" as const }, { updatedAt: "desc" as const }];
+
+  const total = await prisma.part.count({ where });
   const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
   const page = Math.min(Math.max(1, pageReq), totalPages);
-  const partsPage = parts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  let parts = await prisma.part.findMany({
+    where,
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+    select: publicPartListSelect,
+  });
+
+  if (sort === "newest") {
+    parts = [...parts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   const pageHref = (nextPage: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -350,12 +331,12 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
       </div>
 
       <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {partsPage.length === 0 ? (
+        {parts.length === 0 ? (
           <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
             No published parts yet. Check back soon, or reach out via chat for specific requests.
           </p>
         ) : (
-          partsPage.map((p) => (
+          parts.map((p) => (
             <PartCard
               key={p.id}
               part={p}

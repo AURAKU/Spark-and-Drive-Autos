@@ -1,5 +1,5 @@
-import { BikesMotorcyclesComingSoon } from "@/components/landing/bikes-motorcycles-coming-soon";
+import { redirect } from "next/navigation";
 
 export default function ElectricBikesMotorcyclesPage() {
-  return <BikesMotorcyclesComingSoon />;
+  redirect("/motorcycles");
 }

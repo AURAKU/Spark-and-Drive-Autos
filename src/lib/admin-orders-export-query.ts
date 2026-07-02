@@ -56,6 +56,18 @@ export const adminOrderRichSelect = {
       images: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true } },
     },
   },
+  motorcycle: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      coverImageUrl: true,
+      basePriceRmb: true,
+      reservationDepositPercent: true,
+      currency: true,
+      images: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true } },
+    },
+  },
   partItems: {
     orderBy: { createdAt: "asc" as const },
     select: {
