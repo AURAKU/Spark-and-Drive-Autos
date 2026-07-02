@@ -9,6 +9,7 @@ import {
 import { unstable_cache } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { STOREFRONT_CAR_CARD_SELECT } from "@/lib/storefront-car-card-select";
 
 /** ~17 minutes — between 15–20 min so the homepage mix refreshes on a predictable cadence. */
 export const LANDING_SPOTLIGHT_SLOT_MS = 17 * 60 * 1000;
@@ -31,8 +32,11 @@ export type SpotlightCar = Pick<
   | "availabilityStatus"
   | "listingState"
   | "coverImageUrl"
-  | "basePriceRmb"
+  | "engineType"
+  | "transmission"
+  | "mileage"
 > & {
+  basePriceRmb: Car["basePriceRmb"];
   videoPreview?: { thumbnailUrl: string | null; url: string; publicId: string | null };
 };
 
@@ -151,40 +155,14 @@ export async function getHomeSpotlight(): Promise<{
       where: { listingState: CarListingState.PUBLISHED, featured: true },
       orderBy: { updatedAt: "desc" },
       take: 12,
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        brand: true,
-        model: true,
-        year: true,
-        location: true,
-        sourceType: true,
-        availabilityStatus: true,
-        listingState: true,
-        coverImageUrl: true,
-        basePriceRmb: true,
-      },
+      select: { ...STOREFRONT_CAR_CARD_SELECT, basePriceRmb: true },
     }),
     prisma.car.findMany({
       where: { listingState: CarListingState.PUBLISHED },
       orderBy: { updatedAt: "desc" },
       skip: (seed % 8) * 2,
       take: 20,
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        brand: true,
-        model: true,
-        year: true,
-        location: true,
-        sourceType: true,
-        availabilityStatus: true,
-        listingState: true,
-        coverImageUrl: true,
-        basePriceRmb: true,
-      },
+      select: { ...STOREFRONT_CAR_CARD_SELECT, basePriceRmb: true },
     }),
     prisma.part.findMany({
       where: { listingState: PartListingState.PUBLISHED, stockQty: { gte: 1 }, featured: true },
@@ -238,20 +216,7 @@ export async function getHomeSpotlight(): Promise<{
   if (bestCarIds.length > 0) {
     bestCars = await prisma.car.findMany({
       where: { id: { in: bestCarIds }, listingState: CarListingState.PUBLISHED },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        brand: true,
-        model: true,
-        year: true,
-        location: true,
-        sourceType: true,
-        availabilityStatus: true,
-        listingState: true,
-        coverImageUrl: true,
-        basePriceRmb: true,
-      },
+      select: { ...STOREFRONT_CAR_CARD_SELECT, basePriceRmb: true },
     });
     bestCars.sort((a, b) => (carSales.get(b.id) ?? 0) - (carSales.get(a.id) ?? 0));
   }
@@ -316,20 +281,7 @@ export async function getHomeSpotlight(): Promise<{
         where: { listingState: CarListingState.PUBLISHED },
         take: SPOTLIGHT_CARS,
         orderBy: { updatedAt: "desc" },
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          brand: true,
-          model: true,
-          year: true,
-          location: true,
-          sourceType: true,
-          availabilityStatus: true,
-          listingState: true,
-          coverImageUrl: true,
-          basePriceRmb: true,
-        },
+        select: { ...STOREFRONT_CAR_CARD_SELECT, basePriceRmb: true },
       }),
       prisma.part.findMany({
         where: { listingState: PartListingState.PUBLISHED, stockQty: { gte: 1 } },

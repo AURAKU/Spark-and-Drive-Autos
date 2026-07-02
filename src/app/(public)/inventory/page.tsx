@@ -14,6 +14,7 @@ import { normalizeIntelListPage } from "@/lib/ops";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import { prisma } from "@/lib/prisma";
+import { safeAuth } from "@/lib/safe-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,8 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
   const globalDepositPct = globalReservationDepositPercentFromSettings(fx);
+  const session = await safeAuth();
+  const userId = session?.user?.id;
 
   const andClauses: Prisma.CarWhereInput[] = [];
 
@@ -138,6 +141,20 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
     inventoryError =
       "We could not load inventory right now. If you are an operator, run database migrations on the server (npx prisma migrate deploy) and ensure DATABASE_URL matches the migrated database.";
   }
+
+  const favoriteCarIds =
+    userId && cars.length > 0
+      ? new Set(
+          (
+            await prisma.favorite.findMany({
+              where: { userId, carId: { in: cars.map((c) => c.id) } },
+              select: { carId: true },
+            })
+          ).map((f) => f.carId),
+        )
+      : new Set<string>();
+
+  const publicAppUrl = getPublicAppUrl();
   const pageHref = (nextPage: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -158,7 +175,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
   const shareUrl = `${getPublicAppUrl()}${inventoryPath}`;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+    <div className="premium-inventory-page mx-auto max-w-7xl px-4 py-12 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-2xl">
         <PageHeading variant="hero" className="mt-1">
@@ -241,7 +258,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
           {inventoryError}
         </div>
       ) : (
-        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {cars.length === 0 ? (
             <p className="text-sm text-zinc-500">No vehicles match your filters yet.</p>
           ) : (
@@ -261,9 +278,27 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
               return (
                 <CarCard
                   key={car.id}
-                  car={car}
+                  car={{
+                    id: car.id,
+                    slug: car.slug,
+                    title: car.title,
+                    brand: car.brand,
+                    model: car.model,
+                    year: car.year,
+                    location: car.location,
+                    sourceType: car.sourceType,
+                    availabilityStatus: car.availabilityStatus,
+                    listingState: car.listingState,
+                    coverImageUrl: car.coverImageUrl,
+                    engineType: car.engineType,
+                    transmission: car.transmission,
+                    mileage: car.mileage,
+                  }}
                   displayAmount={getCarDisplayPrice(Number(car.basePriceRmb ?? 0), displayCurrency, fx)}
                   displayCurrency={displayCurrency}
+                  shareUrl={`${publicAppUrl}/cars/${car.slug}`}
+                  isSignedIn={Boolean(userId)}
+                  initialFavorite={favoriteCarIds.has(car.id)}
                   reservationDepositHint={reservationDepositHint}
                   videoTeaser={
                     v0
