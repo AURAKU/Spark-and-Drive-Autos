@@ -5,8 +5,10 @@ import {
   checkDutyConfigHealth,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
 } from "@/lib/duty-intelligence/config-bootstrap";
-import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache";
+import { buildEstimateFingerprint, estimateCacheKey } from "@/lib/duty-intelligence/fingerprint";
+import { dutyCacheGet, dutyCacheSet } from "@/lib/duty-intelligence/cache";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
+import { mapFuelType } from "@/lib/duty-intelligence/fuel-type";
 import { estimateFreight, freightToLineItem } from "@/lib/duty-intelligence/engines/freight-engine";
 import { estimateInsurance, insuranceToLineItem } from "@/lib/duty-intelligence/engines/insurance-engine";
 import { runVersionedCalculation } from "@/lib/duty-intelligence/engine-orchestrator";
@@ -32,14 +34,6 @@ import type {
   DutyPipelineError,
   PipelineStageResult,
 } from "@/lib/duty-intelligence/types";
-
-function mapFuelType(fuelType: string): string {
-  if (fuelType === "GASOLINE_PETROL") return "GASOLINE";
-  if (fuelType === "GASOLINE_DIESEL") return "DIESEL";
-  if (fuelType === "PLUGIN_HYBRID") return "PLUGIN_HYBRID";
-  if (fuelType === "HYBRID") return "HYBRID";
-  return fuelType;
-}
 
 export async function runDutyIntelligencePipeline(
   input: DutyCalculationInput,

@@ -22,7 +22,7 @@
     "build:clean": "npm run build",
     "typecheck": "npx tsc --noEmit",
     "test:paste-summary": "tsx --test tests/paste-summary/*.test.ts",
-    "validate": "npm run lint && npm run typecheck && npm run test:parts-finder && npm run test:paste-summary",
+    "validate": "npm run lint && npm run typecheck && npm run test:parts-finder && npm run test:paste-summary && npm run test:duty",
     "validate:full": "npm run validate && npm run build",
     "env:validate:prod": "node scripts/validate-env.mjs",
     "test:parts-finder": "tsx --test tests/parts-finder/*.test.ts",

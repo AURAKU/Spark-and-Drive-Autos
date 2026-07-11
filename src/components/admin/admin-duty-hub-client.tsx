@@ -14,7 +14,7 @@ import {
   updateDutyNotesAction,
   updateDutyWorkflowStageAction,
 } from "@/actions/duty-admin";
-import { DutyCalculatorPanel } from "@/components/duty/duty-calculator-panel";
+import { DutyIntelligenceCalculator } from "@/components/duty/duty-intelligence-calculator";
 import { DutyEstimateDisclosure } from "@/components/duty/duty-estimate-disclosure";
 import { DutyIntelligenceSourceNote } from "@/components/duty/duty-intelligence-source-note";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import { DUTY_WORKFLOW_ORDER, dutyWorkflowLabel } from "@/lib/duty/workflow";
 import type { AdminDutyOrderRow } from "@/lib/duty/admin-duty-types";
 import { formatMoney } from "@/lib/format";
 
-import { computeDutyEstimate, dutyEstimateInputSchema } from "@/lib/duty/calculator";
+import { dutyEstimateInputSchema } from "@/lib/duty/estimate-input-schema";
 import { ENGINE_TYPE_ORDER, engineTypeLabel } from "@/lib/engine-type-ui";
 
 type Props = { rows: AdminDutyOrderRow[] };
@@ -314,11 +314,16 @@ export function AdminDutyHubClient({ rows }: Props) {
       </div>
 
       <div className="space-y-5">
-        <DutyCalculatorPanel
-          defaultYear={selected?.carYear ?? undefined}
-          defaultCifGhs={selected?.orderAmountGhs}
-          defaultPowertrain={selected?.carEngineType ?? undefined}
+        <DutyIntelligenceCalculator
           compact
+          isAdmin
+          showSave
+          prefill={{
+            year: selected?.carYear ?? undefined,
+            fuelType: selected?.carEngineType ?? undefined,
+            fobAmount: selected?.orderAmountGhs ?? undefined,
+            fobCurrency: "GHS",
+          }}
         />
         <DutyIntelligenceSourceNote compact />
       </div>
@@ -366,7 +371,6 @@ function SaveEstimateInline({
           toast.error("Invalid CIF / year / powertrain for estimate.");
           return;
         }
-        computeDutyEstimate(parsed.data);
         const fd = new FormData();
         fd.set("dutyId", dutyId);
         fd.set("cifGhs", String(parsed.data.cifGhs));

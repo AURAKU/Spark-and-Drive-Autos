@@ -7,7 +7,9 @@ import { CarFavoriteButton } from "@/components/cars/car-favorite-button";
 import { CarGallery } from "@/components/cars/car-gallery";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
 import { LazyVideo } from "@/components/media/lazy-video";
-import { DutyIntelligenceCalculator } from "@/components/duty/duty-intelligence-calculator";
+import Link from "next/link";
+
+import { DutyCalculatorWizard } from "@/components/duty/duty-calculator-wizard";
 import { InquiryPanel } from "@/components/inquiry/inquiry-panel";
 import { SharePageButton } from "@/components/sharing/share-page-button";
 import { Badge } from "@/components/ui/badge";
@@ -249,11 +251,12 @@ export default async function CarDetailPage(props: Props) {
                 Rough duty estimate for Ghana arrival — list price is pre-filled as a{" "}
                 <span className="font-medium text-foreground">non-CIF</span> placeholder only. Adjust to the valuation you will declare.
               </p>
-              <div className="mt-4">
-                <DutyIntelligenceCalculator
+              <div className="mt-4 space-y-3">
+                <DutyCalculatorWizard
                   compact
                   prefill={{
                     carId: car.id,
+                    slug: car.slug,
                     manufacturer: car.brand,
                     model: car.model,
                     year: car.year,
@@ -262,8 +265,12 @@ export default async function CarDetailPage(props: Props) {
                     fobAmount: Number(car.basePriceAmount) > 0 ? Number(car.basePriceAmount) : listPriceAsCifHintGhs,
                     fobCurrency: car.basePriceCurrency || "USD",
                     countryOfOrigin: car.sourceType === "IN_CHINA" ? "CHINA" : "CHINA",
+                    vehicleCategory: car.bodyType ?? "SUV",
                   }}
                 />
+                <Link href={`/duty-calculator?carId=${car.id}`} className="text-sm text-primary hover:underline">
+                  Open full duty calculator →
+                </Link>
               </div>
             </div>
           )}
