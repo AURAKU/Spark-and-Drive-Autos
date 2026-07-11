@@ -6,6 +6,11 @@ import { EngineType, MotorcycleType, SourceType, CarListingState } from "@prisma
 
 import { createMotorcycle } from "@/actions/motorcycles";
 import {
+  MotorcycleCreateMediaField,
+  uploadQueuedMotorcycleMedia,
+  type MotorcycleCreateMediaState,
+} from "@/components/admin/motorcycles/motorcycle-create-media-field";
+import {
   MOTORCYCLE_FEATURE_TAGS,
   MOTORCYCLE_HIGHLIGHT_TAGS,
 } from "@/lib/motorcycle-spec-parser";
@@ -21,8 +26,12 @@ export function MotorcycleFastForm() {
   const [error, setError] = useState<string | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
-  const [coverUrl, setCoverUrl] = useState("");
-  const [coverPublicId, setCoverPublicId] = useState("");
+  const [media, setMedia] = useState<MotorcycleCreateMediaState>({
+    coverUrl: "",
+    coverPublicId: "",
+    extraImages: [],
+    videos: [],
+  });
 
   const inputCls =
     "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40";
@@ -30,20 +39,51 @@ export function MotorcycleFastForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (!media.coverUrl.trim()) {
+      setError("Upload or paste a cover photo before publishing.");
+      setStep(1);
+      return;
+    }
     setPending(true);
     const form = e.currentTarget;
     const fd = new FormData(form);
     fd.set("featureTags", features.join(","));
     fd.set("highlightTags", highlights.join(","));
-    if (coverUrl) fd.set("coverImageUrl", coverUrl);
-    if (coverPublicId) fd.set("coverImagePublicId", coverPublicId);
+    fd.set("coverImageUrl", media.coverUrl);
+    if (media.coverPublicId) fd.set("coverImagePublicId", media.coverPublicId);
     const result = await createMotorcycle(null, fd);
-    setPending(false);
     if (result.error) {
+      setPending(false);
       setError(typeof result.error === "string" ? result.error : "Could not save.");
       return;
     }
-    if (result.id) router.push(`/admin/motorcycles/${result.id}/edit`);
+    if (result.id) {
+      try {
+        if (media.extraImages.length > 0 || media.videos.length > 0) {
+          await uploadQueuedMotorcycleMedia(result.id, media);
+        }
+      } catch (uploadError) {
+        setPending(false);
+        setError(
+          uploadError instanceof Error
+            ? `Motorcycle saved, but gallery upload failed: ${uploadError.message}`
+            : "Motorcycle saved, but gallery upload failed.",
+        );
+        router.push(`/admin/motorcycles/${result.id}/edit`);
+        return;
+      }
+      router.push(`/admin/motorcycles/${result.id}/edit`);
+    }
+    setPending(false);
+  }
+
+  function goToNextStep() {
+    if (step === 1 && !media.coverUrl.trim()) {
+      setError("Upload or paste a cover photo before continuing.");
+      return;
+    }
+    setError(null);
+    setStep(step + 1);
   }
 
   function toggleTag(list: string[], setList: (v: string[]) => void, tag: string) {
@@ -94,24 +134,7 @@ export function MotorcycleFastForm() {
       )}
 
       {step === 1 && (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Upload at least one cover photo. Additional media can be added after saving.</p>
-          <label className="block text-xs text-muted-foreground">
-            Cover image URL *
-            <input
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-              required={step === 1}
-              className={inputCls}
-              placeholder="https://res.cloudinary.com/…"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground">
-            Cloudinary public ID (optional)
-            <input value={coverPublicId} onChange={(e) => setCoverPublicId(e.target.value)} className={inputCls} />
-          </label>
-          <p className="text-xs text-muted-foreground">Use Admin → upload sign flow or drag media on the edit page after publish.</p>
-        </div>
+        <MotorcycleCreateMediaField value={media} onChange={setMedia} />
       )}
 
       {step === 2 && (
@@ -182,7 +205,7 @@ export function MotorcycleFastForm() {
           <button type="button" onClick={() => setStep(step - 1)} className="rounded-lg border border-border px-4 py-2 text-sm">Back</button>
         )}
         {step < STEPS.length - 1 ? (
-          <button type="button" onClick={() => setStep(step + 1)} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">Next</button>
+          <button type="button" onClick={goToNextStep} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">Next</button>
         ) : (
           <button type="submit" disabled={pending} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">
             {pending ? "Publishing…" : "Publish motorcycle"}
