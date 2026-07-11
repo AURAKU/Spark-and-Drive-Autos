@@ -23,14 +23,22 @@ export async function POST(req: Request) {
     const elapsed = Date.now() - start;
 
     if (isPipelineError(result)) {
+      const status =
+        result.code === "CONFIG_UNAVAILABLE"
+          ? 503
+          : result.code === "NEEDS_CLASSIFICATION" || result.code === "MISSING_CLASSIFICATION"
+            ? 422
+            : 400;
       return NextResponse.json(
         {
           error: result.code,
           message: result.message,
           adminHint: result.adminHint ?? ADMIN_CONFIG_INIT_HINT,
           health: result.health,
+          missingFields: result.missingFields,
+          details: result.details,
         },
-        { status: 503 },
+        { status },
       );
     }
 
