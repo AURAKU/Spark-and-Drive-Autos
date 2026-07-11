@@ -698,6 +698,13 @@ model User {
   dutyFormulaRuleHistory           DutyFormulaRuleHistory[]       @relation("DutyFormulaRuleHistoryActor")
   dutyIntelligenceAuditLogs        DutyIntelligenceAuditLog[]     @relation("DutyIntelligenceAuditActor")
   dutyOverrides                    DutyOverride[]                 @relation("DutyOverrideActor")
+  dutyVehicleProfilesCreated       DutyVehicleProfile[]           @relation("DutyVehicleProfileCreatedBy")
+  dutyAssessmentsCreated           DutyAssessment[]               @relation("DutyAssessmentCreatedBy")
+  dutyAssessmentsVerified          DutyAssessment[]               @relation("DutyAssessmentVerifiedBy")
+  dutyEvidenceDocumentsUploaded    DutyEvidenceDocument[]         @relation("DutyEvidenceDocumentUploadedBy")
+  dutyEvidenceDocumentsArchived    DutyEvidenceDocument[]         @relation("DutyEvidenceDocumentArchivedBy")
+  dutyRuleSourcesReviewed          DutyRuleSource[]               @relation("DutyRuleSourceReviewedBy")
+  dutyCalculationRulesCreated      DutyCalculationRule[]          @relation("DutyCalculationRuleCreatedBy")
 
   @@index([role])
   @@index([ghanaCardVerificationStatus])
@@ -2934,6 +2941,93 @@ enum DutyCalculationStatus {
   ARCHIVED
 }
 
+/// Canonical fuel type for duty vehicle profiles and assessments.
+enum DutyFuelType {
+  GASOLINE
+  DIESEL
+  ELECTRIC
+  HYBRID
+  PLUGIN_HYBRID
+}
+
+enum DutyEvidenceKind {
+  BILL_OF_ENTRY
+  PAYMENT_RECEIPT
+  BILL_OF_LADING
+  COMMERCIAL_INVOICE
+  PACKING_LIST
+  INSPECTION_REPORT
+  CONTAINER_DETAILS
+  VEHICLE_PHOTO
+  VIN_PHOTO
+  OTHER
+}
+
+enum DutyAssessmentSourceKind {
+  BILL_OF_ENTRY
+  PAYMENT_RECEIPT
+  COMBINED_ASSESSMENT
+  ADMIN_IMPORT
+  LEGACY_VERIFIED_IMPORT
+  CALIBRATION_FIXTURE
+}
+
+enum DutyAssessmentStatus {
+  DRAFT
+  ASSESSED
+  PARTIALLY_PAID
+  PAID
+  VERIFIED
+  DISPUTED
+  ARCHIVED
+}
+
+enum DutyVerificationStatus {
+  PENDING
+  VERIFIED
+  DISPUTED
+  REJECTED
+  ARCHIVED
+}
+
+enum DutyRateType {
+  PERCENTAGE
+  FIXED
+  BLENDED
+  EXPRESSION
+}
+
+enum DutyConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+enum DutyRuleStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum DutyRuleSourceType {
+  GRA_PUBLICATION
+  ICUMS_EXPORT
+  BILL_OF_ENTRY
+  PAYMENT_RECEIPT
+  TARIFF_SCHEDULE
+  ADMIN_VERIFIED
+  UNKNOWN
+}
+
+enum DutyRoundingMode {
+  HALF_UP
+  HALF_EVEN
+  FLOOR
+  CEIL
+}
+
 /// Country-level configuration for extensible multi-country support.
 model DutyCountryConfig {
   id           String          @id @default(cuid())
@@ -2956,6 +3050,9 @@ model DutyCountryConfig {
   shippingCostMatrix DutyShippingCostMatrix[]
   insuranceRules     DutyInsuranceRule[]
   overrides          DutyOverride[]
+  assessments        DutyAssessment[]
+  calculationRules   DutyCalculationRule[]
+  chargeNormalizations DutyChargeNormalization[]
 }
 
 /// Origin country codes for shipping cost matrix lookups.
@@ -3177,17 +3274,30 @@ model DutyCalculation {
   referenceNumber   String                @unique @db.VarChar(32)
   status            DutyCalculationStatus @default(DRAFT)
   carId             String?
+  vehicleProfileId  String?
   createdById       String?
   /// Full input: vehicle, purchase, shipping, overrides.
   inputJson         Json
   /// Full pipeline output with every stage, line item, explanation.
   resultJson        Json
   formulaVersion    String                @db.VarChar(64)
+  /// Published rule pack / formula version used for this estimate.
+  ruleSetVersion    String?               @db.VarChar(64)
+  /// HS / vehicle classification profile used (may equal vehicleProfileId).
+  classificationProfileId String?
+  /// Frozen formula configuration at calculation time.
+  formulaSnapshotJson Json?
+  /// Frozen line-item breakdown at calculation time.
+  lineSnapshotsJson   Json?
   confidenceScore   Decimal?              @db.Decimal(5, 2)
   confidenceLabel   String?               @db.VarChar(32)
+  confidenceLevel   DutyConfidenceLevel?
   similarImportCount Int                  @default(0)
   totalLandedCostGhs Decimal              @db.Decimal(14, 2)
   totalGraTaxesGhs   Decimal              @db.Decimal(14, 2)
+  predictedTotalGhs  Decimal?             @db.Decimal(14, 2)
+  predictedLowGhs    Decimal?             @db.Decimal(14, 2)
+  predictedHighGhs   Decimal?             @db.Decimal(14, 2)
   totalPortChargesGhs Decimal             @db.Decimal(14, 2)
   cifGhs            Decimal               @db.Decimal(14, 2)
   customsValueGhs   Decimal               @db.Decimal(14, 2)
@@ -3197,10 +3307,13 @@ model DutyCalculation {
 
   countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
   car           Car?              @relation(fields: [carId], references: [id], onDelete: SetNull)
+  vehicleProfile DutyVehicleProfile? @relation(fields: [vehicleProfileId], references: [id], onDelete: SetNull)
   createdBy     User?             @relation("DutyCalculationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  predictionOutcomes DutyPredictionOutcome[]
 
   @@index([countryConfigId, createdAt])
   @@index([carId])
+  @@index([vehicleProfileId])
   @@index([status, createdAt])
   @@index([hsCode])
 }
@@ -3209,6 +3322,8 @@ model DutyCalculation {
 model DutyVerifiedImport {
   id                  String                   @id @default(cuid())
   countryConfigId     String
+  vehicleProfileId    String?
+  assessmentId        String?                  @unique
   status              DutyVerifiedImportStatus @default(PENDING_VERIFICATION)
   createdById         String?
   /// Vehicle identification
@@ -3267,6 +3382,8 @@ model DutyVerifiedImport {
   updatedAt           DateTime                 @updatedAt
 
   countryConfig DutyCountryConfig            @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  vehicleProfile DutyVehicleProfile?         @relation(fields: [vehicleProfileId], references: [id], onDelete: SetNull)
+  assessment    DutyAssessment?              @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
   createdBy     User?                        @relation("DutyVerifiedImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   documents     DutyVerifiedImportDocument[]
 
@@ -3275,6 +3392,8 @@ model DutyVerifiedImport {
   @@index([vin])
   @@index([hsCode])
   @@index([fuelType, vehicleCategory])
+  @@index([vehicleProfileId])
+  @@index([assessmentId])
 }
 
 /// Import documents — never physically deleted; archive only.
@@ -3334,4 +3453,260 @@ model DutyIntelligenceAuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@index([actorId])
+}
+
+/// Reusable vehicle identity for estimates, assessments, and calibration.
+model DutyVehicleProfile {
+  id                    String              @id @default(cuid())
+  make                  String
+  model                 String
+  manufacturerModel     String?
+  vin                   String?             @db.VarChar(17)
+  chassis               String?             @db.VarChar(64)
+  manufactureYear       Int
+  manufactureMonth      Int?
+  firstRegistrationDate DateTime?
+  vehicleCategory       DutyVehicleCategory?
+  fuelType              DutyFuelType
+  engineCc              Int?
+  powerKw               Decimal?            @db.Decimal(8, 2)
+  cylinders             Int?
+  seats                 Int?
+  grossWeightKg         Int?
+  netWeightKg           Int?
+  hsCode                String              @db.VarChar(16)
+  hsCodeNormalized      String?             @db.VarChar(16)
+  countryOfOrigin       String?
+  countryOfExport       String?
+  createdById           String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  createdBy        User?                @relation("DutyVehicleProfileCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assessments      DutyAssessment[]
+  calculations     DutyCalculation[]
+  verifiedImports  DutyVerifiedImport[]
+  calculationRules DutyCalculationRule[]
+
+  @@index([make, model, manufactureYear])
+  @@index([hsCode])
+  @@index([hsCodeNormalized])
+  @@index([fuelType])
+  @@index([vin])
+  @@index([chassis])
+}
+
+/// Official customs assessment — Bill of Entry and/or matched payment receipt.
+model DutyAssessment {
+  id                     String                   @id @default(cuid())
+  countryConfigId        String?
+  vehicleProfileId       String
+  sourceKind             DutyAssessmentSourceKind
+  assessmentStatus       DutyAssessmentStatus     @default(DRAFT)
+  customsOffice          String?                  @db.VarChar(120)
+  declarationReference   String?                  @db.VarChar(64)
+  billOfEntryNumber      String?                  @db.VarChar(64)
+  assessmentDate         DateTime?
+  paymentDate            DateTime?
+  currency               String                   @default("GHS") @db.VarChar(3)
+  fobForeign             Decimal?                 @db.Decimal(14, 2)
+  fobForeignCurrency     String?                  @db.VarChar(3)
+  fxRate                 Decimal?                 @db.Decimal(18, 8)
+  fobGhs                 Decimal?                 @db.Decimal(14, 2)
+  freightGhs             Decimal?                 @db.Decimal(14, 2)
+  insuranceGhs           Decimal?                 @db.Decimal(14, 2)
+  customsValueGhs        Decimal?                 @db.Decimal(14, 2)
+  depreciationPercent    Decimal?                 @db.Decimal(8, 4)
+  totalAssessedGhs       Decimal                  @db.Decimal(14, 2)
+  totalPaidGhs           Decimal?                 @db.Decimal(14, 2)
+  varianceGhs            Decimal?                 @db.Decimal(14, 2)
+  /// SHA-256 identity hash for deduplication (BoE ref + office + date + total + importer hash).
+  documentIdentityHash   String?                  @unique @db.VarChar(64)
+  primaryDocumentId      String?
+  verificationStatus     DutyVerificationStatus   @default(PENDING)
+  verifiedById           String?
+  verifiedAt             DateTime?
+  /// Hashed importer/taxpayer identifier — never store raw TIN in lists.
+  importerIdentifierHash String?                  @db.VarChar(128)
+  notes                  String?                  @db.Text
+  archivedAt             DateTime?
+  createdById            String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  countryConfig      DutyCountryConfig?       @relation(fields: [countryConfigId], references: [id], onDelete: SetNull)
+  vehicleProfile     DutyVehicleProfile       @relation(fields: [vehicleProfileId], references: [id], onDelete: Restrict)
+  verifiedImport     DutyVerifiedImport?
+  lines              DutyAssessmentLine[]
+  documents          DutyEvidenceDocument[]
+  predictionOutcomes DutyPredictionOutcome[]
+  createdBy          User?                    @relation("DutyAssessmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  verifiedBy         User?                    @relation("DutyAssessmentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([vehicleProfileId])
+  @@index([assessmentDate])
+  @@index([verificationStatus])
+  @@index([billOfEntryNumber])
+  @@index([declarationReference])
+  @@index([assessmentStatus])
+  @@index([customsOffice, billOfEntryNumber])
+  @@index([countryConfigId, createdAt])
+}
+
+/// Individual charge line from a Bill of Entry or receipt.
+model DutyAssessmentLine {
+  id                  String   @id @default(cuid())
+  assessmentId        String
+  chargeCode          String?  @db.VarChar(64)
+  chargeName          String
+  normalizedChargeKey String   @db.VarChar(64)
+  externalTaxCode     String?  @db.VarChar(32)
+  taxBaseCode         String?  @db.VarChar(32)
+  displayedBaseAmount Decimal? @db.Decimal(14, 2)
+  displayedRate       Decimal? @db.Decimal(18, 8)
+  amountExempted      Decimal? @db.Decimal(14, 2)
+  amountSuspended     Decimal? @db.Decimal(14, 2)
+  amountPayable       Decimal  @db.Decimal(14, 2)
+  displayOrder        Int      @default(0)
+  sourcePage          Int?
+  sourceRow           Int?
+  sourceDocumentKind  DutyEvidenceKind?
+  matchedReceiptLine  Boolean  @default(false)
+  unmatchedReceipt    Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  assessment DutyAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, displayOrder])
+  @@index([normalizedChargeKey])
+  @@index([assessmentId, normalizedChargeKey])
+}
+
+/// Secure evidence storage for BoE, receipts, and rule-source documents.
+model DutyEvidenceDocument {
+  id                 String                 @id @default(cuid())
+  assessmentId       String?
+  documentKind       DutyEvidenceKind
+  fileUrl            String?
+  secureStorageKey   String
+  checksum           String                 @db.VarChar(128)
+  originalFilename   String
+  mimeType           String                 @db.VarChar(128)
+  documentDate       DateTime?
+  uploadedById       String?
+  verificationStatus DutyVerificationStatus @default(PENDING)
+  archived           Boolean                @default(false)
+  archivedAt         DateTime?
+  archivedById       String?
+  createdAt          DateTime               @default(now())
+
+  assessment   DutyAssessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  uploadedBy   User?           @relation("DutyEvidenceDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  archivedBy   User?           @relation("DutyEvidenceDocumentArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  ruleSources  DutyRuleSource[]
+
+  @@unique([checksum, assessmentId])
+  @@index([checksum])
+  @@index([assessmentId, documentKind])
+  @@index([verificationStatus])
+}
+
+/// Official or admin-verified source for a duty rule or rate.
+model DutyRuleSource {
+  id                 String               @id @default(cuid())
+  sourceType         DutyRuleSourceType
+  title              String
+  reference          String
+  officialUrl        String?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  documentId         String?
+  verificationStatus DutyVerificationStatus @default(PENDING)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  notes              String?              @db.Text
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  document         DutyEvidenceDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  reviewedBy       User?                 @relation("DutyRuleSourceReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  calculationRules DutyCalculationRule[]
+
+  @@index([sourceType, effectiveFrom])
+  @@index([verificationStatus])
+  @@index([reference])
+}
+
+/// Configurable calculation rule with evidence linkage (Prompt 3 formula engine).
+model DutyCalculationRule {
+  id                     String           @id @default(cuid())
+  countryConfigId        String
+  profileId              String?
+  chargeKey              String           @db.VarChar(64)
+  chargeName             String
+  rateType               DutyRateType
+  rateValue              Decimal?         @db.Decimal(18, 8)
+  flatAmount             Decimal?         @db.Decimal(14, 2)
+  taxableBaseExpression  String           @db.VarChar(256)
+  roundingMode           DutyRoundingMode @default(HALF_UP)
+  decimalPlaces          Int              @default(2)
+  dependencyOrder        Int              @default(0)
+  effectiveFrom          DateTime
+  effectiveTo            DateTime?
+  sourceId               String
+  status                 DutyRuleStatus   @default(DRAFT)
+  createdById            String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  countryConfig  DutyCountryConfig  @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+  profile        DutyVehicleProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  source         DutyRuleSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  createdBy      User?              @relation("DutyCalculationRuleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([countryConfigId, chargeKey, status])
+  @@index([profileId, chargeKey])
+  @@index([effectiveFrom, effectiveTo])
+  @@index([sourceId])
+}
+
+/// Prediction vs verified assessment variance tracking.
+model DutyPredictionOutcome {
+  id              String   @id @default(cuid())
+  calculationId   String
+  assessmentId    String
+  predictedTotal  Decimal  @db.Decimal(14, 2)
+  actualTotal     Decimal  @db.Decimal(14, 2)
+  absoluteError   Decimal  @db.Decimal(14, 2)
+  percentageError Decimal  @db.Decimal(8, 4)
+  withinRange     Boolean?
+  evaluatedAt     DateTime @default(now())
+
+  calculation DutyCalculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  assessment  DutyAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([calculationId, assessmentId])
+  @@index([assessmentId])
+  @@index([evaluatedAt])
+}
+
+/// Charge name normalization dictionary — maps ICUMS/BoE labels to canonical keys.
+model DutyChargeNormalization {
+  id                  String   @id @default(cuid())
+  countryConfigId     String
+  normalizedChargeKey String   @db.VarChar(64)
+  displayName         String
+  category            String?  @db.VarChar(32)
+  aliases             Json
+  externalTaxCodes    Json?
+  notes               String?  @db.Text
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  countryConfig DutyCountryConfig @relation(fields: [countryConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([countryConfigId, normalizedChargeKey])
+  @@index([normalizedChargeKey])
+  @@index([active])
 }
