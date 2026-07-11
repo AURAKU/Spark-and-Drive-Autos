@@ -5,14 +5,15 @@ import {
   checkDutyConfigHealth,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
 } from "@/lib/duty-intelligence/config-bootstrap";
+import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { estimateFreight, freightToLineItem } from "@/lib/duty-intelligence/engines/freight-engine";
 import { estimateInsurance, insuranceToLineItem } from "@/lib/duty-intelligence/engines/insurance-engine";
 import { runVersionedCalculation } from "@/lib/duty-intelligence/engine-orchestrator";
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "@/lib/duty-intelligence/formula-version";
-import { buildHistoricalComparison, computeConfidence } from "@/lib/duty-intelligence/confidence";
 import { linesToCalculationLineItems } from "@/lib/duty-intelligence/line-normalizer";
 import { findSimilarImports } from "@/lib/duty-intelligence/prediction";
+import { mergePredictionIntoResult, runPredictionLayer } from "@/lib/duty-intelligence/prediction-layer";
 import { resolveHsProfile } from "@/lib/duty-intelligence/hs-profile-resolver";
 import {
   classifyVehicle,
@@ -230,12 +231,62 @@ export async function runDutyIntelligencePipeline(
     input,
     hsCode: versioned.hsCodeNormalized,
   });
-  const confidence = versioned.confidence.similarImportCount > 0
-    ? computeConfidence(similarImports, input)
-    : versioned.confidence;
-  const historicalComparison = buildHistoricalComparison({ similarImports, estimatedDutyGhs: totalGraTaxesGhs });
 
-  return {
+  const vehicleDataComplete =
+    input.vehicle.fuelType === "ELECTRIC"
+      ? Boolean(input.vehicle.engineCc || input.vehicle.batteryKwh)
+      : Boolean(input.vehicle.engineCc);
+
+  const fingerprint = buildEstimateFingerprint({
+    make: input.vehicle.manufacturer,
+    model: input.vehicle.model,
+    year: input.vehicle.year,
+    fuelType: mapFuelType(input.vehicle.fuelType),
+    fobAmount: input.purchase.fobAmount,
+    fobCurrency: input.purchase.fobCurrency,
+    hsCode: versioned.hsCodeNormalized,
+    profileId: versioned.profileId,
+    ruleSetVersion: versioned.ruleSetVersion,
+    fxRate: exchange.rate,
+    fxEffectiveDate: exchange.effectiveDate,
+    engineCc: input.vehicle.engineCc,
+    vehicleCategory: input.vehicle.vehicleCategory,
+    freightGhs,
+    insuranceGhs,
+  });
+
+  const cacheKey = estimateCacheKey(fingerprint);
+  const cached = await dutyCacheGet<DutyIntelligenceResult>(cacheKey, fingerprint);
+  if (cached) {
+    return { ...cached, calculatedAt: assessmentDate.toISOString() };
+  }
+
+  const prediction = await runPredictionLayer({
+    countryConfigId: config.countryConfigId,
+    input,
+    hsCode: versioned.hsCode,
+    hsCodeNormalized: versioned.hsCodeNormalized,
+    profileId: versioned.profileId,
+    profileDescription: hsResolutionPreview.description,
+    ruleSetVersion: versioned.ruleSetVersion,
+    verifiedProfile: versioned.confidence.level === "VERIFIED_PROFILE_HIGH",
+    hsResolutionMethod: hsResolutionPreview.method,
+    fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+    freightGhs,
+    insuranceGhs,
+    customsValueGhs,
+    cifGhs,
+    totalDutyGhs: totalGraTaxesGhs,
+    totalLandedCostGhs,
+    fxRate: exchange.rate,
+    fxSource: exchange.source,
+    fxEffectiveDate: exchange.effectiveDate,
+    assessmentDate,
+    vehicleDataComplete,
+    similarImports,
+  });
+
+  const baseResult: DutyIntelligenceResult = {
     formulaVersion: DUTY_INTELLIGENCE_FORMULA_VERSION,
     countryCode: input.countryCode,
     inputs: input,
@@ -273,17 +324,29 @@ export async function runDutyIntelligencePipeline(
       commercial: versioned.classification.commercial,
       profile: versioned.classification.profile,
     },
-    confidence,
-    historicalComparison,
-    predictionAdjustments: [],
+    confidence: prediction.confidence,
+    historicalComparison: prediction.historicalComparison,
+    predictionAdjustments: prediction.predictionAdjustments,
     ruleSetVersion: versioned.ruleSetVersion,
     profileId: versioned.profileId,
-    estimateRange: versioned.estimateRange,
+    estimateRange: prediction.estimateRange,
+    explanation: prediction.explanation,
+    calibration: {
+      cohortSize: prediction.calibration.cohortSize,
+      exactFixtureMatch: prediction.calibration.exactFixtureMatch,
+      valuationMethod: prediction.calibration.valuation.method,
+      assumptions: prediction.calibration.assumptions,
+    },
+    cacheFingerprint: fingerprint,
     engineReconciliation: versioned.engineResult.reconciliation,
     methodologyNote:
-      "Duty Intelligence Engine V4 — versioned, dependency-aware customs calculation using verified rule profiles. " +
+      "Duty Intelligence Engine V4 with calibration layer — deterministic rule-based tax lines plus cohort-informed confidence and ranges. " +
       "Estimates are for planning only; final customs assessment is determined by Ghana Customs at clearance.",
   };
+
+  const result = mergePredictionIntoResult(baseResult, prediction, { cacheFingerprint: fingerprint });
+  await dutyCacheSet(cacheKey, result, { fingerprint, ttlMs: 5 * 60 * 1000 });
+  return result;
 }
 
 export function isPipelineError(r: DutyIntelligenceResult | DutyPipelineError): r is DutyPipelineError {
@@ -318,8 +381,8 @@ export async function saveDutyCalculation(params: {
       formulaSnapshotJson: params.result.ruleSetVersion ? ({ version: params.result.ruleSetVersion } as object) : undefined,
       lineSnapshotsJson: params.result.lineItems as object,
       confidenceScore: params.result.confidence.score,
-      confidenceLabel: params.result.confidence.label,
-      confidenceLevel: params.result.confidence.label,
+      confidenceLabel: params.result.confidence.level,
+      confidenceLevel: params.result.confidence.level,
       predictedTotalGhs: params.result.summary.totalGraTaxesGhs,
       predictedLowGhs: params.result.estimateRange?.lowGhs,
       predictedHighGhs: params.result.estimateRange?.highGhs,
