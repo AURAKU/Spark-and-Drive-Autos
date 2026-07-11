@@ -5,14 +5,16 @@ import {
   checkDutyConfigHealth,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
 } from "@/lib/duty-intelligence/config-bootstrap";
+import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
-import { runChargeEngine } from "@/lib/duty-intelligence/engines/charge-engine";
-import { runDutyFormulaEngine, sumByCategory } from "@/lib/duty-intelligence/engines/duty-formula-engine";
 import { estimateFreight, freightToLineItem } from "@/lib/duty-intelligence/engines/freight-engine";
 import { estimateInsurance, insuranceToLineItem } from "@/lib/duty-intelligence/engines/insurance-engine";
+import { runVersionedCalculation } from "@/lib/duty-intelligence/engine-orchestrator";
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "@/lib/duty-intelligence/formula-version";
-import { buildHistoricalComparison, computeConfidence } from "@/lib/duty-intelligence/confidence";
+import { linesToCalculationLineItems } from "@/lib/duty-intelligence/line-normalizer";
 import { findSimilarImports } from "@/lib/duty-intelligence/prediction";
+import { mergePredictionIntoResult, runPredictionLayer } from "@/lib/duty-intelligence/prediction-layer";
+import { resolveHsProfile } from "@/lib/duty-intelligence/hs-profile-resolver";
 import {
   classifyVehicle,
   resolveHsCode,
@@ -31,8 +33,12 @@ import type {
   PipelineStageResult,
 } from "@/lib/duty-intelligence/types";
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+function mapFuelType(fuelType: string): string {
+  if (fuelType === "GASOLINE_PETROL") return "GASOLINE";
+  if (fuelType === "GASOLINE_DIESEL") return "DIESEL";
+  if (fuelType === "PLUGIN_HYBRID") return "PLUGIN_HYBRID";
+  if (fuelType === "HYBRID") return "HYBRID";
+  return fuelType;
 }
 
 export async function runDutyIntelligencePipeline(
@@ -50,30 +56,38 @@ export async function runDutyIntelligencePipeline(
     };
   }
 
+  const assessmentDate = new Date();
   const stages: PipelineStageResult[] = [];
   const allLineItems: CalculationLineItem[] = [];
 
-  const classification = classifyVehicle(input, referenceYear);
-  stages.push({
-    stage: "VEHICLE_CLASSIFICATION",
-    label: "Vehicle Classification",
-    output: classification,
-    lineItems: [],
-    notes: [
-      `Profile: ${classification.profile}`,
-      `Vehicle age: ${classification.ageYears} years`,
-      `Commercial: ${classification.commercial}`,
-    ],
+  const classificationLegacy = classifyVehicle(input, referenceYear);
+  const hsFromVehicle = resolveHsCode({ input, hsCodes: config.hsCodes, classification: classificationLegacy });
+
+  const hsResolutionPreview = resolveHsProfile({
+    hsCode: input.hsCodeOverride ?? hsFromVehicle.code.replace(/\./g, ""),
+    hsCodeOverride: input.hsCodeOverride,
+    fuelType: mapFuelType(input.vehicle.fuelType),
+    engineCc: input.vehicle.engineCc,
+    vehicleCategory: input.vehicle.vehicleCategory,
+    manufactureYear: input.vehicle.year,
+    make: input.vehicle.manufacturer,
+    model: input.vehicle.model,
   });
 
-  const hsResolution = resolveHsCode({ input, hsCodes: config.hsCodes, classification });
-  const hsDutyRateHint = config.hsCodes.find((h) => h.hsCode === hsResolution.code)?.dutyRateHint ?? null;
+  if (!hsResolutionPreview) {
+    return {
+      code: "NEEDS_CLASSIFICATION",
+      message: "Unable to resolve HS code profile. Provide HS code override or complete vehicle classification.",
+      missingFields: ["hsCodeOverride", "engineCc"],
+    };
+  }
+
   stages.push({
     stage: "HS_CODE_RESOLUTION",
     label: "HS Code Resolution",
-    output: hsResolution,
+    output: hsResolutionPreview,
     lineItems: [],
-    notes: [`Method: ${hsResolution.method}`, hsResolution.description],
+    notes: [`Method: ${hsResolutionPreview.method}`, hsResolutionPreview.description],
   });
 
   const exchange = await resolveExchangeRate({ countryConfigId: config.countryConfigId, input });
@@ -98,10 +112,13 @@ export async function runDutyIntelligencePipeline(
   });
   const otherGhs = input.shipping.otherShippingChargesGhs ?? 0;
 
+  const freightGhs = input.shipping.freightGhsOverride ?? freightEstimate.freightGhs;
+  const insuranceGhs = input.shipping.insuranceGhsOverride ?? insuranceEstimate.insuranceGhs;
+
   const cifGhs = computeCif({
     fobGhs: input.cifGhsOverride != null ? 0 : fobGhs,
-    freightGhs: freightEstimate.freightGhs,
-    insuranceGhs: insuranceEstimate.insuranceGhs,
+    freightGhs,
+    insuranceGhs,
     otherGhs,
     override: input.cifGhsOverride,
   });
@@ -119,15 +136,15 @@ export async function runDutyIntelligencePipeline(
       formula: input.cifGhsOverride ? `Override CIF ${cifGhs}` : `${input.purchase.fobAmount} × ${exchange.rate} = ${fobGhs}`,
       source: input.cifGhsOverride ? "OVERRIDE" : "CONFIG",
     },
-    freightToLineItem(freightEstimate),
-    insuranceToLineItem(insuranceEstimate),
+    freightToLineItem({ ...freightEstimate, freightGhs }),
+    insuranceToLineItem({ ...insuranceEstimate, insuranceGhs }),
     {
       code: "CIF",
       label: "CIF (Cost, Insurance, Freight)",
       category: "CIF",
       amountGhs: cifGhs,
       basis: "FOB + Freight + Insurance + Other",
-      formula: `${input.cifGhsOverride != null ? cifGhs : fobGhs} + ${freightEstimate.freightGhs} + ${insuranceEstimate.insuranceGhs} + ${otherGhs} = ${cifGhs}`,
+      formula: `${input.cifGhsOverride != null ? cifGhs : fobGhs} + ${freightGhs} + ${insuranceGhs} + ${otherGhs} = ${cifGhs}`,
       source: "CONFIG",
     },
     {
@@ -146,8 +163,8 @@ export async function runDutyIntelligencePipeline(
     label: "FOB → CIF → Customs Value",
     output: {
       fobGhs,
-      freightGhs: freightEstimate.freightGhs,
-      insuranceGhs: insuranceEstimate.insuranceGhs,
+      freightGhs,
+      insuranceGhs,
       cifGhs,
       customsValueGhs,
       freightSource: freightEstimate.source,
@@ -157,88 +174,119 @@ export async function runDutyIntelligencePipeline(
     notes: [freightEstimate.basis, insuranceEstimate.basis],
   });
 
-  const taxLineItems = runDutyFormulaEngine({
-    rules: config.formulaRules,
-    calibrationFactors: config.calibrationFactors,
-    ctx: {
-      cifGhs,
+  const versioned = runVersionedCalculation({
+    assessmentDate,
+    values: {
+      fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+      freightGhs,
+      insuranceGhs,
       customsValueGhs,
-      importDutyGhs: 0,
-      levySubtotalGhs: 0,
-      vatBaseGhs: 0,
-      vehicleAgeYears: classification.ageYears,
-      fuelType: input.vehicle.fuelType,
-      applyEvDutyWaiver: input.vehicle.applyEvDutyWaiver,
-      hsDutyRateHint,
+      cifGhs,
+    },
+    classification: {
+      hsCode: hsResolutionPreview.hsCode,
+      hsCodeOverride: input.hsCodeOverride,
+      fuelType: mapFuelType(input.vehicle.fuelType),
+      engineCc: input.vehicle.engineCc,
+      vehicleCategory: input.vehicle.vehicleCategory,
+      manufactureYear: input.vehicle.year,
+      make: input.vehicle.manufacturer,
+      model: input.vehicle.model,
     },
   });
+
+  if (!versioned.ok) {
+    return {
+      code: versioned.error.code,
+      message: versioned.error.message,
+      missingFields: versioned.error.missingFields,
+      details: versioned.error.details,
+      adminHint: ADMIN_CONFIG_INIT_HINT,
+    };
+  }
+
+  const taxLineItems = linesToCalculationLineItems(versioned.engineResult.lines);
   allLineItems.push(...taxLineItems);
   stages.push({
     stage: "DUTY_ENGINE",
-    label: "Duty, Levy & VAT Engine",
-    output: { lineCount: taxLineItems.length },
+    label: "Versioned Duty & Levy Engine",
+    output: {
+      ruleSetVersion: versioned.ruleSetVersion,
+      profileId: versioned.profileId,
+      lineCount: taxLineItems.length,
+    },
     lineItems: taxLineItems,
-    notes: ["All rates loaded from configurable DutyFormulaRule records — not hardcoded."],
+    notes: [
+      `Rule set ${versioned.ruleSetVersion}`,
+      `Profile ${versioned.profileId}`,
+      "Dependency-aware calculation with decimal-safe arithmetic.",
+    ],
   });
 
-  const totalGraTaxesGhs = round2(
-    taxLineItems.filter((i) => ["DUTY", "LEVY", "VAT", "FEE"].includes(i.category)).reduce((s, i) => s + i.amountGhs, 0),
-  );
-  const estimatedDutyGhs = round2(
-    taxLineItems.filter((i) => i.category === "DUTY" || i.category === "LEVY" || i.category === "VAT").reduce((s, i) => s + i.amountGhs, 0),
-  );
-
-  const portItems = runChargeEngine({
-    templates: config.chargeTemplates,
-    category: "PORT",
-    cifGhs,
-    calibrationFactors: config.calibrationFactors,
-    source: "HISTORICAL",
-  });
-  const shippingItems = runChargeEngine({
-    templates: config.chargeTemplates,
-    category: "SHIPPING_LINE",
-    cifGhs,
-    calibrationFactors: config.calibrationFactors,
-    source: "HISTORICAL",
-  });
-  const agentItems = runChargeEngine({
-    templates: config.chargeTemplates,
-    category: "AGENT",
-    cifGhs,
-    calibrationFactors: config.calibrationFactors,
-    source: "HISTORICAL",
-  });
-
-  allLineItems.push(...portItems, ...shippingItems, ...agentItems);
-  stages.push(
-    { stage: "PORT_CHARGES", label: "Port Charges Engine", output: {}, lineItems: portItems, notes: [] },
-    { stage: "SHIPPING_LINE", label: "Shipping Line Engine", output: {}, lineItems: shippingItems, notes: [] },
-    { stage: "AGENT_FEES", label: "Agent Cost Engine", output: {}, lineItems: agentItems, notes: [] },
-  );
-
-  const totalPortChargesGhs = round2(sumByCategory(portItems, ["PORT"]));
-  const shippingLineChargesGhs = round2(sumByCategory(shippingItems, ["SHIPPING_LINE"]));
-  const agentFeesGhs = round2(sumByCategory(agentItems, ["AGENT"]));
-  const totalLandedCostGhs = round2(cifGhs + totalGraTaxesGhs + totalPortChargesGhs + shippingLineChargesGhs + agentFeesGhs);
+  const totalGraTaxesGhs = versioned.engineResult.totalDutyPayableGhs;
+  const totalLandedCostGhs = customsValueGhs + totalGraTaxesGhs;
 
   const similarImports = await findSimilarImports({
     countryConfigId: config.countryConfigId,
     input,
-    hsCode: hsResolution.code,
+    hsCode: versioned.hsCodeNormalized,
   });
-  const confidence = computeConfidence(similarImports, input);
-  const historicalComparison = buildHistoricalComparison({ similarImports, estimatedDutyGhs });
 
-  const predictionAdjustments = Object.entries(config.calibrationFactors)
-    .filter(([, v]) => v !== 1)
-    .map(([category, factor]) => ({
-      category,
-      factor: factor as number,
-      note: `Self-learning calibration factor applied (${(factor as number).toFixed(4)})`,
-    }));
+  const vehicleDataComplete =
+    input.vehicle.fuelType === "ELECTRIC"
+      ? Boolean(input.vehicle.engineCc || input.vehicle.batteryKwh)
+      : Boolean(input.vehicle.engineCc);
 
-  return {
+  const fingerprint = buildEstimateFingerprint({
+    make: input.vehicle.manufacturer,
+    model: input.vehicle.model,
+    year: input.vehicle.year,
+    fuelType: mapFuelType(input.vehicle.fuelType),
+    fobAmount: input.purchase.fobAmount,
+    fobCurrency: input.purchase.fobCurrency,
+    hsCode: versioned.hsCodeNormalized,
+    profileId: versioned.profileId,
+    ruleSetVersion: versioned.ruleSetVersion,
+    fxRate: exchange.rate,
+    fxEffectiveDate: exchange.effectiveDate,
+    engineCc: input.vehicle.engineCc,
+    vehicleCategory: input.vehicle.vehicleCategory,
+    freightGhs,
+    insuranceGhs,
+  });
+
+  const cacheKey = estimateCacheKey(fingerprint);
+  const cached = await dutyCacheGet<DutyIntelligenceResult>(cacheKey, fingerprint);
+  if (cached) {
+    return { ...cached, calculatedAt: assessmentDate.toISOString() };
+  }
+
+  const prediction = await runPredictionLayer({
+    countryConfigId: config.countryConfigId,
+    input,
+    hsCode: versioned.hsCode,
+    hsCodeNormalized: versioned.hsCodeNormalized,
+    profileId: versioned.profileId,
+    profileDescription: hsResolutionPreview.description,
+    ruleSetVersion: versioned.ruleSetVersion,
+    verifiedProfile: versioned.confidence.level === "VERIFIED_PROFILE_HIGH",
+    hsResolutionMethod: hsResolutionPreview.method,
+    fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+    freightGhs,
+    insuranceGhs,
+    customsValueGhs,
+    cifGhs,
+    totalDutyGhs: totalGraTaxesGhs,
+    totalLandedCostGhs,
+    fxRate: exchange.rate,
+    fxSource: exchange.source,
+    fxEffectiveDate: exchange.effectiveDate,
+    assessmentDate,
+    vehicleDataComplete,
+    similarImports,
+  });
+
+  const baseResult: DutyIntelligenceResult = {
     formulaVersion: DUTY_INTELLIGENCE_FORMULA_VERSION,
     countryCode: input.countryCode,
     inputs: input,
@@ -246,39 +294,63 @@ export async function runDutyIntelligencePipeline(
     lineItems: allLineItems,
     summary: {
       fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
-      freightGhs: freightEstimate.freightGhs,
-      insuranceGhs: insuranceEstimate.insuranceGhs,
+      freightGhs,
+      insuranceGhs,
       cifGhs,
       customsValueGhs,
       totalGraTaxesGhs,
-      totalPortChargesGhs,
-      shippingLineChargesGhs,
-      agentFeesGhs,
+      totalPortChargesGhs: 0,
+      shippingLineChargesGhs: 0,
+      agentFeesGhs: 0,
       totalLandedCostGhs,
       estimatedTransitDays: freightEstimate.transitDays,
     },
-    calculatedAt: new Date().toISOString(),
-    hsCode: hsResolution.code,
-    hsCodeResolution: hsResolution,
+    calculatedAt: assessmentDate.toISOString(),
+    hsCode: versioned.hsCodeNormalized,
+    hsCodeResolution: {
+      code: versioned.hsCodeNormalized,
+      description: hsResolutionPreview.description,
+      method: hsResolutionPreview.method,
+    },
     exchangeRate: {
       rate: exchange.rate,
       source: exchange.source,
       fromCurrency: exchange.fromCurrency,
       effectiveDate: exchange.effectiveDate,
     },
-    vehicleClassification: classification,
-    confidence,
-    historicalComparison,
-    predictionAdjustments,
+    vehicleClassification: {
+      category: versioned.classification.category,
+      ageYears: versioned.classification.ageYears,
+      commercial: versioned.classification.commercial,
+      profile: versioned.classification.profile,
+    },
+    confidence: prediction.confidence,
+    historicalComparison: prediction.historicalComparison,
+    predictionAdjustments: prediction.predictionAdjustments,
+    ruleSetVersion: versioned.ruleSetVersion,
+    profileId: versioned.profileId,
+    estimateRange: prediction.estimateRange,
+    explanation: prediction.explanation,
+    calibration: {
+      cohortSize: prediction.calibration.cohortSize,
+      exactFixtureMatch: prediction.calibration.exactFixtureMatch,
+      valuationMethod: prediction.calibration.valuation.method,
+      assumptions: prediction.calibration.assumptions,
+    },
+    cacheFingerprint: fingerprint,
+    engineReconciliation: versioned.engineResult.reconciliation,
     methodologyNote:
-      "Duty Intelligence Engine V3 — freight and insurance are calculated automatically from the Spark & Drive shipping cost matrix and insurance rules. " +
-      "All tax rates, levies, port charges, and clearing fees are loaded from admin-configured database rules and historical shipment records. " +
+      "Duty Intelligence Engine V4 with calibration layer — deterministic rule-based tax lines plus cohort-informed confidence and ranges. " +
       "Estimates are for planning only; final customs assessment is determined by Ghana Customs at clearance.",
   };
+
+  const result = mergePredictionIntoResult(baseResult, prediction, { cacheFingerprint: fingerprint });
+  await dutyCacheSet(cacheKey, result, { fingerprint, ttlMs: 5 * 60 * 1000 });
+  return result;
 }
 
 export function isPipelineError(r: DutyIntelligenceResult | DutyPipelineError): r is DutyPipelineError {
-  return "code" in r && r.code === "CONFIG_UNAVAILABLE";
+  return "code" in r && r.code !== undefined && !("formulaVersion" in r);
 }
 
 export async function saveDutyCalculation(params: {
@@ -304,15 +376,20 @@ export async function saveDutyCalculation(params: {
       inputJson: params.input as object,
       resultJson: params.result as object,
       formulaVersion: params.result.formulaVersion,
+      ruleSetVersion: params.result.ruleSetVersion ?? params.result.formulaVersion,
+      classificationProfileId: params.result.profileId,
+      formulaSnapshotJson: params.result.ruleSetVersion ? ({ version: params.result.ruleSetVersion } as object) : undefined,
+      lineSnapshotsJson: params.result.lineItems as object,
       confidenceScore: params.result.confidence.score,
-      confidenceLabel: params.result.confidence.label,
+      confidenceLabel: params.result.confidence.level,
+      confidenceLevel: params.result.confidence.level,
+      predictedTotalGhs: params.result.summary.totalGraTaxesGhs,
+      predictedLowGhs: params.result.estimateRange?.lowGhs,
+      predictedHighGhs: params.result.estimateRange?.highGhs,
       similarImportCount: params.result.confidence.similarImportCount,
       totalLandedCostGhs: params.result.summary.totalLandedCostGhs,
       totalGraTaxesGhs: params.result.summary.totalGraTaxesGhs,
-      totalPortChargesGhs:
-        params.result.summary.totalPortChargesGhs +
-        params.result.summary.shippingLineChargesGhs +
-        params.result.summary.agentFeesGhs,
+      totalPortChargesGhs: 0,
       cifGhs: params.result.summary.cifGhs,
       customsValueGhs: params.result.summary.customsValueGhs,
       hsCode: params.result.hsCode,

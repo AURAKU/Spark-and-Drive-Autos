@@ -1,3 +1,7 @@
+/**
+ * @deprecated Superseded by `calculation-engine.ts` (V4 dependency-aware rule engine).
+ * Retained temporarily for reference; do not use in new code paths.
+ */
 import type { EngineType } from "@prisma/client";
 
 import type { CalculationLineItem, LoadedFormulaRule } from "../types";

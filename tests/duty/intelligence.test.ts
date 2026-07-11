@@ -9,8 +9,8 @@ import { resolveImportDutyRateForPowertrain } from "@/lib/duty/calculator";
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "@/lib/duty-intelligence/formula-version";
 
 describe("duty intelligence engine v3", () => {
-  it("uses v3 formula version", () => {
-    assert.equal(DUTY_INTELLIGENCE_FORMULA_VERSION, "sda-duty-intelligence-v3");
+  it("uses v4 formula version", () => {
+    assert.equal(DUTY_INTELLIGENCE_FORMULA_VERSION, "sda-duty-intelligence-v4");
   });
 
   it("resolves ICE age bands for import duty", () => {
@@ -96,6 +96,7 @@ describe("duty intelligence engine v3", () => {
     const low = computeConfidence([]);
     assert.equal(low.similarImportCount, 0);
     assert.equal(low.label, "LOW");
+    assert.equal(low.level, "ADMIN_REVIEW_REQUIRED");
     assert.ok(low.reasons.length >= 2);
 
     const high = computeConfidence(
@@ -127,9 +128,9 @@ describe("duty intelligence engine v3", () => {
         shipping: { shippingMethod: "SEA_FREIGHT", otherShippingChargesGhs: 0 },
       },
     );
-    assert.ok(high.score >= 80);
+    assert.ok(high.score <= 92);
     assert.equal(high.similarImportCount, 26);
-    assert.ok(high.reasons.includes("Historical imports"));
+    assert.equal(high.level, "LIMITED_EVIDENCE");
   });
 
   it("builds historical comparison from similar imports", () => {

@@ -119,12 +119,46 @@ export type PipelineStageResult = {
   notes: string[];
 };
 
+export type DutyConfidenceLevel =
+  | "VERIFIED_PROFILE_HIGH"
+  | "STRONG_EVIDENCE"
+  | "MODERATE_EVIDENCE"
+  | "LIMITED_EVIDENCE"
+  | "ADMIN_REVIEW_REQUIRED";
+
 export type ConfidenceResult = {
   score: number;
   label: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+  level: DutyConfidenceLevel;
   similarImportCount: number;
   basisNote: string;
   reasons: string[];
+  uncertaintyReasons?: string[];
+};
+
+export type EstimateExplanation = {
+  profileUsed: string;
+  majorAssumptions: string[];
+  whyRangeShown: string;
+  couldChangeFinalAmount: string[];
+  uncertaintyReasons: string[];
+  effectiveRuleDate: string;
+  fxRateUsed: number;
+  fxSource: string;
+  customsValueMethod: string;
+  cohortSize: number;
+  exactFixtureMatch: boolean;
+};
+
+export type EstimateRangeResult = {
+  baseGhs: number;
+  lowGhs: number;
+  highGhs: number;
+  bandPct: number;
+  expectedGhs: number;
+  landedCostLowGhs?: number;
+  landedCostExpectedGhs?: number;
+  landedCostHighGhs?: number;
 };
 
 export type HistoricalComparison = {
@@ -165,13 +199,49 @@ export type DutyIntelligenceResult = {
   historicalComparison: HistoricalComparison | null;
   predictionAdjustments: { category: string; factor: number; note: string }[];
   methodologyNote: string;
+  ruleSetVersion?: string;
+  profileId?: string;
+  estimateRange?: EstimateRangeResult;
+  explanation?: EstimateExplanation;
+  vehicleSpec?: {
+    source: string;
+    confidence: string;
+    inferredFields: Record<string, { value: string | number; source: string }>;
+    needsConfirmation: string[];
+  };
+  calibration?: {
+    cohortSize: number;
+    exactFixtureMatch: boolean;
+    valuationMethod: string;
+    assumptions: string[];
+  };
+  cacheFingerprint?: string;
+  engineReconciliation?: {
+    lineTotal: number;
+    documentedTotal: number;
+    variance: number;
+    withinTolerance: boolean;
+    unexplainedVariance: boolean;
+  } | null;
 };
 
 export type DutyPipelineError = {
-  code: "CONFIG_UNAVAILABLE";
+  code:
+    | "CONFIG_UNAVAILABLE"
+    | "MISSING_CLASSIFICATION"
+    | "NEEDS_CLASSIFICATION"
+    | "MISSING_RULE_SET"
+    | "MISSING_FX_RATE"
+    | "MISSING_CUSTOMS_VALUE"
+    | "RULE_DEPENDENCY_ERROR"
+    | "UNVERIFIED_RULE"
+    | "ADMIN_REVIEW_REQUIRED"
+    | "VALIDATION_ERROR";
   message: string;
   adminHint?: string;
   health?: import("./config-bootstrap").DutyConfigHealth;
+  missingFields?: string[];
+  details?: Record<string, unknown>;
 };
 
 export type LoadedFormulaRule = {

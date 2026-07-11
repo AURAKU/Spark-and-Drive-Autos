@@ -6,10 +6,12 @@ import { Check, ChevronDown, ChevronUp, Loader2, Printer, Save, Shield } from "l
 
 import { saveDutyCalculationAction } from "@/actions/duty-intelligence-admin";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
+import type { IntakeQuestion } from "@/lib/duty-intelligence/intake-questions";
 import {
   EXPORT_COUNTRIES,
   SUPPORTED_CURRENCIES,
   type DutyCalculationInput,
+  type DutyConfidenceLevel,
   type DutyIntelligenceResult,
 } from "@/lib/duty-intelligence/types";
 import { formatMoney } from "@/lib/format";
@@ -42,6 +44,27 @@ type Props = {
   isAdmin?: boolean;
 };
 
+const CONFIDENCE_LABELS: Record<DutyConfidenceLevel, string> = {
+  VERIFIED_PROFILE_HIGH: "Verified profile",
+  STRONG_EVIDENCE: "Strong evidence",
+  MODERATE_EVIDENCE: "Moderate evidence",
+  LIMITED_EVIDENCE: "Limited evidence",
+  ADMIN_REVIEW_REQUIRED: "Review required",
+};
+
+type ResolvedVehicleSpec = {
+  source: string;
+  confidence: string;
+  inferredFields: Record<string, { value: string | number; source: string }>;
+  needsConfirmation: string[];
+  engineCc?: number;
+  powerKw?: number;
+  vehicleCategory?: string;
+  countryOfOrigin?: string;
+  fuelType?: string;
+  year?: number;
+};
+
 const defaultYear = new Date().getFullYear() - 3;
 
 export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin }: Props) {
@@ -64,6 +87,13 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   const [expanded, setExpanded] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [powerKw, setPowerKw] = useState("");
+  const [freightOverride, setFreightOverride] = useState("");
+  const [insuranceOverride, setInsuranceOverride] = useState("");
+  const [hsCodeOverride, setHsCodeOverride] = useState("");
+  const [intakeQuestions, setIntakeQuestions] = useState<IntakeQuestion[]>([]);
+  const [resolvedSpec, setResolvedSpec] = useState<ResolvedVehicleSpec | null>(null);
+  const [confirmedFields, setConfirmedFields] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -72,26 +102,102 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
     if (prefill?.countryOfOrigin) setCountryOfOrigin(prefill.countryOfOrigin);
   }, [prefill]);
 
+  const showQuestion = useCallback(
+    (id: string) => intakeQuestions.some((q) => q.id === id),
+    [intakeQuestions],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const payload = {
+      countryCode: "GH",
+      carId: prefill?.carId,
+      vehicle: {
+        manufacturer,
+        model,
+        year: Number(year) || defaultYear,
+        fuelType,
+        engineCc: engineCc.trim() ? Number(engineCc) : undefined,
+        powerKw: powerKw.trim() ? Number(powerKw) : undefined,
+        vehicleCategory: vehicleCategory || undefined,
+        countryOfOrigin: countryOfOrigin || undefined,
+        vin: vin.trim() || undefined,
+        confirmedFields: [...confirmedFields],
+      },
+      purchase: { fobAmount: Number(fobAmount) || 0, fobCurrency },
+      expertMode: isAdmin === true,
+    };
+
+    fetch("/api/duty-intelligence/intake-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        hasShippingConfig: !freightOverride.trim(),
+        hasInsuranceConfig: !insuranceOverride.trim(),
+        inferredFromInventory: Boolean(prefill?.carId),
+        classificationUnresolved: false,
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.questions) setIntakeQuestions(data.questions);
+      })
+      .catch(() => {});
+
+    if (manufacturer.trim() && model.trim()) {
+      fetch("/api/duty-intelligence/resolve-vehicle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.spec) {
+            setResolvedSpec(data.spec);
+            if (data.spec.engineCc && !engineCc) setEngineCc(String(data.spec.engineCc));
+            if (data.spec.powerKw && !powerKw) setPowerKw(String(data.spec.powerKw));
+            if (data.spec.vehicleCategory && vehicleCategory === "SUV") setVehicleCategory(data.spec.vehicleCategory);
+            if (data.spec.countryOfOrigin && countryOfOrigin === "CHINA" && prefill?.carId) {
+              setCountryOfOrigin(data.spec.countryOfOrigin);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => controller.abort();
+  }, [
+    manufacturer, model, year, fuelType, engineCc, powerKw, vehicleCategory, countryOfOrigin, vin,
+    fobAmount, fobCurrency, prefill?.carId, isAdmin, freightOverride, insuranceOverride, confirmedFields,
+  ]);
+
   const inputPayload = useMemo((): DutyCalculationInput | null => {
     const y = Number(year);
     const fob = Number(fobAmount);
     const cc = engineCc.trim() ? Number(engineCc) : undefined;
+    const kw = powerKw.trim() ? Number(powerKw) : undefined;
     if (!manufacturer.trim() || !model.trim()) return null;
     if (!Number.isFinite(y) || !Number.isFinite(fob) || fob <= 0) return null;
     if (fuelType !== "ELECTRIC" && (!cc || cc <= 0)) return null;
+    if (fuelType === "ELECTRIC" && !cc && !kw) return null;
 
     return {
       countryCode: "GH",
       carId: prefill?.carId,
+      hsCodeOverride: isAdmin && hsCodeOverride.trim() ? hsCodeOverride.trim() : undefined,
       vehicle: {
         manufacturer: manufacturer.trim(),
         model: model.trim(),
         year: y,
         vin: vin.trim() || undefined,
-        countryOfOrigin: countryOfOrigin as DutyCalculationInput["vehicle"]["countryOfOrigin"],
-        vehicleCategory: vehicleCategory as DutyCalculationInput["vehicle"]["vehicleCategory"],
+        countryOfOrigin: (countryOfOrigin || "CHINA") as DutyCalculationInput["vehicle"]["countryOfOrigin"],
+        vehicleCategory: (vehicleCategory || "SUV") as DutyCalculationInput["vehicle"]["vehicleCategory"],
         fuelType,
         engineCc: cc,
+        batteryKwh: kw,
         transmission: transmission || undefined,
         driveType: driveType || undefined,
         applyEvDutyWaiver: false,
@@ -99,12 +205,15 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
       purchase: { fobAmount: fob, fobCurrency: fobCurrency as DutyCalculationInput["purchase"]["fobCurrency"] },
       shipping: {
         shippingMethod: shippingMethod as DutyCalculationInput["shipping"]["shippingMethod"],
+        freightGhsOverride: freightOverride.trim() ? Number(freightOverride) : undefined,
+        insuranceGhsOverride: insuranceOverride.trim() ? Number(insuranceOverride) : undefined,
         otherShippingChargesGhs: 0,
       },
     };
   }, [
-    manufacturer, model, year, vin, countryOfOrigin, vehicleCategory, fuelType, engineCc,
-    transmission, driveType, fobAmount, fobCurrency, shippingMethod, prefill?.carId,
+    manufacturer, model, year, vin, countryOfOrigin, vehicleCategory, fuelType, engineCc, powerKw,
+    transmission, driveType, fobAmount, fobCurrency, shippingMethod, prefill?.carId, isAdmin,
+    hsCodeOverride, freightOverride, insuranceOverride,
   ]);
 
   const runCalculation = useCallback(() => {
@@ -171,19 +280,20 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         <div>
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground dark:text-white">Duty Intelligence Engine V3</h3>
+            <h3 className="text-sm font-semibold text-foreground dark:text-white">Ghana Duty Estimate</h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Freight, insurance, and CIF calculated automatically from Spark &amp; Drive configuration. Full landed cost
-            with import taxes, port charges, and clearing fees.
+            Enter make, model, year, fuel type, and purchase price. Freight and insurance are estimated automatically unless you provide them.
           </p>
         </div>
         {result && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-right backdrop-blur-sm">
             <p className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Confidence</p>
-            <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{result.confidence.score}%</p>
+            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+              {CONFIDENCE_LABELS[result.confidence.level]}
+            </p>
             <p className="text-[10px] text-muted-foreground">
-              {result.confidence.similarImportCount} similar imports
+              {result.calibration?.cohortSize ?? result.confidence.similarImportCount} similar case(s)
             </p>
           </div>
         )}
@@ -208,17 +318,19 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           <input value={model} onChange={(e) => setModel(e.target.value)} className={inputCls} placeholder="RAV4" required />
         </label>
         <label className="block text-xs text-muted-foreground">
-          Year *
+          Year of manufacture *
           <input value={year} onChange={(e) => setYear(e.target.value)} inputMode="numeric" className={inputCls} max={new Date().getFullYear()} />
         </label>
-        <label className="block text-xs text-muted-foreground">
-          Vehicle type *
-          <select value={vehicleCategory} onChange={(e) => setVehicleCategory(e.target.value)} className={inputCls}>
-            {VEHICLE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </label>
+        {(showQuestion("vehicleCategory") || !prefill?.carId) && (
+          <label className="block text-xs text-muted-foreground">
+            Vehicle category{showQuestion("vehicleCategory") && intakeQuestions.find((q) => q.id === "vehicleCategory")?.required ? " *" : ""}
+            <select value={vehicleCategory} onChange={(e) => setVehicleCategory(e.target.value)} className={inputCls}>
+              {VEHICLE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="block text-xs text-muted-foreground">
           Fuel type *
           <select value={fuelType} onChange={(e) => setFuelType(e.target.value as EngineType)} className={inputCls}>
@@ -233,8 +345,14 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <input value={engineCc} onChange={(e) => setEngineCc(e.target.value)} inputMode="numeric" className={inputCls} placeholder="2000" />
           </label>
         )}
+        {fuelType === "ELECTRIC" && (showQuestion("powerKw") || !powerKw) && (
+          <label className="block text-xs text-muted-foreground">
+            Electric power (kW){showQuestion("powerKw") && intakeQuestions.find((q) => q.id === "powerKw")?.required ? " *" : ""}
+            <input value={powerKw} onChange={(e) => setPowerKw(e.target.value)} inputMode="decimal" className={inputCls} placeholder="170" />
+          </label>
+        )}
         <label className="block text-xs text-muted-foreground">
-          FOB amount *
+          Purchase / FOB amount *
           <input value={fobAmount} onChange={(e) => setFobAmount(e.target.value)} inputMode="decimal" className={inputCls} placeholder="18500" />
         </label>
         <label className="block text-xs text-muted-foreground">
@@ -245,45 +363,97 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             ))}
           </select>
         </label>
-        <label className="block text-xs text-muted-foreground">
-          Country of export *
-          <select value={countryOfOrigin} onChange={(e) => setCountryOfOrigin(e.target.value)} className={inputCls}>
-            {EXPORT_COUNTRIES.map((c) => (
-              <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs text-muted-foreground">
-          Shipping method *
-          <select value={shippingMethod} onChange={(e) => setShippingMethod(e.target.value)} className={inputCls}>
-            {SHIPPING_METHODS.map((m) => (
-              <option key={m} value={m}>{m.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs text-muted-foreground">
-          Transmission
-          <select value={transmission} onChange={(e) => setTransmission(e.target.value)} className={inputCls}>
-            <option value="">— Optional —</option>
-            {TRANSMISSIONS.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs text-muted-foreground">
-          Drive type
-          <select value={driveType} onChange={(e) => setDriveType(e.target.value)} className={inputCls}>
-            <option value="">— Optional —</option>
-            {DRIVE_TYPES.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs text-muted-foreground sm:col-span-2">
-          VIN (optional)
-          <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} className={inputCls} placeholder="17-character VIN" maxLength={17} />
-        </label>
+        {showQuestion("countryOfOrigin") && (
+          <label className="block text-xs text-muted-foreground">
+            Country of export
+            <select value={countryOfOrigin} onChange={(e) => setCountryOfOrigin(e.target.value)} className={inputCls}>
+              {EXPORT_COUNTRIES.map((c) => (
+                <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!prefill?.carId && (
+          <label className="block text-xs text-muted-foreground">
+            Shipping method
+            <select value={shippingMethod} onChange={(e) => setShippingMethod(e.target.value)} className={inputCls}>
+              {SHIPPING_METHODS.map((m) => (
+                <option key={m} value={m}>{m.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {showQuestion("freight") && (
+          <label className="block text-xs text-muted-foreground">
+            Freight (GHS) — optional override
+            <input value={freightOverride} onChange={(e) => setFreightOverride(e.target.value)} inputMode="decimal" className={inputCls} placeholder="Leave blank to estimate" />
+          </label>
+        )}
+        {showQuestion("insurance") && (
+          <label className="block text-xs text-muted-foreground">
+            Insurance (GHS) — optional override
+            <input value={insuranceOverride} onChange={(e) => setInsuranceOverride(e.target.value)} inputMode="decimal" className={inputCls} placeholder="Leave blank to estimate" />
+          </label>
+        )}
+        {isAdmin && showQuestion("hsCode") && (
+          <label className="block text-xs text-muted-foreground sm:col-span-2">
+            HS code (expert mode)
+            <input value={hsCodeOverride} onChange={(e) => setHsCodeOverride(e.target.value)} className={inputCls} placeholder="870323" />
+          </label>
+        )}
+        {!compact && (
+          <>
+            <label className="block text-xs text-muted-foreground">
+              Transmission
+              <select value={transmission} onChange={(e) => setTransmission(e.target.value)} className={inputCls}>
+                <option value="">— Optional —</option>
+                {TRANSMISSIONS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Drive type
+              <select value={driveType} onChange={(e) => setDriveType(e.target.value)} className={inputCls}>
+                <option value="">— Optional —</option>
+                {DRIVE_TYPES.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        {showQuestion("vin") && (
+          <label className="block text-xs text-muted-foreground sm:col-span-2">
+            VIN (optional — helps verify specifications)
+            <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} className={inputCls} placeholder="17-character VIN" maxLength={17} />
+          </label>
+        )}
       </div>
+
+      {resolvedSpec && resolvedSpec.needsConfirmation.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+          <p className="font-medium text-amber-800 dark:text-amber-200">Please confirm inferred specifications</p>
+          <ul className="mt-2 space-y-2">
+            {resolvedSpec.needsConfirmation.map((field) => {
+              const inferred = resolvedSpec.inferredFields[field];
+              if (!inferred) return null;
+              return (
+                <li key={field} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{field}: {String(inferred.value)} <span className="text-muted-foreground">({inferred.source})</span></span>
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-[11px]"
+                    onClick={() => setConfirmedFields((prev) => new Set([...prev, field]))}
+                  >
+                    Confirm
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
@@ -352,8 +522,33 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
 
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 backdrop-blur-sm">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">Estimated landed cost</p>
-            <p className="text-2xl font-bold text-foreground dark:text-white">{formatMoney(result.summary.totalLandedCostGhs)}</p>
+            {result.estimateRange && result.estimateRange.bandPct > 0 ? (
+              <>
+                <p className="text-2xl font-bold text-foreground dark:text-white">
+                  {formatMoney(result.estimateRange.landedCostExpectedGhs ?? result.summary.totalLandedCostGhs)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Range {formatMoney(result.estimateRange.landedCostLowGhs ?? result.summary.totalLandedCostGhs)} – {formatMoney(result.estimateRange.landedCostHighGhs ?? result.summary.totalLandedCostGhs)}
+                </p>
+              </>
+            ) : (
+              <p className="text-2xl font-bold text-foreground dark:text-white">{formatMoney(result.summary.totalLandedCostGhs)}</p>
+            )}
           </div>
+
+          {result.explanation && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs dark:border-white/10">
+              <p className="font-medium text-foreground">{result.explanation.profileUsed}</p>
+              <p className="mt-1 text-muted-foreground">{result.explanation.whyRangeShown}</p>
+              {result.explanation.uncertaintyReasons.length > 0 && (
+                <ul className="mt-2 list-disc pl-4 text-muted-foreground">
+                  {result.explanation.uncertaintyReasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {result.confidence.reasons.map((r) => (

@@ -112,7 +112,7 @@ export async function computeDutyEstimateAsync(
 ): Promise<DutyEstimateResult> {
   const pipelineResult = await runDutyIntelligencePipeline(toLegacyInput(input), referenceYear);
   if (isPipelineError(pipelineResult)) {
-    return computeDutyEstimate(input, referenceYear);
+    throw new Error(`${pipelineResult.code}: ${pipelineResult.message}`);
   }
   const intelligence = pipelineResult;
   const age = Math.max(0, referenceYear - input.vehicleYear);

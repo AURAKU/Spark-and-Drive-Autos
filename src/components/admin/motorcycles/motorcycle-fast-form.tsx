@@ -1,10 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EngineType, MotorcycleType, SourceType, CarListingState } from "@prisma/client";
+import { toast } from "sonner";
 
 import { createMotorcycle } from "@/actions/motorcycles";
+import { InventoryMediaSourcePicker } from "@/components/admin/inventory-media-source-picker";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
+import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
 import {
   MotorcycleCreateMediaField,
   uploadQueuedMotorcycleMedia,
@@ -26,12 +31,25 @@ export function MotorcycleFastForm() {
   const [error, setError] = useState<string | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
-  const [media, setMedia] = useState<MotorcycleCreateMediaState>({
-    coverUrl: "",
-    coverPublicId: "",
-    extraImages: [],
-    videos: [],
-  });
+  const [coverUrl, setCoverUrl] = useState("");
+  const [coverPublicId, setCoverPublicId] = useState("");
+  const [coverUploading, setCoverUploading] = useState(false);
+
+  async function onCoverFilesReady(files: File[]) {
+    const file = files[0];
+    if (!file) return;
+    setCoverUploading(true);
+    try {
+      const uploaded = await uploadFileToCloudinary(file, "sda/admin/motorcycles/staging", "image");
+      setCoverUrl(uploaded.secure_url);
+      setCoverPublicId(uploaded.public_id);
+      toast.success("Cover photo ready.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cover upload failed.");
+    } finally {
+      setCoverUploading(false);
+    }
+  }
 
   const inputCls =
     "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40";
@@ -39,8 +57,8 @@ export function MotorcycleFastForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!media.coverUrl.trim()) {
-      setError("Upload or paste a cover photo before publishing.");
+    if (!coverUrl) {
+      setError("Add a cover photo before publishing.");
       setStep(1);
       return;
     }
@@ -134,7 +152,32 @@ export function MotorcycleFastForm() {
       )}
 
       {step === 1 && (
-        <MotorcycleCreateMediaField value={media} onChange={setMedia} />
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Add a cover photo from your device or camera. Crop any region before upload — no fixed aspect ratio.
+            More gallery media can be added on the edit page after saving.
+          </p>
+          <InventoryMediaSourcePicker
+            kind="image"
+            multiple={false}
+            disabled={coverUploading}
+            uploadLabel={coverUploading ? "Uploading…" : "Choose cover photo"}
+            onFilesReady={onCoverFilesReady}
+          />
+          {coverUrl ? (
+            <div className="relative aspect-[16/10] max-w-md overflow-hidden rounded-xl border border-border dark:border-white/10">
+              <Image
+                src={optimizeCloudinaryUrl(coverUrl, "card")}
+                alt="Cover preview"
+                fill
+                className="object-cover"
+                sizes="400px"
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-destructive">Cover photo is required before publishing.</p>
+          )}
+        </div>
       )}
 
       {step === 2 && (
@@ -205,7 +248,19 @@ export function MotorcycleFastForm() {
           <button type="button" onClick={() => setStep(step - 1)} className="rounded-lg border border-border px-4 py-2 text-sm">Back</button>
         )}
         {step < STEPS.length - 1 ? (
-          <button type="button" onClick={goToNextStep} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">Next</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (step === 1 && !coverUrl) {
+                toast.error("Add a cover photo before continuing.");
+                return;
+              }
+              setStep(step + 1);
+            }}
+            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
+          >
+            Next
+          </button>
         ) : (
           <button type="submit" disabled={pending} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">
             {pending ? "Publishing…" : "Publish motorcycle"}
