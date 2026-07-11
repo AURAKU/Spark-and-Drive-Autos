@@ -382,7 +382,7 @@ export async function saveDutyCalculation(params: {
       lineSnapshotsJson: params.result.lineItems as object,
       confidenceScore: params.result.confidence.score,
       confidenceLabel: params.result.confidence.level,
-      confidenceLevel: params.result.confidence.level,
+      confidenceLevel: params.result.confidence.label,
       predictedTotalGhs: params.result.summary.totalGraTaxesGhs,
       predictedLowGhs: params.result.estimateRange?.lowGhs,
       predictedHighGhs: params.result.estimateRange?.highGhs,
