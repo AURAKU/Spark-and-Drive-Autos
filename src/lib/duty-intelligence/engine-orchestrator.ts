@@ -1,3 +1,10 @@
+import {
+  applyValueOverrides,
+  buildChargeOverrideMap,
+  buildOverrideAuditSnapshot,
+  mergeLegacyChargeOverrides,
+  type AdminOverrideRecord,
+} from "./audit";
 import { classifyVehicleInput } from "./classification";
 import { runCalculationEngine } from "./calculation-engine";
 import { resolveCustomsValue } from "./customs-value";
@@ -7,6 +14,18 @@ import { buildEstimateRange } from "./range";
 import { resolveRuleSet } from "./rule-set-resolver";
 import { validateEngineRequest, type EngineCalculationRequest } from "./validation";
 import type { ConfidenceResult } from "./types";
+
+function normalizeOverrideRecords(input: EngineCalculationRequest): AdminOverrideRecord[] {
+  return (input.adminOverrideRecords ?? []).map((record) => ({
+    target: record.target as AdminOverrideRecord["target"],
+    originalValue: record.originalValue,
+    overrideValue: record.overrideValue,
+    reason: record.reason,
+    adminId: record.adminId,
+    adminDisplayName: record.adminDisplayName,
+    appliedAt: record.appliedAt.toISOString(),
+  }));
+}
 
 export type VersionedCalculationSuccess = {
   ok: true;
@@ -40,10 +59,24 @@ function buildVerifiedConfidence(profileId: string): ConfidenceResult {
 export function runVersionedCalculation(rawInput: unknown): VersionedCalculationOutcome {
   try {
     const input: EngineCalculationRequest = validateEngineRequest(rawInput);
+    const overrideRecords = normalizeOverrideRecords(input);
+    const overrideAudit = overrideRecords.length > 0 ? buildOverrideAuditSnapshot(overrideRecords) : undefined;
+
+    const valueOverrides = applyValueOverrides(
+      {
+        fobGhs: input.values.fobGhs,
+        freightGhs: input.values.freightGhs,
+        insuranceGhs: input.values.insuranceGhs,
+        cifGhs: input.values.cifGhs,
+        customsValueGhs: input.values.customsValueGhs,
+        hsCodeOverride: input.classification.hsCodeOverride,
+      },
+      overrideRecords,
+    );
 
     const hsProfile = requireHsProfile({
       hsCode: input.classification.hsCode,
-      hsCodeOverride: input.classification.hsCodeOverride,
+      hsCodeOverride: valueOverrides.hsCodeOverride,
       fuelType: input.classification.fuelType,
       engineCc: input.classification.engineCc,
       powerKw: input.classification.powerKw,
@@ -59,11 +92,11 @@ export function runVersionedCalculation(rawInput: unknown): VersionedCalculation
     });
 
     const values = resolveCustomsValue({
-      fobGhs: input.values.fobGhs,
-      freightGhs: input.values.freightGhs,
-      insuranceGhs: input.values.insuranceGhs,
-      customsValueOverride: input.values.customsValueGhs,
-      cifOverride: input.values.cifGhs,
+      fobGhs: valueOverrides.fobGhs ?? input.values.fobGhs,
+      freightGhs: valueOverrides.freightGhs ?? input.values.freightGhs,
+      insuranceGhs: valueOverrides.insuranceGhs ?? input.values.insuranceGhs,
+      customsValueOverride: valueOverrides.customsValueGhs ?? input.values.customsValueGhs,
+      cifOverride: valueOverrides.cifGhs ?? input.values.cifGhs,
       depreciationPercent: input.values.depreciatedCustomsValueGhs,
     });
 
@@ -76,16 +109,22 @@ export function runVersionedCalculation(rawInput: unknown): VersionedCalculation
       assessmentDate: input.assessmentDate,
     });
 
+    const chargeOverrides = mergeLegacyChargeOverrides(
+      buildChargeOverrideMap(overrideRecords),
+      input.adminOverrides,
+    );
+
     const engineResult = runCalculationEngine({
       assessmentDate: input.assessmentDate,
       ruleSet,
-      fobGhs: input.values.fobGhs,
-      freightGhs: input.values.freightGhs,
-      insuranceGhs: input.values.insuranceGhs,
+      fobGhs: valueOverrides.fobGhs ?? input.values.fobGhs,
+      freightGhs: valueOverrides.freightGhs ?? input.values.freightGhs,
+      insuranceGhs: valueOverrides.insuranceGhs ?? input.values.insuranceGhs,
       customsValueGhs: values.customsValueGhs,
       cifGhs: values.cifGhs,
       documentedTotalGhs: input.documentedTotalGhs,
-      adminOverrides: input.adminOverrides,
+      adminOverrides: chargeOverrides,
+      overrideAudit,
     });
 
     const estimateRange = buildEstimateRange({

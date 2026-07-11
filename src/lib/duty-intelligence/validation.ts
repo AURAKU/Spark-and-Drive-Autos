@@ -24,12 +24,23 @@ export const engineClassificationSchema = z.object({
   model: z.string().optional(),
 });
 
+export const adminOverrideRecordSchema = z.object({
+  target: z.string().trim().min(1),
+  originalValue: z.union([z.string(), z.number(), z.null()]),
+  overrideValue: z.union([z.string(), z.number()]),
+  reason: z.string().trim().min(1),
+  adminId: z.string().trim().min(1),
+  adminDisplayName: z.string().trim().min(1).optional(),
+  appliedAt: z.coerce.date(),
+});
+
 export const engineCalculationRequestSchema = z.object({
   assessmentDate: z.coerce.date(),
   values: engineValueInputSchema,
   classification: engineClassificationSchema,
   documentedTotalGhs: z.number().nonnegative().optional(),
   adminOverrides: z.record(z.string(), z.number()).optional(),
+  adminOverrideRecords: z.array(adminOverrideRecordSchema).optional(),
 });
 
 export type EngineCalculationRequest = z.infer<typeof engineCalculationRequestSchema>;

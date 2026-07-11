@@ -1,5 +1,6 @@
 import { normalizeChargeName } from "@/lib/duty-assessment/charge-normalization";
 
+import type { OverrideAuditSnapshot } from "./audit";
 import { buildDependencyGraph } from "./dependency-graph";
 import { engineError, isEngineError } from "./errors";
 import { money, moneySum, moneyToNumber, type Money } from "./money";
@@ -17,6 +18,7 @@ export type CalculationEngineInput = {
   cifGhs?: string | number;
   depreciatedCustomsValueGhs?: string | number;
   adminOverrides?: Record<string, string | number>;
+  overrideAudit?: OverrideAuditSnapshot;
   documentedTotalGhs?: string | number;
 };
 
@@ -51,6 +53,7 @@ export type CalculationEngineResult = {
   reconciliation: ReturnType<typeof reconcileTotals> | null;
   formulaSnapshot: VersionedRuleSet;
   lineSnapshots: CalculatedChargeLine[];
+  overrideAudit: OverrideAuditSnapshot | null;
 };
 
 function categorizeCharge(chargeKey: string): CalculatedChargeLine["category"] {
@@ -197,5 +200,6 @@ export function runCalculationEngine(input: CalculationEngineInput): Calculation
     reconciliation,
     formulaSnapshot: input.ruleSet,
     lineSnapshots: lines,
+    overrideAudit: input.overrideAudit ?? null,
   };
 }

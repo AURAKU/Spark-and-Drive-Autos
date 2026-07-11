@@ -31,6 +31,7 @@ export async function persistVersionedCalculation(params: {
         confidence,
         profileId: params.outcome.profileId,
         hsCode: params.outcome.hsCode,
+        overrideAudit: engineResult.overrideAudit,
       } as object,
       formulaVersion: DUTY_INTELLIGENCE_FORMULA_VERSION,
       ruleSetVersion: engineResult.ruleSetVersion,

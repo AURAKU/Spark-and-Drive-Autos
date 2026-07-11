@@ -6,8 +6,16 @@ import {
   BYD_SEALION6_CALIBRATION,
   JETOUR_DASHING_CALIBRATION,
 } from "@/lib/duty-assessment/fixtures/calibration-cases";
+import {
+  applyValueOverrides,
+  buildChargeOverrideMap,
+  buildOverrideAuditSnapshot,
+} from "@/lib/duty-intelligence/audit";
 import { buildDependencyGraph } from "@/lib/duty-intelligence/dependency-graph";
-import { runVersionedCalculationFromSnapshot } from "@/lib/duty-intelligence/engine-orchestrator";
+import {
+  runVersionedCalculation,
+  runVersionedCalculationFromSnapshot,
+} from "@/lib/duty-intelligence/engine-orchestrator";
 import { engineError, isEngineError } from "@/lib/duty-intelligence/errors";
 import { money, moneyToNumber } from "@/lib/duty-intelligence/money";
 import { roundMoney, withinTolerance } from "@/lib/duty-intelligence/rounding";
@@ -208,6 +216,94 @@ describe("duty calculation engine v4", () => {
     const err = engineError("MISSING_FX_RATE", "FX required");
     assert.equal(err.code, "MISSING_FX_RATE");
     assert.equal(isEngineError(err), true);
+  });
+
+  it("preserves admin override audit metadata without mutating rule sets", () => {
+    const appliedAt = new Date("2024-06-15T10:00:00.000Z");
+    const outcome = runVersionedCalculation({
+      assessmentDate: new Date("2024-06-15"),
+      documentedTotalGhs: JETOUR_DASHING_CALIBRATION.totalAssessedGhs,
+      values: {
+        fobGhs: JETOUR_DASHING_CALIBRATION.fobGhs!,
+        freightGhs: JETOUR_DASHING_CALIBRATION.freightGhs!,
+        insuranceGhs: JETOUR_DASHING_CALIBRATION.insuranceGhs!,
+        customsValueGhs: JETOUR_DASHING_CALIBRATION.customsValueGhs!,
+        cifGhs: JETOUR_DASHING_CALIBRATION.customsValueGhs!,
+      },
+      classification: {
+        hsCode: JETOUR_DASHING_CALIBRATION.vehicle.hsCode!,
+        fuelType: JETOUR_DASHING_CALIBRATION.vehicle.fuelType,
+        manufactureYear: JETOUR_DASHING_CALIBRATION.vehicle.manufactureYear,
+        engineCc: JETOUR_DASHING_CALIBRATION.vehicle.engineCc,
+        vehicleCategory: JETOUR_DASHING_CALIBRATION.vehicle.vehicleCategory,
+      },
+      adminOverrideRecords: [
+        {
+          target: "customsValueGhs",
+          originalValue: 160000,
+          overrideValue: JETOUR_DASHING_CALIBRATION.customsValueGhs!,
+          reason: "BoE verified customs value",
+          adminId: "admin-001",
+          adminDisplayName: "Duty Admin",
+          appliedAt,
+        },
+      ],
+    });
+
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+
+    const audit = outcome.engineResult.overrideAudit;
+    assert.ok(audit);
+    assert.equal(audit!.snapshotOnly, true);
+    assert.equal(audit!.overrides.length, 1);
+    assert.equal(audit!.overrides[0]!.originalValue, 160000);
+    assert.equal(audit!.overrides[0]!.overrideValue, JETOUR_DASHING_CALIBRATION.customsValueGhs);
+    assert.equal(audit!.overrides[0]!.adminId, "admin-001");
+    assert.equal(audit!.overrides[0]!.reason, "BoE verified customs value");
+    assert.equal(outcome.engineResult.totalDutyPayableGhs, 61862.67);
+  });
+
+  it("applies charge-level admin overrides from structured records", () => {
+    const chargeMap = buildChargeOverrideMap([
+      {
+        target: "charge:NETWORK_CHARGE",
+        originalValue: 600,
+        overrideValue: 614.82,
+        reason: "BoE network charge",
+        adminId: "admin-002",
+        appliedAt: "2024-06-15T10:00:00.000Z",
+      },
+    ]);
+    assert.equal(chargeMap.NETWORK_CHARGE, 614.82);
+
+    const values = applyValueOverrides(
+      { fobGhs: 100000, freightGhs: 1000, insuranceGhs: 100 },
+      [
+        {
+          target: "freightGhs",
+          originalValue: 1000,
+          overrideValue: 1200,
+          reason: "Verified freight",
+          adminId: "admin-003",
+          appliedAt: "2024-06-15T10:00:00.000Z",
+        },
+      ],
+    );
+    assert.equal(values.freightGhs, 1200);
+
+    const snapshot = buildOverrideAuditSnapshot([
+      {
+        target: "freightGhs",
+        originalValue: 1000,
+        overrideValue: 1200,
+        reason: "Verified freight",
+        adminId: "admin-003",
+        appliedAt: "2024-06-15T10:00:00.000Z",
+      },
+    ]);
+    assert.equal(snapshot.overrides[0]!.originalValue, 1000);
+    assert.equal(snapshot.snapshotOnly, true);
   });
 });
 
