@@ -129,6 +129,50 @@ export async function rejectAssessment(params: {
   });
 }
 
+export async function requestAssessmentCorrection(params: {
+  assessmentId: string;
+  actorId: string;
+  reason: string;
+}): Promise<void> {
+  const existing = await prisma.dutyAssessment.findUniqueOrThrow({
+    where: { id: params.assessmentId },
+    select: { notes: true },
+  });
+  await prisma.dutyAssessment.update({
+    where: { id: params.assessmentId },
+    data: {
+      verificationStatus: "PENDING",
+      assessmentStatus: "ASSESSED",
+      notes: [existing.notes, `[correction-requested] ${params.reason}`].filter(Boolean).join("\n"),
+    },
+  });
+}
+
+export async function setCalibrationEligibility(params: {
+  assessmentId: string;
+  eligible: boolean;
+  actorId: string;
+}): Promise<void> {
+  const existing = await prisma.dutyAssessment.findUniqueOrThrow({
+    where: { id: params.assessmentId },
+    select: { notes: true },
+  });
+  const stripped = (existing.notes ?? "")
+    .split("\n")
+    .filter((line) => !line.startsWith("[calibration:"))
+    .join("\n")
+    .trim();
+  const tag = params.eligible ? "[calibration:eligible]" : "[calibration:ineligible]";
+  await prisma.dutyAssessment.update({
+    where: { id: params.assessmentId },
+    data: { notes: [stripped, tag].filter(Boolean).join("\n") },
+  });
+}
+
+export function isCalibrationEligible(notes: string | null | undefined): boolean {
+  return (notes ?? "").includes("[calibration:eligible]");
+}
+
 export async function compareAssessmentToCalculation(params: {
   assessmentId: string;
   calculationId: string;

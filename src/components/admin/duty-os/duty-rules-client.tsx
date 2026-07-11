@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 
 import {
-  cloneRuleSetAction,
+  createDraftRuleAction,
   publishRulesAction,
   retireRuleAction,
   runRegressionPreviewAction,
@@ -19,8 +19,41 @@ type Props = {
 
 export function DutyRulesClient({ data }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [draftForm, setDraftForm] = useState({
+    chargeKey: "",
+    chargeName: "",
+    rateType: "PERCENTAGE" as "PERCENTAGE" | "FIXED",
+    rateValue: "",
+    taxableBaseExpression: "customsValueGhs",
+    dependencyOrder: "0",
+    sourceId: data.sources[0]?.id ?? "",
+  });
   const [pending, startTransition] = useTransition();
   const draftIds = data.items.filter((r) => r.status === "DRAFT").map((r) => r.id);
+
+  function handleCreateDraft() {
+    if (!draftForm.sourceId) {
+      setMsg("Create a rule source first.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await createDraftRuleAction({
+        countryConfigId: data.countryConfigId,
+        chargeKey: draftForm.chargeKey,
+        chargeName: draftForm.chargeName,
+        rateType: draftForm.rateType,
+        rateValue: draftForm.rateType === "PERCENTAGE" ? Number(draftForm.rateValue) / 100 : undefined,
+        flatAmount: draftForm.rateType === "FIXED" ? Number(draftForm.rateValue) : undefined,
+        taxableBaseExpression: draftForm.taxableBaseExpression,
+        dependencyOrder: Number(draftForm.dependencyOrder),
+        decimalPlaces: 2,
+        sourceId: draftForm.sourceId,
+      });
+      if (result.error) setMsg(result.error);
+      else window.location.reload();
+    });
+  }
 
   function handlePublish() {
     if (!window.confirm("Publish draft rules after regression passes? This supersedes active rules.")) return;
@@ -48,6 +81,9 @@ export function DutyRulesClient({ data }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setShowCreate((v) => !v)} className="rounded-lg border px-3 py-2 text-sm">
+          {showCreate ? "Hide draft form" : "Create draft rule"}
+        </button>
         <button type="button" onClick={handleRegression} disabled={pending} className="rounded-lg border px-3 py-2 text-sm">
           Run regression preview
         </button>
@@ -62,6 +98,34 @@ export function DutyRulesClient({ data }: Props) {
       </div>
 
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+
+      {showCreate && (
+        <section className="space-y-3 rounded-xl border border-border p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold">New draft rule</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block text-sm">Charge key<input className="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs" value={draftForm.chargeKey} onChange={(e) => setDraftForm({ ...draftForm, chargeKey: e.target.value })} /></label>
+            <label className="block text-sm">Charge name<input className="mt-1 w-full rounded-lg border px-3 py-2" value={draftForm.chargeName} onChange={(e) => setDraftForm({ ...draftForm, chargeName: e.target.value })} /></label>
+            <label className="block text-sm">Rate type
+              <select className="mt-1 w-full rounded-lg border px-3 py-2" value={draftForm.rateType} onChange={(e) => setDraftForm({ ...draftForm, rateType: e.target.value as "PERCENTAGE" | "FIXED" })}>
+                <option value="PERCENTAGE">Percentage</option>
+                <option value="FIXED">Fixed amount</option>
+              </select>
+            </label>
+            <label className="block text-sm">{draftForm.rateType === "PERCENTAGE" ? "Rate (%)" : "Amount (GHS)"}<input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={draftForm.rateValue} onChange={(e) => setDraftForm({ ...draftForm, rateValue: e.target.value })} /></label>
+            <label className="block text-sm">Taxable base expression<input className="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs" value={draftForm.taxableBaseExpression} onChange={(e) => setDraftForm({ ...draftForm, taxableBaseExpression: e.target.value })} /></label>
+            <label className="block text-sm">Dependency order<input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={draftForm.dependencyOrder} onChange={(e) => setDraftForm({ ...draftForm, dependencyOrder: e.target.value })} /></label>
+            <label className="block text-sm">Official source
+              <select className="mt-1 w-full rounded-lg border px-3 py-2" value={draftForm.sourceId} onChange={(e) => setDraftForm({ ...draftForm, sourceId: e.target.value })}>
+                <option value="">Select source</option>
+                {data.sources.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+              </select>
+            </label>
+          </div>
+          <button type="button" disabled={pending} onClick={handleCreateDraft} className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+            Save draft
+          </button>
+        </section>
+      )}
 
       <div className="rounded-xl border border-border dark:border-white/10">
         <div className="overflow-x-auto">

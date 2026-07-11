@@ -120,6 +120,37 @@ export async function listCalculationRules(params: {
   };
 }
 
+export function canMutateDraftRule(status: string): boolean {
+  return status === "DRAFT";
+}
+
+export async function updateDraftRule(params: {
+  ruleId: string;
+  patch: {
+    chargeName?: string;
+    rateType?: "PERCENTAGE" | "FIXED";
+    rateValue?: number;
+    flatAmount?: number;
+    taxableBaseExpression?: string;
+    dependencyOrder?: number;
+    decimalPlaces?: number;
+    sourceId?: string;
+    effectiveFrom?: Date;
+  };
+}): Promise<{ ok: boolean; error?: string }> {
+  const existing = await prisma.dutyCalculationRule.findUnique({ where: { id: params.ruleId } });
+  if (!existing) return { ok: false, error: "Rule not found." };
+  if (!canMutateDraftRule(existing.status)) {
+    return { ok: false, error: "Published rules are immutable — clone or create a new draft version." };
+  }
+
+  await prisma.dutyCalculationRule.update({
+    where: { id: params.ruleId },
+    data: params.patch,
+  });
+  return { ok: true };
+}
+
 export async function publishDraftRules(params: {
   countryConfigId: string;
   ruleIds: string[];

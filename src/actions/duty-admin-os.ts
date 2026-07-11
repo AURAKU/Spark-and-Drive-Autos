@@ -12,17 +12,22 @@ import {
   listAssessments,
   listCalculations,
   rejectAssessment,
+  requestAssessmentCorrection,
+  setCalibrationEligibility,
   verifyAssessment,
 } from "@/lib/duty-admin/assessments";
 import { getCalibrationAnalytics } from "@/lib/duty-admin/calibration";
 import { getDutyAdminDashboard } from "@/lib/duty-admin/dashboard";
+import { validateFxRateInput } from "@/lib/duty-admin/fx-rates";
 import { parsePagination } from "@/lib/duty-admin/pagination";
+import { detectProfileConflicts } from "@/lib/duty-admin/profiles";
 import {
   cloneRuleSet,
   listCalculationRules,
   publishDraftRules,
   retireRule,
   runVerifiedFixtureRegression,
+  updateDraftRule,
 } from "@/lib/duty-admin/rules";
 import { mergeDutyAdminSettings, parseDutyAdminSettings } from "@/lib/duty-admin/settings";
 import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache";
@@ -100,7 +105,7 @@ export async function getDutyAdminRulesData(searchParams: Record<string, string 
   });
   const sources = await prisma.dutyRuleSource.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
   const regression = runVerifiedFixtureRegression();
-  return { ...rules, page, pageSize, sources, regression };
+  return { ...rules, page, pageSize, sources, regression, countryConfigId: config.countryConfigId };
 }
 
 export async function getDutyAdminAssessmentsData(searchParams: Record<string, string | string[] | undefined>) {
@@ -239,6 +244,31 @@ export async function createDraftRuleAction(input: z.infer<typeof ruleDraftSchem
   return { ok: true, id: row.id };
 }
 
+export async function updateDraftRuleAction(params: {
+  ruleId: string;
+  chargeName?: string;
+  rateType?: "PERCENTAGE" | "FIXED";
+  rateValue?: number;
+  flatAmount?: number;
+  taxableBaseExpression?: string;
+  dependencyOrder?: number;
+  sourceId?: string;
+}): Promise<DutyAdminOsState> {
+  const admin = await requireAdmin();
+  const result = await updateDraftRule({ ruleId: params.ruleId, patch: params });
+  if (!result.ok) return { error: result.error };
+
+  await logDutyAdminAudit({
+    actorId: admin.user.id,
+    action: "duty.rule.update",
+    entityType: "DutyCalculationRule",
+    entityId: params.ruleId,
+    afterJson: params,
+  });
+  revalidatePath("/admin/duty/rules");
+  return { ok: true };
+}
+
 export async function publishRulesAction(params: {
   ruleIds: string[];
   confirmRegression: boolean;
@@ -334,6 +364,41 @@ export async function rejectAssessmentAction(params: {
   return { ok: true };
 }
 
+export async function requestCorrectionAction(params: {
+  assessmentId: string;
+  reason: string;
+}): Promise<DutyAdminOsState> {
+  const admin = await requireAdmin();
+  if (!params.reason.trim()) return { error: "Correction reason required." };
+  await requestAssessmentCorrection({ ...params, actorId: admin.user.id });
+  await logDutyAdminAudit({
+    actorId: admin.user.id,
+    action: "duty.assessment.reject",
+    entityType: "DutyAssessment",
+    entityId: params.assessmentId,
+    afterJson: { type: "correction-requested", reason: params.reason },
+  });
+  revalidatePath(`/admin/duty/assessments/${params.assessmentId}`);
+  return { ok: true };
+}
+
+export async function toggleCalibrationEligibilityAction(params: {
+  assessmentId: string;
+  eligible: boolean;
+}): Promise<DutyAdminOsState> {
+  const admin = await requireAdmin();
+  await setCalibrationEligibility({ ...params, actorId: admin.user.id });
+  await logDutyAdminAudit({
+    actorId: admin.user.id,
+    action: "duty.assessment.calibration.toggle",
+    entityType: "DutyAssessment",
+    entityId: params.assessmentId,
+    afterJson: params,
+  });
+  revalidatePath(`/admin/duty/assessments/${params.assessmentId}`);
+  return { ok: true };
+}
+
 export async function updateDutySettingsAction(patch: z.infer<typeof settingsPatchSchema>): Promise<DutyAdminOsState> {
   const admin = await requireAdmin();
   const parsed = settingsPatchSchema.safeParse(patch);
@@ -372,15 +437,97 @@ export async function runRegressionPreviewAction() {
 export async function listVehicleProfilesData(searchParams: Record<string, string | string[] | undefined>) {
   await requireAdmin();
   const { page, pageSize } = parsePagination(searchParams, 20);
-  const [items, totalItems] = await Promise.all([
+  const [items, totalItems, allForConflicts] = await Promise.all([
     prisma.dutyVehicleProfile.findMany({
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
     prisma.dutyVehicleProfile.count(),
+    prisma.dutyVehicleProfile.findMany({
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        manufactureYear: true,
+        hsCode: true,
+        fuelType: true,
+        engineCc: true,
+        chassis: true,
+      },
+      take: 500,
+    }),
   ]);
-  return { items, page, pageSize, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / pageSize)) };
+  return {
+    items,
+    page,
+    pageSize,
+    totalItems,
+    totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+    conflicts: detectProfileConflicts(allForConflicts),
+  };
+}
+
+export async function createFxRateAction(input: {
+  fromCurrency: string;
+  toCurrency?: string;
+  rate: number;
+  effectiveDate: string | Date;
+  source: "BANK_OF_GHANA" | "CUSTOMS" | "MANUAL_OVERRIDE" | "GLOBAL_CURRENCY";
+  isOverride?: boolean;
+  overrideReason?: string;
+}): Promise<DutyAdminOsState> {
+  const admin = await requireAdmin();
+  const validated = validateFxRateInput(input);
+  if (!validated.ok) return { error: validated.error };
+
+  const config = await ghanaConfig();
+  const row = await prisma.dutyExchangeRate.create({
+    data: {
+      countryConfigId: config.countryConfigId,
+      fromCurrency: validated.data.fromCurrency,
+      toCurrency: validated.data.toCurrency,
+      rate: validated.data.rate,
+      effectiveDate: validated.data.effectiveDate,
+      source: validated.data.source,
+      isOverride: validated.data.isOverride,
+      createdById: admin.user.id,
+    },
+  });
+
+  await logDutyAdminAudit({
+    actorId: admin.user.id,
+    action: validated.data.isOverride ? "duty.fx.override" : "duty.fx.create",
+    entityType: "DutyExchangeRate",
+    entityId: row.id,
+    afterJson: { ...validated.data, overrideReason: input.overrideReason },
+  });
+
+  await dutyCacheInvalidate("duty:fx:");
+  revalidatePath("/admin/duty/fx-rates");
+  revalidatePath("/admin/duty");
+  return { ok: true, id: row.id };
+}
+
+export async function listFxRatesData(searchParams: Record<string, string | string[] | undefined>) {
+  await requireAdmin();
+  const config = await ghanaConfig();
+  const settings = await prisma.dutyCountryConfig.findUnique({
+    where: { id: config.countryConfigId },
+    select: { configJson: true },
+  });
+  const staleThresholdDays = parseDutyAdminSettings(settings?.configJson).staleFxThresholdDays;
+  const { page, pageSize } = parsePagination(searchParams, 20);
+  const [items, totalItems] = await Promise.all([
+    prisma.dutyExchangeRate.findMany({
+      where: { countryConfigId: config.countryConfigId },
+      orderBy: { effectiveDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.dutyExchangeRate.count({ where: { countryConfigId: config.countryConfigId } }),
+  ]);
+  return { items, page, pageSize, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / pageSize)), staleThresholdDays };
 }
 
 export async function listHsCodesData(searchParams: Record<string, string | string[] | undefined>) {
@@ -395,22 +542,6 @@ export async function listHsCodesData(searchParams: Record<string, string | stri
       take: pageSize,
     }),
     prisma.dutyHsCode.count({ where: { countryConfigId: config.countryConfigId } }),
-  ]);
-  return { items, page, pageSize, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / pageSize)) };
-}
-
-export async function listFxRatesData(searchParams: Record<string, string | string[] | undefined>) {
-  await requireAdmin();
-  const config = await ghanaConfig();
-  const { page, pageSize } = parsePagination(searchParams, 20);
-  const [items, totalItems] = await Promise.all([
-    prisma.dutyExchangeRate.findMany({
-      where: { countryConfigId: config.countryConfigId },
-      orderBy: { effectiveDate: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.dutyExchangeRate.count({ where: { countryConfigId: config.countryConfigId } }),
   ]);
   return { items, page, pageSize, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / pageSize)) };
 }

@@ -15,6 +15,20 @@ export default async function DutyProfilesPage({ searchParams }: { searchParams:
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">Reusable vehicle classification profiles for estimates and assessments.</p>
+
+      {data.conflicts.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <h3 className="font-semibold text-amber-700">Ambiguous profile overlaps ({data.conflicts.length})</h3>
+          <ul className="mt-2 space-y-2">
+            {data.conflicts.map((c) => (
+              <li key={c.key}>
+                <strong>{c.make} {c.model} ({c.manufactureYear})</strong> — {c.reason}
+                <span className="ml-2 text-muted-foreground">HS: {c.hsCodes.join(", ")} · Fuel: {c.fuelTypes.join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
         <table className="min-w-full text-sm">
           <thead>
