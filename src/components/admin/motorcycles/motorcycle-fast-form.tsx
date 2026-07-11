@@ -11,6 +11,11 @@ import { InventoryMediaSourcePicker } from "@/components/admin/inventory-media-s
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
 import {
+  MotorcycleCreateMediaField,
+  uploadQueuedMotorcycleMedia,
+  type MotorcycleCreateMediaState,
+} from "@/components/admin/motorcycles/motorcycle-create-media-field";
+import {
   MOTORCYCLE_FEATURE_TAGS,
   MOTORCYCLE_HIGHLIGHT_TAGS,
 } from "@/lib/motorcycle-spec-parser";
@@ -62,15 +67,41 @@ export function MotorcycleFastForm() {
     const fd = new FormData(form);
     fd.set("featureTags", features.join(","));
     fd.set("highlightTags", highlights.join(","));
-    if (coverUrl) fd.set("coverImageUrl", coverUrl);
-    if (coverPublicId) fd.set("coverImagePublicId", coverPublicId);
+    fd.set("coverImageUrl", media.coverUrl);
+    if (media.coverPublicId) fd.set("coverImagePublicId", media.coverPublicId);
     const result = await createMotorcycle(null, fd);
-    setPending(false);
     if (result.error) {
+      setPending(false);
       setError(typeof result.error === "string" ? result.error : "Could not save.");
       return;
     }
-    if (result.id) router.push(`/admin/motorcycles/${result.id}/edit`);
+    if (result.id) {
+      try {
+        if (media.extraImages.length > 0 || media.videos.length > 0) {
+          await uploadQueuedMotorcycleMedia(result.id, media);
+        }
+      } catch (uploadError) {
+        setPending(false);
+        setError(
+          uploadError instanceof Error
+            ? `Motorcycle saved, but gallery upload failed: ${uploadError.message}`
+            : "Motorcycle saved, but gallery upload failed.",
+        );
+        router.push(`/admin/motorcycles/${result.id}/edit`);
+        return;
+      }
+      router.push(`/admin/motorcycles/${result.id}/edit`);
+    }
+    setPending(false);
+  }
+
+  function goToNextStep() {
+    if (step === 1 && !media.coverUrl.trim()) {
+      setError("Upload or paste a cover photo before continuing.");
+      return;
+    }
+    setError(null);
+    setStep(step + 1);
   }
 
   function toggleTag(list: string[], setList: (v: string[]) => void, tag: string) {
