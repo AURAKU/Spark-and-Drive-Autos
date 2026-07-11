@@ -8,7 +8,7 @@ import {
   toggleCalibrationEligibilityAction,
   verifyAssessmentAction,
 } from "@/actions/duty-admin-os";
-import { isCalibrationEligible } from "@/lib/duty-admin/assessments";
+import { isCalibrationEligible } from "@/lib/duty-admin/calibration-eligibility";
 import { maskBillOfEntry, maskChassis } from "@/lib/duty-assessment/masking";
 import { formatMoney } from "@/lib/format";
 

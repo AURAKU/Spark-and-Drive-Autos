@@ -50,6 +50,7 @@ const rlChatMod = redisOrNull("chat_mod", 40, "1 m");
 const rlPay = redisOrNull("pay", 20, "1 m");
 const rlWebhook = redisOrNull("webhook", 120, "1 m");
 const rlDispute = redisOrNull("dispute", 8, "10 m");
+const rlDutyCalc = redisOrNull("duty_calc", 60, "1 m");
 
 async function run(
   redis: Ratelimit | null,
@@ -100,4 +101,9 @@ export async function rateLimitWebhook(identifier: string): Promise<LimitResult>
 /** Open-dispute attempts per user/payment key. */
 export async function rateLimitDispute(identifier: string): Promise<LimitResult> {
   return run(rlDispute, "dispute", 8, identifier, 10 * 60 * 1000);
+}
+
+/** Public duty calculator — per IP, configurable limit via caller. */
+export async function rateLimitDutyCalculation(identifier: string, limit = 60): Promise<LimitResult> {
+  return run(rlDutyCalc, "duty_calc", limit, identifier, 60 * 60 * 1000);
 }

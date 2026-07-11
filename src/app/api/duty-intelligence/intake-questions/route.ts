@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertPublicCalculatorEnabled } from "@/lib/duty-intelligence/public-access";
 import { resolveIntakeQuestions } from "@/lib/duty-intelligence/intake-questions";
 import { minimumIntakeSchema } from "@/lib/duty-intelligence/intake-schema";
 
@@ -7,6 +8,11 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const gate = await assertPublicCalculatorEnabled("GH");
+    if (!gate.ok) {
+      return NextResponse.json({ error: "CALCULATOR_DISABLED", message: gate.message }, { status: 503 });
+    }
+
     const body = await req.json();
     const parsed = minimumIntakeSchema.partial().safeParse(body);
     if (!parsed.success) {

@@ -1,8 +1,8 @@
 import { EngineType } from "@prisma/client";
 import { z } from "zod";
 
-import { isPipelineError, runDutyIntelligencePipeline } from "@/lib/duty-intelligence/pipeline";
 import type { DutyCalculationInput, DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
+import type { DutyEstimateInput } from "@/lib/duty/estimate-input-schema";
 
 import { DUTY_FORMULA_VERSION } from "./formula-version";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
@@ -45,25 +45,7 @@ export function resolveImportDutyRateForPowertrain(params: {
   return { rate: g, label: `CIF × ${(g * 100).toFixed(0)}% — ICE age band (~${vehicleAgeYears}y).` };
 }
 
-export const dutyEstimateInputSchema = z
-  .object({
-    cifGhs: z.number().positive().max(500_000_000),
-    vehicleYear: z.number().int().min(1980).max(new Date().getFullYear() + 1),
-    engineCc: z.number().int().positive().max(30_000).optional(),
-    powertrain: z.nativeEnum(EngineType).default(EngineType.GASOLINE_PETROL),
-    applyEvDutyWaiver: z.boolean().default(false),
-  })
-  .superRefine((data, ctx) => {
-    if (data.applyEvDutyWaiver && data.powertrain !== "ELECTRIC") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Duty relief scenario applies to electric (BEV) only.",
-        path: ["applyEvDutyWaiver"],
-      });
-    }
-  });
-
-export type DutyEstimateInput = z.infer<typeof dutyEstimateInputSchema>;
+export { dutyEstimateInputSchema, type DutyEstimateInput } from "@/lib/duty/estimate-input-schema";
 
 export type DutyEstimateLine = {
   code: string;
@@ -110,6 +92,7 @@ export async function computeDutyEstimateAsync(
   input: DutyEstimateInput,
   referenceYear = new Date().getFullYear(),
 ): Promise<DutyEstimateResult> {
+  const { isPipelineError, runDutyIntelligencePipeline } = await import("@/lib/duty-intelligence/pipeline");
   const pipelineResult = await runDutyIntelligencePipeline(toLegacyInput(input), referenceYear);
   if (isPipelineError(pipelineResult)) {
     throw new Error(`${pipelineResult.code}: ${pipelineResult.message}`);

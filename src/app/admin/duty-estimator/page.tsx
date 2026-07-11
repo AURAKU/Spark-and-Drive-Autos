@@ -10,5 +10,5 @@ export default async function VehicleImportEstimateIndexPage(props: { searchPara
     if (key === "dutySection") continue;
     if (typeof value === "string" && value.length > 0) q.set(key, value);
   }
-  redirect(`/admin/duty?${q.toString()}`);
+  redirect(`/admin/duty/tracking?${q.toString()}`);
 }

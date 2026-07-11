@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 
 import { CarGallery } from "@/components/cars/car-gallery";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
-import { DutyIntelligenceCalculator } from "@/components/duty/duty-intelligence-calculator";
+import Link from "next/link";
+
+import { DutyCalculatorWizard } from "@/components/duty/duty-calculator-wizard";
 import { MotorcycleCheckoutPayRow } from "@/components/motorcycles/motorcycle-checkout-pay-row";
 import { SharePageButton } from "@/components/sharing/share-page-button";
 import { PageHeading } from "@/components/typography/page-headings";
@@ -157,8 +159,8 @@ export default async function MotorcycleDetailPage(props: Props) {
       {(motorcycle.sourceType === "IN_CHINA" || motorcycle.sourceType === "IN_TRANSIT") && (
         <div className="mt-10">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Import duty estimate</h3>
-          <div className="mt-4">
-            <DutyIntelligenceCalculator
+          <div className="mt-4 space-y-3">
+            <DutyCalculatorWizard
               compact
               prefill={{
                 manufacturer: motorcycle.brand,
@@ -172,6 +174,7 @@ export default async function MotorcycleDetailPage(props: Props) {
                 countryOfOrigin: motorcycle.sourceType === "IN_CHINA" ? "CHINA" : "CHINA",
               }}
             />
+            <Link href="/duty-calculator" className="text-sm text-primary hover:underline">Open full duty calculator →</Link>
           </div>
         </div>
       )}

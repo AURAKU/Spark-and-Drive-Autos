@@ -23,7 +23,8 @@ const links = [
   { href: "/dashboard/orders", label: "All Orders" },
   { href: "/dashboard/payments", label: "All Payments" },
   { href: "/dashboard/shipping", label: "Shipping & Delivery Tracking" },
-  { href: "/dashboard/estimates", label: "Duty Estimates" },
+  { href: "/dashboard/duty", label: "Duty Calculator" },
+  { href: "/dashboard/estimates", label: "Staff duty estimates" },
   { href: "/dashboard/parts-finder", label: "Parts Finder", ctaStyle: "parts-finder" as const },
   { href: "/dashboard/inquiry-requests", label: "Customer Inquiry & Request" },
 ];

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { stripCalibrationTags } from "@/lib/duty-admin/calibration-eligibility";
 import { toMaskedAssessmentSummary } from "@/lib/duty-assessment/masking";
 import { runVersionedCalculationFromSnapshot } from "@/lib/duty-intelligence/engine-orchestrator";
 import { evaluatePredictionOutcome } from "@/lib/duty-assessment/ingestion";
@@ -157,11 +158,7 @@ export async function setCalibrationEligibility(params: {
     where: { id: params.assessmentId },
     select: { notes: true },
   });
-  const stripped = (existing.notes ?? "")
-    .split("\n")
-    .filter((line) => !line.startsWith("[calibration:"))
-    .join("\n")
-    .trim();
+  const stripped = stripCalibrationTags(existing.notes);
   const tag = params.eligible ? "[calibration:eligible]" : "[calibration:ineligible]";
   await prisma.dutyAssessment.update({
     where: { id: params.assessmentId },
@@ -169,9 +166,7 @@ export async function setCalibrationEligibility(params: {
   });
 }
 
-export function isCalibrationEligible(notes: string | null | undefined): boolean {
-  return (notes ?? "").includes("[calibration:eligible]");
-}
+export { isCalibrationEligible } from "@/lib/duty-admin/calibration-eligibility";
 
 export async function compareAssessmentToCalculation(params: {
   assessmentId: string;
