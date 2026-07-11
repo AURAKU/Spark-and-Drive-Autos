@@ -1,17 +1,20 @@
 "use client";
 
-import { GitCompare, Heart, Share2 } from "lucide-react";
-import Link from "next/link";
+import { Heart, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { CarCompareButton } from "@/components/cars/car-compare-button";
 import { cn } from "@/lib/utils";
 
 type Props = {
   carId: string;
   carSlug: string;
   carTitle: string;
+  carBrand: string;
+  carYear: number;
+  coverImageUrl?: string | null;
   shareUrl: string;
   isSignedIn: boolean;
   initialFavorite: boolean;
@@ -25,6 +28,9 @@ export function CarCardSecondaryActions({
   carId,
   carSlug,
   carTitle,
+  carBrand,
+  carYear,
+  coverImageUrl,
   shareUrl,
   isSignedIn,
   initialFavorite,
@@ -104,15 +110,17 @@ export function CarCardSecondaryActions({
         <Heart className={cn("size-4 shrink-0", favorite && "fill-current")} aria-hidden />
         <span>{favorite ? "Saved" : "Save"}</span>
       </button>
-      <Link
-        href={`/cars/${carSlug}`}
-        aria-label={`Compare specifications for ${carTitle}`}
-        title="View full specifications"
-        className={secondaryBtn}
-      >
-        <GitCompare className="size-4 shrink-0" aria-hidden />
-        <span>Compare</span>
-      </Link>
+      <CarCompareButton
+        variant="card"
+        car={{
+          id: carId,
+          slug: carSlug,
+          title: carTitle,
+          brand: carBrand,
+          year: carYear,
+          coverImageUrl: coverImageUrl ?? null,
+        }}
+      />
       <button
         type="button"
         disabled={shareBusy}

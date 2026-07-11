@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { CarCheckoutPayRow } from "@/components/cars/car-checkout-pay-row";
+import { CarCompareButton } from "@/components/cars/car-compare-button";
 import { CarFavoriteButton } from "@/components/cars/car-favorite-button";
 import { CarGallery } from "@/components/cars/car-gallery";
 import { VehicleImageStockBadges } from "@/components/cars/vehicle-image-stock-badges";
@@ -332,6 +333,17 @@ export default async function CarDetailPage(props: Props) {
               reservationDepositPercentLabel={reservationDepositPercentLabel}
             />
             <SharePageButton url={shareUrl} title={car.title} text={`${car.title} — Spark and Drive Autos`} />
+            <CarCompareButton
+              variant="detail"
+              car={{
+                id: car.id,
+                slug: car.slug,
+                title: car.title,
+                brand: car.brand,
+                year: car.year,
+                coverImageUrl: car.coverImageUrl,
+              }}
+            />
             <CarFavoriteButton
               carId={car.id}
               carSlug={car.slug}
