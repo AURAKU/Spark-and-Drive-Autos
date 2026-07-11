@@ -23,6 +23,7 @@ const ALLOWED_FOLDER_PREFIXES = [
   "sda/users/",
   /** Vehicle media from admin */
   "sda/cars/",
+  "sda/admin/motorcycles/",
   /** Legacy part image folders */
   "spark-drive/",
 ] as const;
