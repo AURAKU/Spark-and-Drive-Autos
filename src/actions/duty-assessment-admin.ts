@@ -38,7 +38,7 @@ export async function ingestBillOfEntryAction(
       });
       return ingested;
     });
-    revalidatePath("/admin/duty-intelligence");
+    revalidatePath("/admin/duty/assessments");
     return { ok: true, assessmentId: result.assessmentId, duplicatePrevented: result.duplicatePrevented };
   } catch (e) {
     if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Admin only." };
@@ -67,7 +67,7 @@ export async function attachPaymentReceiptAction(
       });
       return attached;
     });
-    revalidatePath("/admin/duty-intelligence");
+    revalidatePath("/admin/duty/assessments");
     return {
       ok: true,
       assessmentId: result.assessmentId,
@@ -100,7 +100,7 @@ export async function archiveEvidenceDocumentAction(
         afterJson: { reason },
       });
     });
-    revalidatePath("/admin/duty-intelligence");
+    revalidatePath("/admin/duty/assessments");
     return { ok: true };
   } catch (e) {
     if (e instanceof Error && e.message === "FORBIDDEN") return { error: "Admin only." };
