@@ -119,12 +119,46 @@ export type PipelineStageResult = {
   notes: string[];
 };
 
+export type DutyConfidenceLevel =
+  | "VERIFIED_PROFILE_HIGH"
+  | "STRONG_EVIDENCE"
+  | "MODERATE_EVIDENCE"
+  | "LIMITED_EVIDENCE"
+  | "ADMIN_REVIEW_REQUIRED";
+
 export type ConfidenceResult = {
   score: number;
   label: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+  level: DutyConfidenceLevel;
   similarImportCount: number;
   basisNote: string;
   reasons: string[];
+  uncertaintyReasons?: string[];
+};
+
+export type EstimateExplanation = {
+  profileUsed: string;
+  majorAssumptions: string[];
+  whyRangeShown: string;
+  couldChangeFinalAmount: string[];
+  uncertaintyReasons: string[];
+  effectiveRuleDate: string;
+  fxRateUsed: number;
+  fxSource: string;
+  customsValueMethod: string;
+  cohortSize: number;
+  exactFixtureMatch: boolean;
+};
+
+export type EstimateRangeResult = {
+  baseGhs: number;
+  lowGhs: number;
+  highGhs: number;
+  bandPct: number;
+  expectedGhs: number;
+  landedCostLowGhs?: number;
+  landedCostExpectedGhs?: number;
+  landedCostHighGhs?: number;
 };
 
 export type HistoricalComparison = {
@@ -167,7 +201,21 @@ export type DutyIntelligenceResult = {
   methodologyNote: string;
   ruleSetVersion?: string;
   profileId?: string;
-  estimateRange?: { baseGhs: number; lowGhs: number; highGhs: number; bandPct: number };
+  estimateRange?: EstimateRangeResult;
+  explanation?: EstimateExplanation;
+  vehicleSpec?: {
+    source: string;
+    confidence: string;
+    inferredFields: Record<string, { value: string | number; source: string }>;
+    needsConfirmation: string[];
+  };
+  calibration?: {
+    cohortSize: number;
+    exactFixtureMatch: boolean;
+    valuationMethod: string;
+    assumptions: string[];
+  };
+  cacheFingerprint?: string;
   engineReconciliation?: {
     lineTotal: number;
     documentedTotal: number;

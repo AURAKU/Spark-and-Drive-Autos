@@ -48,11 +48,13 @@ export type VersionedCalculationOutcome = VersionedCalculationSuccess | Versione
 
 function buildVerifiedConfidence(profileId: string): ConfidenceResult {
   return {
-    score: 95,
-    label: "VERY_HIGH",
+    score: 88,
+    label: "HIGH",
+    level: "VERIFIED_PROFILE_HIGH",
     similarImportCount: 1,
     basisNote: `Verified rule profile ${profileId} with BoE-calibrated charge lines.`,
     reasons: ["Verified rule profile", "Bill of Entry calibration fixture", "Versioned rule set"],
+    uncertaintyReasons: [],
   };
 }
 
