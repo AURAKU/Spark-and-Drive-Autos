@@ -31,6 +31,11 @@ export function buildComparePageHref(slugs: [string, string], page = 1): string 
   return `/compare?${params.toString()}`;
 }
 
+export function buildCompareHrefFromEntries(entries: CarCompareEntry[]): string | null {
+  if (entries.length !== CAR_COMPARE_MAX) return null;
+  return buildComparePageHref([entries[0]!.slug, entries[1]!.slug]);
+}
+
 export function parseCompareCarsParam(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw
