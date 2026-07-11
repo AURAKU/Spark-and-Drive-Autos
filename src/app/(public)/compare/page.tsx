@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { CarListingState } from "@prisma/client";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
+import { CarCompareAutoRedirect } from "@/components/cars/car-compare-auto-redirect";
 import { CarCompareEmptyState } from "@/components/cars/car-compare-empty-state";
 import { CarCompareView } from "@/components/cars/car-compare-view";
 import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links";
@@ -72,6 +74,9 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
   if (!slugPair) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <Suspense fallback={null}>
+          <CarCompareAutoRedirect />
+        </Suspense>
         <CarCompareEmptyState />
       </div>
     );

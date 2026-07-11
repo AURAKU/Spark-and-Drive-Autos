@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import {
-  buildComparePageHref,
+  buildCompareHrefFromEntries,
   CAR_COMPARE_MAX,
   type CarCompareEntry,
 } from "@/lib/car-compare";
@@ -70,10 +70,7 @@ export function CarCompareProvider({ children }: { children: React.ReactNode }) 
     setEntries([]);
   }, []);
 
-  const compareHref = useMemo(() => {
-    if (entries.length !== CAR_COMPARE_MAX) return null;
-    return buildComparePageHref([entries[0]!.slug, entries[1]!.slug]);
-  }, [entries]);
+  const compareHref = useMemo(() => buildCompareHrefFromEntries(entries), [entries]);
 
   const value = useMemo(
     () => ({

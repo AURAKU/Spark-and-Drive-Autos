@@ -17,8 +17,8 @@ export function CarCompareEmptyState() {
       </div>
       <PageHeading variant="hero">Compare vehicles</PageHeading>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Select two cars from inventory using the <span className="font-medium text-foreground">Compare</span> button on each
-        listing, then return here to review specifications side by side.
+        Tap <span className="font-medium text-foreground">Compare</span> on any two listings, or use the compare tray to
+        pick a second vehicle. We will open a side-by-side view so you can review specs and decide which fits best.
       </p>
       {entries.length > 0 ? (
         <p className="text-sm text-foreground">

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { useCarCompareOptional } from "@/components/cars/car-compare-context";
-import { toCarCompareEntry, type CarCompareEntry } from "@/lib/car-compare";
+import { buildComparePageHref, toCarCompareEntry, type CarCompareEntry } from "@/lib/car-compare";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -25,46 +25,74 @@ export function CarCompareButton({ car, className, variant = "card" }: Props) {
   const router = useRouter();
   const entry = "id" in car && "slug" in car && "title" in car ? (car as CarCompareEntry) : toCarCompareEntry(car);
   const selected = compare?.isSelected(entry.id) ?? false;
+  const canViewCompare = selected && Boolean(compare?.compareHref);
+
+  function openCompareView(href: string) {
+    toast.success("Opening side-by-side comparison…");
+    router.push(href);
+  }
 
   function onClick() {
     if (!compare) {
       router.push(`/cars/${entry.slug}`);
       return;
     }
-    const result = compare.toggle(entry);
-    if (!result.ok && result.reason === "full") {
-      toast.error("Compare list is full. Remove a vehicle first, then add this one.");
+
+    if (canViewCompare && compare.compareHref) {
+      openCompareView(compare.compareHref);
       return;
     }
+
+    const result = compare.toggle(entry);
+    if (!result.ok && result.reason === "full") {
+      toast.error("Compare list is full. Remove a vehicle from the compare tray first.");
+      return;
+    }
+
     if (result.action === "added") {
       if (result.list.length >= compare.max) {
-        toast.success("Both vehicles selected. Open Compare to view side by side.");
+        openCompareView(buildComparePageHref([result.list[0]!.slug, result.list[1]!.slug]));
       } else {
-        toast.success("Added to compare. Select one more vehicle.");
+        toast.success("Added to compare. Select one more vehicle to view side by side.");
       }
       return;
     }
+
     toast.message("Removed from compare.");
   }
+
+  const label = canViewCompare ? "View compare" : selected ? "In compare" : "Compare";
 
   return (
     <button
       type="button"
-      aria-label={selected ? `Remove ${entry.title} from compare` : `Add ${entry.title} to compare`}
+      aria-label={
+        canViewCompare
+          ? `View side-by-side comparison including ${entry.title}`
+          : selected
+            ? `Remove ${entry.title} from compare`
+            : `Add ${entry.title} to compare`
+      }
       aria-pressed={selected}
-      title={selected ? "Remove from compare" : "Add to compare (pick 2 vehicles)"}
+      title={
+        canViewCompare
+          ? "Open side-by-side comparison"
+          : selected
+            ? "View comparison or remove from compare tray"
+            : "Add to compare (pick 2 vehicles)"
+      }
       className={cn(
         variant === "card" ? cardBtn : detailBtn,
         selected &&
           "border-[var(--brand)]/50 bg-[var(--brand)]/10 text-[var(--brand)] hover:border-[var(--brand)]/60 dark:text-[var(--brand)]",
+        canViewCompare &&
+          "border-[var(--brand)] bg-[var(--brand)]/15 text-[var(--brand)] shadow-sm hover:border-[var(--brand)] dark:text-[var(--brand)]",
         className,
       )}
       onClick={onClick}
     >
       <GitCompare className="size-4 shrink-0" aria-hidden />
-      <span className={variant === "detail" ? "hidden sm:inline" : undefined}>
-        {selected ? "In compare" : "Compare"}
-      </span>
+      <span className={variant === "detail" ? "hidden sm:inline" : undefined}>{label}</span>
     </button>
   );
 }
