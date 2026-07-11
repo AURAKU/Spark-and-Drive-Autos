@@ -9,8 +9,8 @@ import { resolveImportDutyRateForPowertrain } from "@/lib/duty/calculator";
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "@/lib/duty-intelligence/formula-version";
 
 describe("duty intelligence engine v3", () => {
-  it("uses v3 formula version", () => {
-    assert.equal(DUTY_INTELLIGENCE_FORMULA_VERSION, "sda-duty-intelligence-v3");
+  it("uses v4 formula version", () => {
+    assert.equal(DUTY_INTELLIGENCE_FORMULA_VERSION, "sda-duty-intelligence-v4");
   });
 
   it("resolves ICE age bands for import duty", () => {

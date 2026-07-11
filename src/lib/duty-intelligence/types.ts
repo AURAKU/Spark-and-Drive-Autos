@@ -165,13 +165,35 @@ export type DutyIntelligenceResult = {
   historicalComparison: HistoricalComparison | null;
   predictionAdjustments: { category: string; factor: number; note: string }[];
   methodologyNote: string;
+  ruleSetVersion?: string;
+  profileId?: string;
+  estimateRange?: { baseGhs: number; lowGhs: number; highGhs: number; bandPct: number };
+  engineReconciliation?: {
+    lineTotal: number;
+    documentedTotal: number;
+    variance: number;
+    withinTolerance: boolean;
+    unexplainedVariance: boolean;
+  } | null;
 };
 
 export type DutyPipelineError = {
-  code: "CONFIG_UNAVAILABLE";
+  code:
+    | "CONFIG_UNAVAILABLE"
+    | "MISSING_CLASSIFICATION"
+    | "NEEDS_CLASSIFICATION"
+    | "MISSING_RULE_SET"
+    | "MISSING_FX_RATE"
+    | "MISSING_CUSTOMS_VALUE"
+    | "RULE_DEPENDENCY_ERROR"
+    | "UNVERIFIED_RULE"
+    | "ADMIN_REVIEW_REQUIRED"
+    | "VALIDATION_ERROR";
   message: string;
   adminHint?: string;
   health?: import("./config-bootstrap").DutyConfigHealth;
+  missingFields?: string[];
+  details?: Record<string, unknown>;
 };
 
 export type LoadedFormulaRule = {
