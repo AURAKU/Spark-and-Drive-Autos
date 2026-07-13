@@ -42,10 +42,10 @@ function CarCompareHeroCard({ car, side }: { car: CarSummary; side: "left" | "ri
       )}
     >
       <div className="relative aspect-[16/10] bg-muted dark:bg-zinc-900">
-        {car.coverImageUrl ? (
+        {car.coverImageUrl && car.coverImageUrl.trim() ? (
           <VehicleCoverImage
-            src={car.coverImageUrl}
-            alt=""
+            src={car.coverImageUrl.trim()}
+            alt={car.title || "Vehicle image"}
             fill
             sizes="(max-width:1024px) 100vw, 50vw"
             deliveryPreset="galleryStrip"

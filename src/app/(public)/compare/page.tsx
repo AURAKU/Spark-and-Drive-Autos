@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { CarListingState } from "@prisma/client";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
@@ -8,18 +7,10 @@ import { CarCompareEmptyState } from "@/components/cars/car-compare-empty-state"
 import { CarCompareView } from "@/components/cars/car-compare-view";
 import { BrowseCarsCtaLink } from "@/components/storefront/storefront-cta-links";
 import { PageHeading } from "@/components/typography/page-headings";
-import {
-  buildCarCompareRows,
-  buildComparePageHref,
-  CAR_COMPARE_SPEC_PAGE_SIZE,
-  type CompareCarRecord,
-  normalizeCompareSlugs,
-  parseCompareCarsParam,
-} from "@/lib/car-compare";
-import { formatVehiclePriceFromRmb, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { engineTypeLabel } from "@/lib/engine-type-ui";
+import { resolveCompareCarsQuery } from "@/lib/car-compare";
+import { parseDisplayCurrency } from "@/lib/currency";
 import { normalizeIntelListPage } from "@/lib/ops";
-import { prisma } from "@/lib/prisma";
+import { buildComparePagePayload } from "@/lib/vehicles/comparison.server";
 
 export const dynamic = "force-dynamic";
 
@@ -39,39 +30,41 @@ function readPage(sp: Record<string, string | string[] | undefined>): number {
   return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
 }
 
-const compareCarSelect = {
-  slug: true,
-  title: true,
-  brand: true,
-  model: true,
-  year: true,
-  trim: true,
-  bodyType: true,
-  engineType: true,
-  transmission: true,
-  drivetrain: true,
-  mileage: true,
-  colorExterior: true,
-  colorInterior: true,
-  vin: true,
-  condition: true,
-  inspectionStatus: true,
-  estimatedDelivery: true,
-  seaShippingFeeGhs: true,
-  sourceType: true,
-  location: true,
-  shortDescription: true,
-  coverImageUrl: true,
-  basePriceRmb: true,
-  specifications: true,
-  specs: { orderBy: { sortOrder: "asc" as const }, select: { label: true, value: true } },
-} as const;
+function CompareNotice({
+  title,
+  body,
+}: {
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <PageHeading variant="hero">{title}</PageHeading>
+      <p className="mt-4 text-sm text-muted-foreground">{body}</p>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <BrowseCarsCtaLink className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--brand)] px-5 text-sm font-semibold text-black hover:opacity-90" />
+        <Link
+          href="/compare"
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium hover:bg-muted dark:border-white/15"
+        >
+          Start over
+        </Link>
+        <Link
+          href="/inventory"
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium hover:bg-muted dark:border-white/15"
+        >
+          Back to inventory
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default async function CompareCarsPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
-  const slugPair = normalizeCompareSlugs(parseCompareCarsParam(firstQueryValue(sp, "cars")));
+  const resolved = resolveCompareCarsQuery(firstQueryValue(sp, "cars"));
 
-  if (!slugPair) {
+  if (resolved.status === "empty") {
     return (
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
         <Suspense fallback={null}>
@@ -82,63 +75,62 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
     );
   }
 
-  const [slugA, slugB] = slugPair;
+  if (resolved.status === "one") {
+    return (
+      <CompareNotice
+        title="Select one more vehicle"
+        body={`You selected “${resolved.slug}”. Choose a second distinct vehicle from inventory to open the side-by-side comparison.`}
+      />
+    );
+  }
+
+  if (resolved.status === "duplicate") {
+    return (
+      <CompareNotice
+        title="Choose two different vehicles"
+        body="The same vehicle was selected twice. Pick two distinct listings to compare."
+      />
+    );
+  }
+
+  if (resolved.status === "invalid") {
+    return (
+      <CompareNotice
+        title="Invalid comparison link"
+        body="That comparison URL is malformed or contains unsupported characters. Start again from inventory and select two vehicles."
+      />
+    );
+  }
+
+  const [slugA, slugB] = resolved.slugs;
   const pageReq = readPage(sp);
 
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
-  const fx = await getGlobalCurrencySettings();
 
-  const cars = await prisma.car.findMany({
-    where: {
-      slug: { in: [slugA, slugB] },
-      listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] },
-    },
-    select: compareCarSelect,
-  });
+  const payload = await buildComparePagePayload(slugA, slugB, { displayCurrency, pageReq });
 
-  const left = cars.find((c) => c.slug === slugA);
-  const right = cars.find((c) => c.slug === slugB);
-
-  if (!left || !right) {
+  if (payload.status === "db_error") {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
-        <PageHeading variant="hero">Compare vehicles</PageHeading>
-        <p className="mt-4 text-sm text-muted-foreground">
-          One or both vehicles could not be found. They may have been removed or are not published.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <BrowseCarsCtaLink className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--brand)] px-5 text-sm font-semibold text-black hover:opacity-90" />
-          <Link
-            href="/compare"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium hover:bg-muted dark:border-white/15"
-          >
-            Start over
-          </Link>
-        </div>
-      </div>
+      <CompareNotice
+        title="Comparison temporarily unavailable"
+        body="We could not load vehicle data right now. Please try again in a moment."
+      />
     );
   }
 
-  const formatPrice = (car: CompareCarRecord) => {
-    const rmb =
-      typeof car.basePriceRmb === "number"
-        ? car.basePriceRmb
-        : Number(String(car.basePriceRmb ?? 0));
-    return formatVehiclePriceFromRmb(Number.isFinite(rmb) ? rmb : 0, displayCurrency, fx);
-  };
-  const allRows = buildCarCompareRows(left, right, formatPrice, engineTypeLabel);
-  const totalRows = allRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / CAR_COMPARE_SPEC_PAGE_SIZE));
-  const page = Math.min(Math.max(1, pageReq), totalPages);
-  const rows = allRows.slice((page - 1) * CAR_COMPARE_SPEC_PAGE_SIZE, page * CAR_COMPARE_SPEC_PAGE_SIZE);
-
-  const pageHref = (nextPage: number) => buildComparePageHref([slugA, slugB], nextPage);
-  const swapHref = buildComparePageHref([slugB, slugA], page);
-  const prevHref = page > 1 ? pageHref(page - 1) : null;
-  const nextHref = page < totalPages ? pageHref(page + 1) : null;
-  const pageHrefs =
-    totalPages > 1 ? Array.from({ length: totalPages }, (_, i) => pageHref(i + 1)) : undefined;
+  if (payload.status === "missing") {
+    return (
+      <CompareNotice
+        title="One selected vehicle is no longer available"
+        body={
+          payload.missingSlugs.length >= 2
+            ? "Both selected vehicles could not be found. They may have been removed or are not published."
+            : `“${payload.missingSlugs[0] ?? "A selected vehicle"}” is no longer available. Update your selection and try again.`
+        }
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -162,31 +154,17 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
       </div>
 
       <CarCompareView
-        left={{
-          slug: left.slug,
-          title: left.title,
-          brand: left.brand,
-          year: left.year,
-          coverImageUrl: left.coverImageUrl,
-          priceLabel: formatPrice(left),
-        }}
-        right={{
-          slug: right.slug,
-          title: right.title,
-          brand: right.brand,
-          year: right.year,
-          coverImageUrl: right.coverImageUrl,
-          priceLabel: formatPrice(right),
-        }}
-        rows={rows}
-        page={page}
-        totalPages={totalPages}
-        totalRows={totalRows}
-        pageSize={CAR_COMPARE_SPEC_PAGE_SIZE}
-        prevHref={prevHref}
-        nextHref={nextHref}
-        pageHrefs={pageHrefs}
-        swapHref={swapHref}
+        left={payload.left}
+        right={payload.right}
+        rows={payload.rows}
+        page={payload.page}
+        totalPages={payload.totalPages}
+        totalRows={payload.totalRows}
+        pageSize={payload.pageSize}
+        prevHref={payload.prevHref}
+        nextHref={payload.nextHref}
+        pageHrefs={payload.pageHrefs}
+        swapHref={payload.swapHref}
       />
     </div>
   );
