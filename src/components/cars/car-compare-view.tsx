@@ -26,7 +26,10 @@ type Props = {
   totalPages: number;
   totalRows: number;
   pageSize: number;
-  pageHref: (page: number) => string;
+  /** Precomputed on the server — functions cannot cross the RSC → client boundary. */
+  prevHref: string | null;
+  nextHref: string | null;
+  pageHrefs?: string[];
   swapHref: string;
 };
 
@@ -79,10 +82,11 @@ export function CarCompareView({
   totalPages,
   totalRows,
   pageSize,
-  pageHref,
+  prevHref,
+  nextHref,
+  pageHrefs,
   swapHref,
 }: Props) {
-  const pageHrefs = Array.from({ length: totalPages }, (_, i) => pageHref(i + 1));
   const diffCount = useMemo(() => rows.filter((row) => row.differs).length, [rows]);
 
   return (
@@ -194,8 +198,8 @@ export function CarCompareView({
           totalItems={totalRows}
           pageSize={pageSize}
           itemLabel="Specifications"
-          prevHref={page > 1 ? pageHref(page - 1) : null}
-          nextHref={page < totalPages ? pageHref(page + 1) : null}
+          prevHref={prevHref}
+          nextHref={nextHref}
           pageHrefs={totalPages > 1 ? pageHrefs : undefined}
           showPerPageNote
         />

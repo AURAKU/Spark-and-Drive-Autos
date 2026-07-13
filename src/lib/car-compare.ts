@@ -68,10 +68,39 @@ export function toCarCompareEntry(car: {
   };
 }
 
-function displayOrDash(value: string | number | null | undefined): string {
+function displayOrDash(value: string | number | boolean | null | undefined | unknown): string {
   if (value == null) return "—";
+  if (typeof value === "string") {
+    const s = value.trim();
+    return s.length > 0 ? s : "—";
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "—";
+    }
+  }
   const s = String(value).trim();
   return s.length > 0 ? s : "—";
+}
+
+function decimalToNumber(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof value === "object" && value !== null && "toString" in value) {
+    const n = Number(String(value));
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -123,14 +152,14 @@ export function buildCarCompareRows(
   push("delivery", "Delivery window", displayOrDash(left.estimatedDelivery), displayOrDash(right.estimatedDelivery));
   push("vin", "VIN / chassis", displayOrDash(left.vin ?? "Available on request"), displayOrDash(right.vin ?? "Available on request"));
 
-  const leftShip =
-    left.seaShippingFeeGhs != null && Number(left.seaShippingFeeGhs) > 0
-      ? `GHS ${Number(left.seaShippingFeeGhs).toLocaleString()}`
-      : "—";
-  const rightShip =
-    right.seaShippingFeeGhs != null && Number(right.seaShippingFeeGhs) > 0
-      ? `GHS ${Number(right.seaShippingFeeGhs).toLocaleString()}`
-      : "—";
+  const leftShip = (() => {
+    const n = decimalToNumber(left.seaShippingFeeGhs);
+    return n > 0 ? `GHS ${n.toLocaleString()}` : "—";
+  })();
+  const rightShip = (() => {
+    const n = decimalToNumber(right.seaShippingFeeGhs);
+    return n > 0 ? `GHS ${n.toLocaleString()}` : "—";
+  })();
   push("shipping", "Sea shipping (est.)", leftShip, rightShip);
 
   push("short_desc", "Summary", displayOrDash(left.shortDescription), displayOrDash(right.shortDescription));

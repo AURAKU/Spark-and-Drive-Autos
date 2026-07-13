@@ -120,8 +120,13 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
     );
   }
 
-  const formatPrice = (car: CompareCarRecord) =>
-    formatVehiclePriceFromRmb(Number(car.basePriceRmb), displayCurrency, fx);
+  const formatPrice = (car: CompareCarRecord) => {
+    const rmb =
+      typeof car.basePriceRmb === "number"
+        ? car.basePriceRmb
+        : Number(String(car.basePriceRmb ?? 0));
+    return formatVehiclePriceFromRmb(Number.isFinite(rmb) ? rmb : 0, displayCurrency, fx);
+  };
   const allRows = buildCarCompareRows(left, right, formatPrice, engineTypeLabel);
   const totalRows = allRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / CAR_COMPARE_SPEC_PAGE_SIZE));
@@ -130,6 +135,10 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
 
   const pageHref = (nextPage: number) => buildComparePageHref([slugA, slugB], nextPage);
   const swapHref = buildComparePageHref([slugB, slugA], page);
+  const prevHref = page > 1 ? pageHref(page - 1) : null;
+  const nextHref = page < totalPages ? pageHref(page + 1) : null;
+  const pageHrefs =
+    totalPages > 1 ? Array.from({ length: totalPages }, (_, i) => pageHref(i + 1)) : undefined;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -174,7 +183,9 @@ export default async function CompareCarsPage(props: { searchParams: SearchParam
         totalPages={totalPages}
         totalRows={totalRows}
         pageSize={CAR_COMPARE_SPEC_PAGE_SIZE}
-        pageHref={pageHref}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        pageHrefs={pageHrefs}
         swapHref={swapHref}
       />
     </div>
