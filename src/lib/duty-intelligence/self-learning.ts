@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-import { dutyCacheInvalidate } from "./cache";
+import { dutyCacheInvalidate } from "./cache.server";
 
 function round4(n: number): number {
   return Math.round(n * 10_000) / 10_000;

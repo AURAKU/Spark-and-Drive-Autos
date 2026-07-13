@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { runCalibrationLayer } from "@/lib/duty-intelligence/calibration-engine";
-import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache";
+import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache.server";
 import { computeCalibratedConfidence, resolveConfidenceLevel } from "@/lib/duty-intelligence/confidence";
 import {
   isExactVerifiedCohort,

@@ -1,4 +1,6 @@
-import { checkDutyConfigHealth, initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap";
+import "server-only";
+
+import { checkDutyConfigHealth, initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap.server";
 
 export type RunDutyConfigStartupResult =
   | { ok: true; bootstrapped: boolean; countryConfigId?: string }
@@ -43,4 +45,9 @@ export async function runDutyConfigStartupSync(): Promise<RunDutyConfigStartupRe
     console.error("[duty-config-startup] unexpected failure", e);
     return { ok: false, reason: e instanceof Error ? e.message : "unknown_error" };
   }
+}
+
+/** Alias for instrumentation and lazy server initializers. */
+export async function initializeDutyConfiguration(): Promise<RunDutyConfigStartupResult> {
+  return runDutyConfigStartupSync();
 }

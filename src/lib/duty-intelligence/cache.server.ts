@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createHash } from "node:crypto";
 
 import { DUTY_INTELLIGENCE_FORMULA_VERSION } from "./formula-version";

@@ -1,9 +1,11 @@
+import "server-only";
+
 import type { DutyCountryCode } from "@prisma/client";
 
-import { initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap";
+import { initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap.server";
 import { prisma } from "@/lib/prisma";
 
-import { dutyCacheGet, dutyCacheInvalidate, dutyCacheKey, dutyCacheSet } from "./cache";
+import { dutyCacheGet, dutyCacheInvalidate, dutyCacheKey, dutyCacheSet } from "./cache.server";
 import type { CountryConfigBundle, LoadedChargeTemplate, LoadedFormulaRule, LoadedHsCode } from "./types";
 
 function toNum(v: unknown): number {

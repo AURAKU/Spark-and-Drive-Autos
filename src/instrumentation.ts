@@ -5,7 +5,10 @@
 
 function scheduleDepositBalanceMaintenance(): void {
   const run = () => {
-    void import("@/lib/deposit-balance-startup")
+    void import(
+      /* webpackIgnore: true */
+      "./lib/deposit-balance-startup",
+    )
       .then((m) => m.runDepositBalanceMaintenance())
       .then((result) => {
         if (result.ok) return;
@@ -25,8 +28,11 @@ function scheduleDepositBalanceMaintenance(): void {
 
 function scheduleDutyConfigBootstrap(): void {
   const run = () => {
-    void import("@/lib/duty-intelligence/duty-config-startup")
-      .then((m) => m.runDutyConfigStartupSync())
+    void import(
+      /* webpackIgnore: true */
+      "./lib/duty-intelligence/duty-config-startup.server",
+    )
+      .then((m) => m.initializeDutyConfiguration())
       .then((result) => {
         if (result.ok) {
           if (result.bootstrapped) {
@@ -49,15 +55,13 @@ function scheduleDutyConfigBootstrap(): void {
 }
 
 export async function register() {
-  if (typeof process === "undefined" || typeof process.versions?.node === "undefined") {
-    return;
-  }
-
-  try {
-    scheduleDepositBalanceMaintenance();
-    scheduleDutyConfigBootstrap();
-  } catch (e) {
-    console.error("[instrumentation] startup maintenance schedule failed (non-fatal)", e);
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    try {
+      scheduleDepositBalanceMaintenance();
+      scheduleDutyConfigBootstrap();
+    } catch (e) {
+      console.error("[instrumentation] startup maintenance schedule failed (non-fatal)", e);
+    }
   }
 
   if (process.env.NODE_ENV !== "production") return;
