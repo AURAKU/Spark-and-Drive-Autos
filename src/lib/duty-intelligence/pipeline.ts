@@ -1,11 +1,13 @@
+import "server-only";
+
 import { prisma } from "@/lib/prisma";
 
 import {
   ADMIN_CONFIG_INIT_HINT,
   checkDutyConfigHealth,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
-} from "@/lib/duty-intelligence/config-bootstrap";
-import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache";
+} from "@/lib/duty-intelligence/config-bootstrap.server";
+import { buildEstimateFingerprint, dutyCacheGet, dutyCacheSet, estimateCacheKey } from "@/lib/duty-intelligence/cache.server";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { estimateFreight, freightToLineItem } from "@/lib/duty-intelligence/engines/freight-engine";
 import { estimateInsurance, insuranceToLineItem } from "@/lib/duty-intelligence/engines/insurance-engine";
@@ -382,7 +384,7 @@ export async function saveDutyCalculation(params: {
       lineSnapshotsJson: params.result.lineItems as object,
       confidenceScore: params.result.confidence.score,
       confidenceLabel: params.result.confidence.level,
-      confidenceLevel: params.result.confidence.level,
+      confidenceLevel: params.result.confidence.label,
       predictedTotalGhs: params.result.summary.totalGraTaxesGhs,
       predictedLowGhs: params.result.estimateRange?.lowGhs,
       predictedHighGhs: params.result.estimateRange?.highGhs,

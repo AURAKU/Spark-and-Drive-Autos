@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { checkDutyConfigHealth, USER_CONFIG_UNAVAILABLE_MESSAGE } from "@/lib/duty-intelligence/config-bootstrap";
+import { checkDutyConfigHealth, USER_CONFIG_UNAVAILABLE_MESSAGE } from "@/lib/duty-intelligence/config-bootstrap.server";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { prisma } from "@/lib/prisma";
 
@@ -12,7 +12,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const { initializeGhanaDutyConfig } = await import("@/lib/duty-intelligence/config-bootstrap");
+  const { initializeGhanaDutyConfig } = await import("@/lib/duty-intelligence/config-bootstrap.server");
   const result = await initializeGhanaDutyConfig();
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 500 });

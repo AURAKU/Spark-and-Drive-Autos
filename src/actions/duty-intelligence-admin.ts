@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
-import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache";
+import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache.server";
 import {
   checkDutyConfigHealth,
   initializeGhanaDutyConfig,
-} from "@/lib/duty-intelligence/config-bootstrap";
+} from "@/lib/duty-intelligence/config-bootstrap.server";
 import { ensureCountryConfig } from "@/lib/duty-intelligence/config-loader";
 import { getDutyAnalytics } from "@/lib/duty-intelligence/analytics";
 import { processDocumentOcr } from "@/lib/duty-intelligence/ocr";

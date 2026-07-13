@@ -1,7 +1,9 @@
+import "server-only";
+
 import type { DutyCountryCode } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache";
+import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache.server";
 import { seedDutyIntelligence } from "../../../prisma/seed-duty-intelligence";
 
 export type DutyConfigHealth = {

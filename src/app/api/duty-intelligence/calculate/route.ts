@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import {
   ADMIN_CONFIG_INIT_HINT,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
-} from "@/lib/duty-intelligence/config-bootstrap";
+} from "@/lib/duty-intelligence/config-bootstrap.server";
 import { dutyCalculationInputSchema } from "@/lib/duty-intelligence/types";
 import { isPipelineError, runDutyIntelligencePipeline } from "@/lib/duty-intelligence/pipeline";
 

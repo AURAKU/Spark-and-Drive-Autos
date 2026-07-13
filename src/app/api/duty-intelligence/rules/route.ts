@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { USER_CONFIG_UNAVAILABLE_MESSAGE, checkDutyConfigHealth } from "@/lib/duty-intelligence/config-bootstrap";
+import { USER_CONFIG_UNAVAILABLE_MESSAGE, checkDutyConfigHealth } from "@/lib/duty-intelligence/config-bootstrap.server";
 import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 
 export const runtime = "nodejs";

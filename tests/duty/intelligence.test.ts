@@ -166,9 +166,9 @@ describe("duty intelligence engine v3", () => {
 });
 
 describe("duty config bootstrap helpers", () => {
-  it("exports ensureCountryConfig loader", async () => {
-    const { ensureCountryConfig } = await import("@/lib/duty-intelligence/config-loader");
-    assert.equal(typeof ensureCountryConfig, "function");
+  it("exports ensureCountryConfig loader from server module path", async () => {
+    const mod = await import("@/lib/duty-intelligence/config-loader");
+    assert.equal(typeof mod.ensureCountryConfig, "function");
   });
 });
 
