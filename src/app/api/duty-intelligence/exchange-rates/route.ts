@@ -4,7 +4,7 @@ import {
   ADMIN_CONFIG_INIT_HINT,
   USER_CONFIG_UNAVAILABLE_MESSAGE,
   checkDutyConfigHealth,
-} from "@/lib/duty-intelligence/config-bootstrap";
+} from "@/lib/duty-intelligence/config-bootstrap.server";
 import { loadCountryConfigSafe, getLatestExchangeRate } from "@/lib/duty-intelligence/config-loader";
 import { prisma } from "@/lib/prisma";
 

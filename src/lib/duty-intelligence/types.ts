@@ -225,6 +225,20 @@ export type DutyIntelligenceResult = {
   } | null;
 };
 
+export type DutyConfigHealth = {
+  countryConfigExists: boolean;
+  ghanaConfigExists: boolean;
+  migrationsApplied: boolean;
+  formulaRulesCount: number;
+  hsCodesCount: number;
+  exchangeRatesCount: number;
+  shippingCostMatrixCount: number;
+  insuranceRulesCount: number;
+  chargeTemplatesCount: number;
+  isReady: boolean;
+  missing: string[];
+};
+
 export type DutyPipelineError = {
   code:
     | "CONFIG_UNAVAILABLE"
@@ -239,7 +253,7 @@ export type DutyPipelineError = {
     | "VALIDATION_ERROR";
   message: string;
   adminHint?: string;
-  health?: import("./config-bootstrap").DutyConfigHealth;
+  health?: DutyConfigHealth;
   missingFields?: string[];
   details?: Record<string, unknown>;
 };
