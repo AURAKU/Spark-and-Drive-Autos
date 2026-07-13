@@ -169,6 +169,20 @@ export type HistoricalComparison = {
   note: string;
 };
 
+export type DutyConfigHealth = {
+  countryConfigExists: boolean;
+  ghanaConfigExists: boolean;
+  migrationsApplied: boolean;
+  formulaRulesCount: number;
+  hsCodesCount: number;
+  exchangeRatesCount: number;
+  shippingCostMatrixCount: number;
+  insuranceRulesCount: number;
+  chargeTemplatesCount: number;
+  isReady: boolean;
+  missing: string[];
+};
+
 export type DutyIntelligenceResult = {
   formulaVersion: string;
   countryCode: DutyCountryCode;

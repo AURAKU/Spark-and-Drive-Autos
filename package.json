@@ -45,7 +45,8 @@
     "db:studio": "prisma studio",
     "backup:db": "bash scripts/backup-db.sh",
     "backup:full": "bash scripts/backup-full.sh",
-    "restore:db": "bash scripts/restore-db.sh"
+    "restore:db": "bash scripts/restore-db.sh",
+    "deploy:production": "bash scripts/deploy-production.sh"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
