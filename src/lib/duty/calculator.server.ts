@@ -1,11 +1,16 @@
 import "server-only";
 
 import { isPipelineError, runDutyIntelligencePipeline } from "@/lib/duty-intelligence/pipeline";
-import type { DutyCalculationInput } from "@/lib/duty-intelligence/types";
+import type { DutyCalculationInput, DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
+
 import { DUTY_FORMULA_VERSION } from "./formula-version";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
 
-import type { DutyEstimateInput, DutyEstimateLine, DutyEstimateResult } from "./calculator";
+import {
+  type DutyEstimateInput,
+  type DutyEstimateLine,
+  type DutyEstimateResult,
+} from "./calculator";
 
 function toLegacyInput(input: DutyEstimateInput): DutyCalculationInput {
   return {
@@ -69,3 +74,5 @@ export async function computeDutyEstimateAsync(
     intelligence,
   };
 }
+
+export type { DutyIntelligenceResult };

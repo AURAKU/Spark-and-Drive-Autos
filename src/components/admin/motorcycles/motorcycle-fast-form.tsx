@@ -76,6 +76,15 @@ export function MotorcycleFastForm() {
     setPending(false);
   }
 
+  function goToNextStep() {
+    if (step === 1 && !coverUrl.trim()) {
+      setError("Upload or paste a cover photo before continuing.");
+      return;
+    }
+    setError(null);
+    setStep(step + 1);
+  }
+
   function toggleTag(list: string[], setList: (v: string[]) => void, tag: string) {
     setList(list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag]);
   }

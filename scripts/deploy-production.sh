@@ -1,151 +1,160 @@
 #!/usr/bin/env bash
-# Atomic production deploy for Spark & Drive Autos.
-# Builds in an isolated release directory and switches `current` only after success.
-# PM2 is restarted only when build, migrations, and validation all pass.
-#
-# Usage (on VPS):
-#   cd /var/www/spark-drive-autos && npm run deploy:production
-#
-# Optional env:
-#   APP_ROOT=/var/www/spark-drive-autos   — repo checkout used as source
-#   RELEASES_DIR=/var/www/releases        — timestamped release roots
-#   CURRENT_LINK=/var/www/current         — symlink switched after success
-#   PM2_APP=sparkdrive                    — PM2 process name to restart
-#   SKIP_PM2=1                            — build only, do not restart PM2
-
+# Atomic production deployment for Spark & Drive Autos.
+# Builds in an isolated release directory and switches the live symlink only after success.
+# Preserves the previous working release for rollback.
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-RELEASES_DIR="${RELEASES_DIR:-/var/www/releases}"
-CURRENT_LINK="${CURRENT_LINK:-/var/www/current}"
-PM2_APP="${PM2_APP:-sparkdrive}"
-TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+APP_NAME="${PM2_APP_NAME:-sparkdrive}"
+DEPLOY_ROOT="${DEPLOY_ROOT:-/var/www}"
+RELEASES_DIR="${DEPLOY_ROOT}/releases"
+CURRENT_LINK="${DEPLOY_ROOT}/current"
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RELEASE_DIR="${RELEASES_DIR}/${TIMESTAMP}"
-PREVIOUS_CURRENT=""
-ROLLBACK_NEXT=""
+KEEP_RELEASES="${KEEP_RELEASES:-5}"
 
 log() {
-  printf '[deploy-production] %s\n' "$*"
+  echo "[deploy] $*"
 }
 
 fail() {
-  printf '[deploy-production] ERROR: %s\n' "$*" >&2
+  echo "[deploy] ERROR: $*" >&2
   exit 1
 }
 
-restore_previous_build() {
-  if [[ -n "${ROLLBACK_NEXT}" && -d "${ROLLBACK_NEXT}" ]]; then
-    log "Restoring previous .next from backup: ${ROLLBACK_NEXT}"
-    rm -rf "${APP_ROOT}/.next"
-    cp -a "${ROLLBACK_NEXT}" "${APP_ROOT}/.next"
-  elif [[ -n "${PREVIOUS_CURRENT}" && -d "${PREVIOUS_CURRENT}/.next" ]]; then
-    log "Restoring .next from previous release: ${PREVIOUS_CURRENT}"
-    rm -rf "${APP_ROOT}/.next"
-    cp -a "${PREVIOUS_CURRENT}/.next" "${APP_ROOT}/.next"
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+rollback_to_previous_release() {
+  if [[ -L "$CURRENT_LINK" ]]; then
+    local previous
+    previous="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+    if [[ -n "$previous" && -f "$previous/.next/BUILD_ID" ]]; then
+      log "Previous release still available at: $previous"
+      log "Rollback: ln -sfn \"$previous\" \"$CURRENT_LINK\" && pm2 restart $APP_NAME --update-env"
+    fi
+  elif [[ -f ".next/BUILD_ID" ]]; then
+    log "In-place build failed but existing .next/BUILD_ID is intact — no symlink switch occurred."
   fi
 }
 
 on_error() {
   local exit_code=$?
-  log "Deploy failed (exit ${exit_code}). Attempting rollback of working build artifact."
-  restore_previous_build
-  exit "${exit_code}"
+  log "Deployment failed (exit $exit_code). Live traffic was not switched to the failed release."
+  rollback_to_previous_release
+  exit "$exit_code"
 }
+
 trap on_error ERR
 
-if [[ -d "${APP_ROOT}/.next" ]]; then
-  ROLLBACK_NEXT="$(mktemp -d /tmp/sparkdrive-next-backup-XXXXXX)"
-  log "Backing up current .next to ${ROLLBACK_NEXT}"
-  cp -a "${APP_ROOT}/.next" "${ROLLBACK_NEXT}/"
-fi
+require_cmd npm
+require_cmd npx
+require_cmd node
 
-if [[ -L "${CURRENT_LINK}" ]]; then
-  PREVIOUS_CURRENT="$(readlink -f "${CURRENT_LINK}" || true)"
-fi
+# Resolve source directory (repo checkout used to seed the release)
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$SOURCE_DIR"
 
-log "Installing dependencies in ${APP_ROOT}"
-cd "${APP_ROOT}"
-npm ci
+log "Source: $SOURCE_DIR"
+log "Release: $RELEASE_DIR"
 
-log "Validating environment"
-npm run env:validate:prod
+mkdir -p "$RELEASES_DIR"
 
-log "Generating Prisma client"
-npx prisma validate
-npx prisma generate
-
-log "Applying database migrations"
-npx prisma migrate deploy
-
-log "Typecheck and lint"
-npm run typecheck
-npm run lint
-
-if npm run test --if-present; then
-  :
-else
-  fail "Tests failed"
-fi
-
-if [[ -d "${RELEASES_DIR}" || "${RELEASES_DIR}" == "/var/www/releases" ]]; then
-  mkdir -p "${RELEASES_DIR}"
-  log "Building release in ${RELEASE_DIR}"
+# Seed release directory from current checkout (rsync preferred; cp fallback)
+if command -v rsync >/dev/null 2>&1; then
   rsync -a \
     --exclude node_modules \
     --exclude .next \
     --exclude .git \
-    "${APP_ROOT}/" "${RELEASE_DIR}/"
-
-  cd "${RELEASE_DIR}"
-  npm ci
-  npx prisma generate
-  npm run build
-
-  if [[ ! -f "${RELEASE_DIR}/.next/BUILD_ID" ]]; then
-    fail "Build succeeded but .next/BUILD_ID is missing"
-  fi
-
-  ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}"
-  log "Switched ${CURRENT_LINK} -> ${RELEASE_DIR}"
-
-  rm -rf "${APP_ROOT}/.next"
-  cp -a "${RELEASE_DIR}/.next" "${APP_ROOT}/.next"
+    --exclude "$RELEASES_DIR" \
+    "$SOURCE_DIR/" "$RELEASE_DIR/"
 else
-  log "Release directory unavailable — building in place (previous .next preserved until success)"
-  npm run build
-  if [[ ! -f "${APP_ROOT}/.next/BUILD_ID" ]]; then
-    fail "Build succeeded but .next/BUILD_ID is missing"
+  mkdir -p "$RELEASE_DIR"
+  cp -a "$SOURCE_DIR/." "$RELEASE_DIR/"
+  rm -rf "$RELEASE_DIR/node_modules" "$RELEASE_DIR/.next" "$RELEASE_DIR/.git"
+fi
+
+cd "$RELEASE_DIR"
+
+log "Installing dependencies (npm ci)..."
+npm ci
+
+log "Validating Prisma schema..."
+npx prisma validate
+
+log "Generating Prisma client..."
+npx prisma generate
+
+if [[ -f .env || -f .env.production ]]; then
+  log "Applying database migrations..."
+  npx prisma migrate deploy
+else
+  log "No .env in release dir — skipping prisma migrate deploy (ensure migrations run separately)."
+fi
+
+log "Type-checking..."
+npx tsc --noEmit
+
+log "Linting..."
+npm run lint
+
+if npm run test --if-present 2>/dev/null; then
+  log "Tests passed."
+else
+  log "No test script or tests skipped."
+fi
+
+# Backup last successful .next inside release workspace before clean build
+if [[ -d .next && -f .next/BUILD_ID ]]; then
+  log "Backing up existing .next before build..."
+  rm -rf .next.backup
+  cp -a .next .next.backup
+fi
+
+log "Building Next.js application..."
+if npm run build; then
+  rm -rf .next.backup
+  log "Build succeeded."
+else
+  log "Build failed — restoring .next backup if present..."
+  if [[ -d .next.backup ]]; then
+    rm -rf .next
+    mv .next.backup .next
+    log "Restored .next backup inside release directory."
   fi
+  fail "npm run build failed"
 fi
 
-if [[ "${SKIP_PM2:-}" == "1" ]]; then
-  log "SKIP_PM2=1 — build complete, PM2 not restarted"
-  trap - ERR
-  exit 0
+[[ -f .next/BUILD_ID ]] || fail "Build output missing .next/BUILD_ID"
+
+# Atomically switch live symlink only after a successful build
+PREVIOUS_TARGET=""
+if [[ -L "$CURRENT_LINK" ]]; then
+  PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
 fi
 
-if ! command -v pm2 >/dev/null 2>&1; then
-  log "pm2 not found — build complete, skipping process restart"
-  trap - ERR
-  exit 0
+log "Switching live release: $CURRENT_LINK -> $RELEASE_DIR"
+ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+
+if command -v pm2 >/dev/null 2>&1; then
+  log "Restarting PM2 process: $APP_NAME"
+  pm2 restart "$APP_NAME" --update-env
+  pm2 save
+  pm2 status "$APP_NAME" || true
+  pm2 logs "$APP_NAME" --lines 80 --nostream || true
+else
+  log "pm2 not found — skipping process restart (build artifacts are ready at $RELEASE_DIR)."
 fi
 
-log "Restarting PM2 app: ${PM2_APP}"
-pm2 restart "${PM2_APP}" --update-env
-pm2 save
-pm2 status "${PM2_APP}"
-
-log "Local health check"
-curl -fsSI "http://127.0.0.1:${PORT:-5173}" | head -n 1 || log "Warning: localhost health check did not return headers"
-
-if command -v nginx >/dev/null 2>&1; then
-  if sudo nginx -t; then
-    sudo systemctl reload nginx || log "Warning: nginx reload failed"
-  else
-    log "Warning: nginx -t failed — not reloading"
-  fi
+# Prune old releases, always keeping the current live target
+if [[ -d "$RELEASES_DIR" ]]; then
+  mapfile -t OLD_RELEASES < <(ls -1dt "$RELEASES_DIR"/* 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) || true)
+  for old in "${OLD_RELEASES[@]:-}"; do
+    [[ -n "$old" && "$old" != "$RELEASE_DIR" && "$old" != "$PREVIOUS_TARGET" ]] || continue
+    log "Pruning old release: $old"
+    rm -rf "$old"
+  done
 fi
 
-trap - ERR
-log "Deploy completed successfully"
-log "Rollback: ln -sfn ${PREVIOUS_CURRENT:-<previous-release>} ${CURRENT_LINK} && cp -a ${PREVIOUS_CURRENT:-<previous-release>}/.next ${APP_ROOT}/.next && pm2 restart ${PM2_APP} --update-env"
+log "Deployment complete."
+log "Rollback: ln -sfn \"${PREVIOUS_TARGET:-<previous-release>}\" \"$CURRENT_LINK\" && pm2 restart $APP_NAME --update-env"

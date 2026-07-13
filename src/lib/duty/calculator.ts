@@ -81,7 +81,7 @@ export type DutyEstimateResult = {
   intelligence?: DutyIntelligenceResult;
 };
 
-/** Client-safe sync estimate — use computeDutyEstimateAsync (server) or the Duty Intelligence API for full pipeline results. */
+/** Browser-safe sync fallback — use computeDutyEstimateAsync (server) or the Duty Intelligence API for full estimates. */
 export function computeDutyEstimate(input: DutyEstimateInput, referenceYear = new Date().getFullYear()): DutyEstimateResult {
   const age = Math.max(0, referenceYear - input.vehicleYear);
   const { rate: importDutyRate, label: importDutyLabel } = resolveImportDutyRateForPowertrain({

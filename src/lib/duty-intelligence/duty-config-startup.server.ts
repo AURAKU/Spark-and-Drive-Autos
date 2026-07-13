@@ -6,6 +6,8 @@ export type RunDutyConfigStartupResult =
   | { ok: true; bootstrapped: boolean; countryConfigId?: string }
   | { ok: false; reason: string };
 
+let startupInFlight: Promise<RunDutyConfigStartupResult> | null = null;
+
 /**
  * Idempotent startup check: ensures Ghana duty configuration exists after deploy.
  * Never throws — safe to schedule from instrumentation on process start.
@@ -47,7 +49,12 @@ export async function runDutyConfigStartupSync(): Promise<RunDutyConfigStartupRe
   }
 }
 
-/** Alias for instrumentation and lazy server initializers. */
+/** Idempotent entry point for instrumentation — coalesces concurrent calls. */
 export async function initializeDutyConfiguration(): Promise<RunDutyConfigStartupResult> {
-  return runDutyConfigStartupSync();
+  if (!startupInFlight) {
+    startupInFlight = runDutyConfigStartupSync().finally(() => {
+      startupInFlight = null;
+    });
+  }
+  return startupInFlight;
 }
