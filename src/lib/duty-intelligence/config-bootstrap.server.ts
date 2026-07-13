@@ -4,21 +4,10 @@ import type { DutyCountryCode } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { dutyCacheInvalidate } from "@/lib/duty-intelligence/cache.server";
+import type { DutyConfigHealth } from "@/lib/duty-intelligence/types";
 import { seedDutyIntelligence } from "../../../prisma/seed-duty-intelligence";
 
-export type DutyConfigHealth = {
-  countryConfigExists: boolean;
-  ghanaConfigExists: boolean;
-  migrationsApplied: boolean;
-  formulaRulesCount: number;
-  hsCodesCount: number;
-  exchangeRatesCount: number;
-  shippingCostMatrixCount: number;
-  insuranceRulesCount: number;
-  chargeTemplatesCount: number;
-  isReady: boolean;
-  missing: string[];
-};
+export type { DutyConfigHealth };
 
 export async function checkDutyConfigHealth(
   countryCode: DutyCountryCode = "GH",
