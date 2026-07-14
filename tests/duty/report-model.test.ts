@@ -184,12 +184,17 @@ test("buildDutyReportData for gasoline Jetour-style estimate", () => {
   });
   assert.equal(report.vehicle.make, "Jetour");
   assert.equal(report.vehicle.engineCc, 1600);
-  assert.equal(report.totals.estimatedDutyPayableGhs, 74550);
+  // Includes all unique payable lines (duty/VAT/levy + port fee in fixture) — not a parallel formula.
+  assert.equal(report.totals.estimatedDutyPayableGhs, 75350);
   assert.equal(report.totals.estimatedLandedCostGhs, 298550);
   assert.equal(report.confidence.label, "Standard estimate");
   assert.ok(report.dutyLines.every((l) => l.code !== "FOB"));
   assert.equal(report.dutyLines.filter((l) => l.code === "IMPORT_DUTY").length, 1);
   assert.match(formatReportMoney(report.totals.estimatedLandedCostGhs), /298/);
+  assert.equal(
+    Math.round(report.dutyLines.reduce((s, l) => s + l.payableAmount, 0) * 100) / 100,
+    report.totals.estimatedDutyPayableGhs,
+  );
 });
 
 test("buildDutyReportData for EV BYD-style estimate", () => {

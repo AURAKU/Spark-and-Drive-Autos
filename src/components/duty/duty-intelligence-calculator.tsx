@@ -205,7 +205,11 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         driveType: driveType || undefined,
         applyEvDutyWaiver: false,
       },
-      purchase: { fobAmount: fob, fobCurrency: fobCurrency as DutyCalculationInput["purchase"]["fobCurrency"] },
+      purchase: {
+        fobAmount: fob,
+        fobCurrency: fobCurrency as DutyCalculationInput["purchase"]["fobCurrency"],
+        pricingBasis: "FOB",
+      },
       shipping: {
         shippingMethod: shippingMethod as DutyCalculationInput["shipping"]["shippingMethod"],
         freightGhsOverride: freightOverride.trim() ? Number(freightOverride) : undefined,
@@ -532,15 +536,54 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             {result.summary.estimatedTransitDays != null ? (
               <div className="flex justify-between"><span className="text-muted-foreground">Est. delivery</span><span>~{result.summary.estimatedTransitDays} days</span></div>
             ) : null}
+            {result.summary.pricingBasis ? (
+              <div className="flex justify-between"><span className="text-muted-foreground">Price basis</span><span>{result.summary.pricingBasis}</span></div>
+            ) : null}
             <div className="flex justify-between"><span className="text-muted-foreground">FOB</span><span>{formatMoney(result.summary.fobGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Shipping (freight)</span><span>{formatMoney(result.summary.freightGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Insurance</span><span>{formatMoney(result.summary.insuranceGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">CIF value</span><span>{formatMoney(result.summary.cifGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Estimated import taxes</span><span>{formatMoney(result.summary.totalGraTaxesGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Port charges</span><span>{formatMoney(result.summary.totalPortChargesGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Shipping line charges</span><span>{formatMoney(result.summary.shippingLineChargesGhs)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Clearing charges</span><span>{formatMoney(result.summary.agentFeesGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Freight (resolved)</span><span>{formatMoney(result.summary.freightGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Insurance (resolved)</span><span>{formatMoney(result.summary.insuranceGhs)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">CIF / customs value</span><span>{formatMoney(result.summary.cifGhs)}</span></div>
           </div>
+
+          {(result.payableDutyLines?.length ? result.payableDutyLines : result.lineItems.filter((l) => ["DUTY", "LEVY", "VAT", "FEE"].includes(l.category))).length > 0 && (
+            <div className="overflow-hidden rounded-xl border border-border dark:border-white/10">
+              <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase dark:border-white/10">
+                Duty & charge breakdown
+              </div>
+              <ul className="divide-y divide-border dark:divide-white/10">
+                {(result.payableDutyLines?.length
+                  ? result.payableDutyLines
+                  : result.lineItems.filter((l) => ["DUTY", "LEVY", "VAT", "FEE"].includes(l.category))
+                ).map((line) => (
+                  <li key={`${line.code}-${line.label}`} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">{line.label}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {line.basis}
+                        {line.rate != null ? ` · ${line.rate}${line.rateType === "PERCENTAGE" || line.rateType === "PERCENT" ? "%" : ""}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-mono font-semibold text-foreground">{formatMoney(line.amountGhs)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="border-t border-border bg-amber-500/10 px-4 py-3 dark:border-white/10">
+                <p className="text-[11px] font-semibold tracking-[0.16em] text-amber-800 uppercase dark:text-amber-300">
+                  Total Estimated Duty Payable
+                </p>
+                <p className="mt-1 text-2xl font-bold text-foreground dark:text-white">
+                  {formatMoney(result.summary.totalGraTaxesGhs)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Equals the sum of every unique charge line above
+                  {result.summary.lineItemSumGhs != null
+                    ? ` (${formatMoney(result.summary.lineItemSumGhs)})`
+                    : ""}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
 
           {result.historicalComparison && (
             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs">
@@ -566,6 +609,9 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             ) : (
               <p className="text-2xl font-bold text-foreground dark:text-white">{formatMoney(result.summary.totalLandedCostGhs)}</p>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              CIF / customs value + total estimated duty payable (freight is not added twice).
+            </p>
           </div>
 
           {result.explanation && (
