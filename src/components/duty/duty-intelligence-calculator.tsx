@@ -5,6 +5,7 @@ import { EngineType } from "@prisma/client";
 import { Check, ChevronDown, ChevronUp, Loader2, Printer, Save, Shield } from "lucide-react";
 
 import { saveDutyCalculationAction } from "@/actions/duty-intelligence-admin";
+import { prepareDutyReportAction } from "@/actions/duty-intelligence-report";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
 import type { IntakeQuestion } from "@/lib/duty-intelligence/intake-questions";
 import {
@@ -86,6 +87,8 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   const [adminHint, setAdminHint] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportPending, setReportPending] = useState(false);
   const [pending, startTransition] = useTransition();
   const [powerKw, setPowerKw] = useState("");
   const [freightOverride, setFreightOverride] = useState("");
@@ -267,6 +270,24 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
       if (saved.ok) setSaveMsg(`Saved as ${saved.referenceNumber}`);
       else setSaveMsg(saved.error ?? "Save failed");
     });
+  }
+
+  async function handlePrintReport() {
+    if (!result || !inputPayload || reportPending) return;
+    setReportError(null);
+    setReportPending(true);
+    try {
+      const prepared = await prepareDutyReportAction(inputPayload, result);
+      if (!prepared.ok) {
+        setReportError(prepared.error);
+        return;
+      }
+      window.open(prepared.reportUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setReportError("Could not open the report. Please try again.");
+    } finally {
+      setReportPending(false);
+    }
   }
 
   const inputCls =
@@ -471,8 +492,14 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           </button>
         )}
         {result && (
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm">
-            <Printer className="h-4 w-4" /> Print report
+          <button
+            type="button"
+            onClick={() => void handlePrintReport()}
+            disabled={reportPending || !inputPayload}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
+          >
+            {reportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            Print report
           </button>
         )}
       </div>
@@ -481,6 +508,11 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
           {adminHint && isAdmin && <p className="mt-1 text-xs font-medium">Administrator: {adminHint}</p>}
+        </div>
+      )}
+      {reportError && (
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {reportError}
         </div>
       )}
       {saveMsg && <p className="mt-3 text-sm text-emerald-600">{saveMsg}</p>}
