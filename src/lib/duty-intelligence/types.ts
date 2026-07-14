@@ -75,6 +75,8 @@ export const dutyVehicleInputSchema = z
 export const dutyPurchaseInputSchema = z.object({
   fobAmount: z.number().positive("FOB amount must be greater than zero"),
   fobCurrency: z.enum(SUPPORTED_CURRENCIES).default("USD"),
+  /** Commercial price basis of the entered purchase amount. Default FOB (never treat FOB as including freight). */
+  pricingBasis: z.enum(["FOB", "CFR", "CIF", "EXW", "DDP", "UNKNOWN"]).default("FOB"),
 });
 
 export const dutyShippingInputSchema = z.object({
@@ -202,6 +204,12 @@ export type DutyIntelligenceResult = {
     totalLandedCostGhs: number;
     /** Sea/air transit estimate from shipping cost matrix (days). */
     estimatedTransitDays: number | null;
+    /** Commercial purchase basis used for valuation. */
+    pricingBasis?: "FOB" | "CFR" | "CIF" | "EXW" | "DDP" | "UNKNOWN";
+    /** Σ unique payable duty lines — authoritative Total Estimated Duty Payable. */
+    lineItemSumGhs?: number;
+    /** |lineItemSum − engine total| before forcing total to line sum. */
+    reconciliationDifferenceGhs?: number;
   };
   /** ISO timestamp when this estimate was produced. */
   calculatedAt: string;
@@ -237,6 +245,8 @@ export type DutyIntelligenceResult = {
     withinTolerance: boolean;
     unexplainedVariance: boolean;
   } | null;
+  /** Deduplicated payable duty lines (excludes FOB/freight/insurance/CIF). */
+  payableDutyLines?: CalculationLineItem[];
 };
 
 export type DutyPipelineError = {
@@ -250,7 +260,9 @@ export type DutyPipelineError = {
     | "RULE_DEPENDENCY_ERROR"
     | "UNVERIFIED_RULE"
     | "ADMIN_REVIEW_REQUIRED"
-    | "VALIDATION_ERROR";
+    | "VALIDATION_ERROR"
+    | "FREIGHT_REQUIRED"
+    | "CALCULATION_RECONCILIATION_ERROR";
   message: string;
   adminHint?: string;
   health?: DutyConfigHealth;

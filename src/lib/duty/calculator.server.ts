@@ -25,7 +25,8 @@ function toLegacyInput(input: DutyEstimateInput): DutyCalculationInput {
       engineCc: input.engineCc,
       applyEvDutyWaiver: input.applyEvDutyWaiver,
     },
-    purchase: { fobAmount: input.cifGhs, fobCurrency: "GHS" },
+    // Do not put CIF into FOB — declare CIF pricing basis + override only.
+    purchase: { fobAmount: input.cifGhs, fobCurrency: "GHS", pricingBasis: "CIF" },
     shipping: { shippingMethod: "SEA_FREIGHT", otherShippingChargesGhs: 0 },
     cifGhsOverride: input.cifGhs,
   };

@@ -1,5 +1,6 @@
 import type { CalculationLineItem, DutyConfidenceLevel, DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
 import { dutyCalculationInputSchema } from "@/lib/duty-intelligence/types";
+import { reconcilePayableDutyLines } from "@/lib/duty-intelligence/charge-reconciliation";
 import { DUTY_ESTIMATE_DISCLAIMER_LONG, DUTY_ESTIMATE_DISCLAIMER_SHORT } from "@/lib/duty/disclaimer";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
 
@@ -176,14 +177,6 @@ function groupDutyLines(lines: DutyReportLine[]): Array<{ heading: string; lines
   return groups;
 }
 
-function rateLabel(item: CalculationLineItem): string | null {
-  if (item.rate == null || !Number.isFinite(item.rate)) return null;
-  if (item.rateType === "PERCENT" || item.formula?.includes("%")) {
-    return `${item.rate}%`;
-  }
-  return String(item.rate);
-}
-
 export function buildDutyReportData(params: {
   calculationId: string;
   reportReference: string;
@@ -208,13 +201,17 @@ export function buildDutyReportData(params: {
 
   const vehicle = input?.vehicle;
   const purchase = input?.purchase;
-  const chargeItems = uniqueDutyChargeLines(result.lineItems);
+  const reconciliation = reconcilePayableDutyLines(
+    result.payableDutyLines?.length ? result.payableDutyLines : result.lineItems,
+    { expectedTotalGhs: result.summary?.totalGraTaxesGhs },
+  );
+  const chargeItems = reconciliation.payableLines;
   const dutyLines: DutyReportLine[] = chargeItems.map((item) => ({
     category: item.category,
     chargeName: item.label,
     taxableBaseLabel: item.basis || "—",
     taxableBaseAmount: null,
-    rateLabel: rateLabel(item),
+    rateLabel: item.rate != null ? (item.rateType === "PERCENTAGE" || item.rateType === "PERCENT" ? `${item.rate}%` : String(item.rate)) : null,
     payableAmount: moneyNumber(item.amountGhs),
     code: item.code,
   }));
@@ -292,7 +289,7 @@ export function buildDutyReportData(params: {
       customsDutyGhs: customsDuty > 0 ? customsDuty : null,
       taxesAndLeviesGhs: taxesLevies > 0 ? taxesLevies : null,
       portAndAdminChargesGhs: portAdmin > 0 ? portAdmin : null,
-      estimatedDutyPayableGhs: moneyNumber(result.summary.totalGraTaxesGhs),
+      estimatedDutyPayableGhs: reconciliation.totalEstimatedDutyPayableGhs,
       estimatedLandedCostGhs: moneyNumber(result.summary.totalLandedCostGhs),
       lowEstimateGhs:
         result.estimateRange?.landedCostLowGhs != null

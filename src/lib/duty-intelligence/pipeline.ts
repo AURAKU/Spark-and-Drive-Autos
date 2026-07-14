@@ -22,11 +22,15 @@ import {
   resolveHsCode,
 } from "@/lib/duty-intelligence/stages/vehicle-classification";
 import {
-  computeCif,
-  computeCustomsValue,
   computeFobGhs,
   resolveExchangeRate,
 } from "@/lib/duty-intelligence/stages/value-chain";
+import { reconcilePayableDutyLines } from "@/lib/duty-intelligence/charge-reconciliation";
+import {
+  buildValuationChain,
+  computeLandedCostGhs,
+  resolvePricingBasis,
+} from "@/lib/duty-intelligence/valuation-resolver";
 import type {
   CalculationLineItem,
   DutyCalculationInput,
@@ -102,41 +106,87 @@ export async function runDutyIntelligencePipeline(
     notes: exchange.notes,
   });
 
-  const fobGhs =
-    input.cifGhsOverride != null ? input.cifGhsOverride : computeFobGhs(input.purchase.fobAmount, exchange.rate);
+  const pricingBasis = resolvePricingBasis({
+    declared: input.purchase.pricingBasis,
+    cifGhsOverride: input.cifGhsOverride,
+  });
 
-  const freightEstimate = await estimateFreight({ countryConfigId: config.countryConfigId, input, fobGhs });
+  // Always keep purchase FOB as FOB — never assign CIF override into FOB.
+  const purchaseFobGhs = computeFobGhs(input.purchase.fobAmount, exchange.rate);
+
+  const freightEstimate = await estimateFreight({
+    countryConfigId: config.countryConfigId,
+    input,
+    fobGhs: purchaseFobGhs,
+  });
+  const freightGhsResolved = input.shipping.freightGhsOverride ?? freightEstimate.freightGhs;
+
+  if (
+    freightGhsResolved <= 0 &&
+    input.shipping.freightGhsOverride == null &&
+    freightEstimate.source !== "OVERRIDE"
+  ) {
+    // Zero freight is only allowed when explicitly overridden/verified.
+    // Matrix/fallback paths always return >0; this guards misconfigured zeros.
+    return {
+      code: "FREIGHT_REQUIRED",
+      message:
+        "Freight could not be resolved from shipping configuration. Provide freight or update the shipping-cost matrix.",
+      missingFields: ["shipping.freightGhsOverride"],
+      adminHint: "Configure Duty Shipping Cost Matrix or enter an authorized freight override.",
+    };
+  }
+
+  // For CIF-declared purchases that reused CIF as the "FOB" field, do not insure CIF+freight.
+  const fobForInsurance =
+    pricingBasis === "CIF" &&
+    input.cifGhsOverride != null &&
+    Math.abs(purchaseFobGhs - input.cifGhsOverride) < 0.02
+      ? Math.max(0, input.cifGhsOverride - freightGhsResolved)
+      : purchaseFobGhs;
+
   const insuranceEstimate = await estimateInsurance({
     countryConfigId: config.countryConfigId,
     input,
-    fobGhs,
-    freightGhs: freightEstimate.freightGhs,
+    fobGhs: fobForInsurance,
+    freightGhs: freightGhsResolved,
   });
+  const insuranceGhsResolved =
+    input.shipping.insuranceGhsOverride ?? insuranceEstimate.insuranceGhs;
   const otherGhs = input.shipping.otherShippingChargesGhs ?? 0;
 
-  const freightGhs = input.shipping.freightGhsOverride ?? freightEstimate.freightGhs;
-  const insuranceGhs = input.shipping.insuranceGhsOverride ?? insuranceEstimate.insuranceGhs;
-
-  const cifGhs = computeCif({
-    fobGhs: input.cifGhsOverride != null ? 0 : fobGhs,
-    freightGhs,
-    insuranceGhs,
+  const valuation = buildValuationChain({
+    pricingBasis,
+    purchaseFobGhs,
+    freightGhs: freightGhsResolved,
+    insuranceGhs: insuranceGhsResolved,
     otherGhs,
-    override: input.cifGhsOverride,
+    cifGhsOverride: input.cifGhsOverride,
   });
-  const customsValueGhs = computeCustomsValue(cifGhs);
+
+  const { fobGhs, freightGhs, insuranceGhs, cifGhs, customsValueGhs } = valuation;
+
+  if (!(customsValueGhs > 0)) {
+    return {
+      code: "MISSING_CUSTOMS_VALUE",
+      message: "Customs value could not be calculated from FOB, freight and insurance.",
+      missingFields: ["purchase.fobAmount"],
+    };
+  }
 
   const valueLineItems: CalculationLineItem[] = [
     {
       code: "FOB",
       label: "FOB (Free On Board)",
       category: "FOB",
-      amountGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
-      basis: input.cifGhsOverride
-        ? "CIF override supplied"
+      amountGhs: fobGhs,
+      basis: valuation.fobInferredFromCif
+        ? "Inferred from CIF − Freight − Insurance"
         : `${input.purchase.fobAmount} ${input.purchase.fobCurrency} × ${exchange.rate}`,
-      formula: input.cifGhsOverride ? `Override CIF ${cifGhs}` : `${input.purchase.fobAmount} × ${exchange.rate} = ${fobGhs}`,
-      source: input.cifGhsOverride ? "OVERRIDE" : "CONFIG",
+      formula: valuation.fobInferredFromCif
+        ? `CIF ${cifGhs} − Freight ${freightGhs} − Insurance ${insuranceGhs} = ${fobGhs}`
+        : `${input.purchase.fobAmount} × ${exchange.rate} = ${fobGhs}`,
+      source: valuation.fobInferredFromCif ? "OVERRIDE" : "CONFIG",
     },
     freightToLineItem({ ...freightEstimate, freightGhs }),
     insuranceToLineItem({ ...insuranceEstimate, insuranceGhs }),
@@ -145,9 +195,13 @@ export async function runDutyIntelligencePipeline(
       label: "CIF (Cost, Insurance, Freight)",
       category: "CIF",
       amountGhs: cifGhs,
-      basis: "FOB + Freight + Insurance + Other",
-      formula: `${input.cifGhsOverride != null ? cifGhs : fobGhs} + ${freightGhs} + ${insuranceGhs} + ${otherGhs} = ${cifGhs}`,
-      source: "CONFIG",
+      basis: valuation.cifOverridden
+        ? "Declared / override CIF (freight not added twice)"
+        : "FOB + Freight + Insurance + Other",
+      formula: valuation.cifOverridden
+        ? `Override CIF ${cifGhs}`
+        : `${fobGhs} + ${freightGhs} + ${insuranceGhs} + ${otherGhs} = ${cifGhs}`,
+      source: valuation.cifOverridden ? "OVERRIDE" : "CONFIG",
     },
     {
       code: "CUSTOMS_VALUE",
@@ -162,8 +216,9 @@ export async function runDutyIntelligencePipeline(
   allLineItems.push(...valueLineItems);
   stages.push({
     stage: "VALUE_CHAIN",
-    label: "FOB → CIF → Customs Value",
+    label: "FOB → Freight → Insurance → CIF → Customs Value",
     output: {
+      pricingBasis: valuation.pricingBasis,
       fobGhs,
       freightGhs,
       insuranceGhs,
@@ -171,15 +226,17 @@ export async function runDutyIntelligencePipeline(
       customsValueGhs,
       freightSource: freightEstimate.source,
       insuranceRate: insuranceEstimate.percentageRate,
+      cifOverridden: valuation.cifOverridden,
+      fobInferredFromCif: valuation.fobInferredFromCif,
     },
     lineItems: valueLineItems,
-    notes: [freightEstimate.basis, insuranceEstimate.basis],
+    notes: [...valuation.notes, freightEstimate.basis, insuranceEstimate.basis],
   });
 
   const versioned = runVersionedCalculation({
     assessmentDate,
     values: {
-      fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+      fobGhs,
       freightGhs,
       insuranceGhs,
       customsValueGhs,
@@ -225,8 +282,47 @@ export async function runDutyIntelligencePipeline(
     ],
   });
 
-  const totalGraTaxesGhs = versioned.engineResult.totalDutyPayableGhs;
-  const totalLandedCostGhs = customsValueGhs + totalGraTaxesGhs;
+  const reconciliation = reconcilePayableDutyLines(taxLineItems, {
+    expectedTotalGhs: versioned.engineResult.totalDutyPayableGhs,
+  });
+
+  if (!reconciliation.withinTolerance) {
+    console.error("[duty-pipeline] reconciliation mismatch", {
+      lineItemSumGhs: reconciliation.lineItemSumGhs,
+      engineTotal: versioned.engineResult.totalDutyPayableGhs,
+      difference: reconciliation.reconciliationDifferenceGhs,
+      duplicates: reconciliation.duplicateKeysDropped,
+    });
+    return {
+      code: "CALCULATION_RECONCILIATION_ERROR",
+      message:
+        "Duty lines could not be reconciled to a single total. Please retry or contact an administrator.",
+      details: {
+        lineItemSumGhs: reconciliation.lineItemSumGhs,
+        engineTotalGhs: versioned.engineResult.totalDutyPayableGhs,
+        reconciliationDifferenceGhs: reconciliation.reconciliationDifferenceGhs,
+      },
+      adminHint: "Inspect charge keys / duplicate aliases in the active duty rule set.",
+    };
+  }
+
+  // Authoritative total = unique payable line sum (never a separate formula).
+  const totalGraTaxesGhs = reconciliation.totalEstimatedDutyPayableGhs;
+  const totalLandedCostGhs = computeLandedCostGhs({
+    customsValueGhs,
+    totalEstimatedDutyPayableGhs: totalGraTaxesGhs,
+  });
+  const payableDutyLines: CalculationLineItem[] = reconciliation.payableLines.map((l) => ({
+    code: l.code,
+    label: l.label,
+    category: l.category,
+    amountGhs: l.amountGhs,
+    basis: l.basis,
+    formula: l.formula,
+    rate: l.rate,
+    rateType: l.rateType,
+    source: l.source,
+  }));
 
   const similarImports = await findSimilarImports({
     countryConfigId: config.countryConfigId,
@@ -273,7 +369,7 @@ export async function runDutyIntelligencePipeline(
     ruleSetVersion: versioned.ruleSetVersion,
     verifiedProfile: versioned.confidence.level === "VERIFIED_PROFILE_HIGH",
     hsResolutionMethod: hsResolutionPreview.method,
-    fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+    fobGhs,
     freightGhs,
     insuranceGhs,
     customsValueGhs,
@@ -295,7 +391,7 @@ export async function runDutyIntelligencePipeline(
     stages,
     lineItems: allLineItems,
     summary: {
-      fobGhs: input.cifGhsOverride != null ? cifGhs : fobGhs,
+      fobGhs,
       freightGhs,
       insuranceGhs,
       cifGhs,
@@ -306,6 +402,9 @@ export async function runDutyIntelligencePipeline(
       agentFeesGhs: 0,
       totalLandedCostGhs,
       estimatedTransitDays: freightEstimate.transitDays,
+      pricingBasis: valuation.pricingBasis,
+      lineItemSumGhs: reconciliation.lineItemSumGhs,
+      reconciliationDifferenceGhs: reconciliation.reconciliationDifferenceGhs,
     },
     calculatedAt: assessmentDate.toISOString(),
     hsCode: versioned.hsCodeNormalized,
@@ -337,12 +436,19 @@ export async function runDutyIntelligencePipeline(
       cohortSize: prediction.calibration.cohortSize,
       exactFixtureMatch: prediction.calibration.exactFixtureMatch,
       valuationMethod: prediction.calibration.valuation.method,
-      assumptions: prediction.calibration.assumptions,
+      assumptions: [
+        ...prediction.calibration.assumptions,
+        ...valuation.notes,
+        `Freight source: ${freightEstimate.source}`,
+        `Insurance source: ${insuranceEstimate.source}`,
+      ],
     },
     cacheFingerprint: fingerprint,
     engineReconciliation: versioned.engineResult.reconciliation,
+    payableDutyLines,
     methodologyNote:
       "Duty Intelligence Engine V4 with calibration layer — deterministic rule-based tax lines plus cohort-informed confidence and ranges. " +
+      "FOB, freight and insurance stay separate; Total Estimated Duty Payable equals the unique duty-line sum. " +
       "Estimates are for planning only; final customs assessment is determined by Ghana Customs at clearance.",
   };
 
