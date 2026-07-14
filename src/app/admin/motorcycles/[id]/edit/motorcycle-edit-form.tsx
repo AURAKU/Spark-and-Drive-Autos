@@ -8,22 +8,20 @@ import { toast } from "sonner";
 
 import {
   archiveMotorcycle,
-  deleteMotorcycle,
   duplicateMotorcycle,
   publishMotorcycle,
   unpublishMotorcycle,
   updateMotorcycle,
 } from "@/actions/motorcycles";
 import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
+import { MotorcycleDeleteDialog } from "@/components/admin/motorcycles/motorcycle-delete-dialog";
 import { MotorcycleSpecsEditor } from "@/components/admin/motorcycles/motorcycle-specs-editor";
-import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
+import { MotorcycleSummaryAutofill } from "@/components/admin/motorcycles/motorcycle-summary-autofill";
 import { Button } from "@/components/ui/button";
 import {
   AUTOFILL_TOAST_REVIEW,
-  getFormCheckboxChecked,
   getFormControlString,
   setFormControlString,
-  shouldApplyAutofillCheckbox,
   shouldApplyAutofillEnum,
   shouldApplyAutofillNumber,
   shouldApplyAutofillText,
@@ -34,10 +32,7 @@ import {
   MOTORCYCLE_HIGHLIGHT_TAGS,
 } from "@/lib/motorcycle-spec-parser";
 import type { MotorcycleSpecRowInput } from "@/lib/motorcycle-specs";
-import {
-  parseMotorcycleSummaryForAutofill,
-  previewRowsFromMotorcycleParse,
-} from "@/lib/motorcycle-summary-autofill";
+import type { MotorcycleSummaryAutofillResult } from "@/lib/motorcycle-summary-autofill";
 
 type Props = {
   motorcycle: Motorcycle & { specs?: MotorcycleSpecification[] };
@@ -48,7 +43,7 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [autofillUnmapped, setAutofillUnmapped] = useState<string[]>([]);
   const [features, setFeatures] = useState<string[]>(
     Array.isArray(motorcycle.featureTags) ? (motorcycle.featureTags as string[]) : [],
@@ -92,21 +87,59 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
   const inputCls =
     "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40";
 
-  async function applyMotorcycleSummary(raw: string, opts?: { overwrite?: boolean }) {
-    const overwrite = opts?.overwrite ?? false;
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      setAutofillUnmapped([]);
-      toast.error("Paste or type something in the summary box first.");
-      return;
-    }
-    const parsed = parseMotorcycleSummaryForAutofill(trimmed);
+  function getCurrentFormValues(): Record<string, string> {
+    const form = formRef.current;
+    if (!form) return {};
+    const names = [
+      "brand",
+      "model",
+      "year",
+      "mileage",
+      "condition",
+      "longDescription",
+      "transmission",
+      "color",
+      "location",
+      "engineCc",
+      "torque",
+      "horsepower",
+      "weightKg",
+      "tyreSize",
+      "basePriceAmount",
+      "basePriceCurrency",
+      "engineType",
+      "motorcycleType",
+      "sourceType",
+      "listingState",
+      "frontTyre",
+      "rearTyre",
+      "frontBrake",
+      "rearBrake",
+      "frontSuspension",
+      "rearSuspension",
+      "cylinders",
+      "gears",
+      "clutchType",
+    ];
+    const out: Record<string, string> = {};
+    for (const n of names) out[n] = getFormControlString(form, n);
+    return out;
+  }
+
+  async function applySelectedSummary(
+    parsed: MotorcycleSummaryAutofillResult,
+    selectedKeys: Set<string>,
+    opts: { overwrite: boolean },
+  ) {
+    const overwrite = opts.overwrite;
     setAutofillUnmapped(parsed.unmappedConcepts);
     const form = formRef.current;
     if (!form) return;
     const b = baselineRef.current;
+    const selected = (key: string) => selectedKeys.has(key);
 
     if (
+      selected("listingPrice") &&
       parsed.listingPrice &&
       shouldApplyListingPrice(
         getFormControlString(form, "basePriceAmount"),
@@ -119,60 +152,28 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
       setFormControlString(form, "basePriceCurrency", parsed.listingPrice.currency);
     }
 
-    const textMap: [string, string | undefined][] = [
-      ["brand", parsed.stringFields.brand?.value],
-      ["model", parsed.stringFields.model?.value],
-      ["condition", parsed.stringFields.condition?.value],
-      ["longDescription", parsed.stringFields.longDescription?.value],
-      ["transmission", parsed.stringFields.transmission?.value],
-      ["driveType", parsed.stringFields.driveType?.value],
-      ["color", parsed.stringFields.color?.value],
-      ["location", parsed.stringFields.location?.value],
-      ["vin", parsed.stringFields.vin?.value],
-      ["frameNumber", parsed.stringFields.frameNumber?.value],
-      ["torque", parsed.stringFields.torque?.value],
-      ["tyreSize", parsed.stringFields.tyreSize?.value],
-      ["warranty", parsed.stringFields.warranty?.value],
-      ["variant", parsed.stringFields.variant?.value],
-      ["coolingType", parsed.stringFields.coolingType?.value],
-      ["fuelTankCapacity", parsed.stringFields.fuelTankCapacity?.value],
-      ["batteryCapacity", parsed.stringFields.batteryCapacity?.value],
-      ["motorPower", parsed.stringFields.motorPower?.value],
-      ["electricRange", parsed.stringFields.electricRange?.value],
-      ["chargingTime", parsed.stringFields.chargingTime?.value],
-      ["wheelSize", parsed.stringFields.wheelSize?.value],
-      ["estimatedDelivery", parsed.stringFields.estimatedDelivery?.value],
-      ["inspectionStatus", parsed.stringFields.inspectionStatus?.value],
-    ];
-
-    for (const [name, value] of textMap) {
-      if (!value) continue;
-      const field = parsed.stringFields[name];
-      const proposed = field ?? { value, confidence: "explicit" as const };
+    for (const [name, field] of Object.entries(parsed.stringFields)) {
+      if (!field?.value || !selected(`str:${name}`)) continue;
       if (
         shouldApplyAutofillText(
           getFormControlString(form, name),
           (b as Record<string, string>)[name] ?? "",
-          proposed,
+          field,
           overwrite,
         )
       ) {
-        setFormControlString(form, name, value);
+        if (name === "featureTags") {
+          const tags = field.value.split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+          if (tags.length) setFeatures(tags);
+        } else {
+          setFormControlString(form, name, field.value);
+        }
       }
     }
 
-    const numMap: [string, typeof parsed.numberFields.year][] = [
-      ["year", parsed.numberFields.year],
-      ["mileage", parsed.numberFields.mileage],
-      ["engineCc", parsed.numberFields.engineCc],
-      ["horsepower", parsed.numberFields.horsepower],
-      ["weightKg", parsed.numberFields.weightKg],
-      ["seatHeight", parsed.numberFields.seatHeight],
-      ["topSpeedKmh", parsed.numberFields.topSpeedKmh],
-    ];
-    for (const [name, field] of numMap) {
+    for (const [name, field] of Object.entries(parsed.numberFields)) {
+      if (!field || !selected(`num:${name}`)) continue;
       if (
-        field &&
         shouldApplyAutofillNumber(
           getFormControlString(form, name),
           (b as Record<string, string>)[name] ?? "",
@@ -185,17 +186,14 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
     }
 
     if (
+      selected("enum:engineType") &&
       parsed.engineTypeEnum &&
-      shouldApplyAutofillEnum(
-        getFormControlString(form, "engineType"),
-        b.engineType,
-        parsed.engineTypeEnum,
-        overwrite,
-      )
+      shouldApplyAutofillEnum(getFormControlString(form, "engineType"), b.engineType, parsed.engineTypeEnum, overwrite)
     ) {
       setFormControlString(form, "engineType", parsed.engineTypeEnum.value);
     }
     if (
+      selected("enum:motorcycleType") &&
       parsed.motorcycleTypeEnum &&
       shouldApplyAutofillEnum(
         getFormControlString(form, "motorcycleType"),
@@ -207,17 +205,14 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
       setFormControlString(form, "motorcycleType", parsed.motorcycleTypeEnum.value);
     }
     if (
+      selected("enum:sourceType") &&
       parsed.sourceTypeEnum &&
-      shouldApplyAutofillEnum(
-        getFormControlString(form, "sourceType"),
-        b.sourceType,
-        parsed.sourceTypeEnum,
-        overwrite,
-      )
+      shouldApplyAutofillEnum(getFormControlString(form, "sourceType"), b.sourceType, parsed.sourceTypeEnum, overwrite)
     ) {
       setFormControlString(form, "sourceType", parsed.sourceTypeEnum.value);
     }
     if (
+      selected("enum:listingState") &&
       parsed.listingStateEnum &&
       shouldApplyAutofillEnum(
         getFormControlString(form, "listingState"),
@@ -228,34 +223,22 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
     ) {
       setFormControlString(form, "listingState", parsed.listingStateEnum.value);
     }
-    if (
-      parsed.featured &&
-      shouldApplyAutofillCheckbox(getFormCheckboxChecked(form, "featured"), motorcycle.featured, parsed.featured, overwrite)
-    ) {
-      setFormControlString(form, "featured", parsed.featured.value ? "on" : "");
-    }
 
-    if (parsed.stringFields.featureTags?.value) {
-      const tags = parsed.stringFields.featureTags.value.split(/[,;]/).map((t) => t.trim()).filter(Boolean);
-      if (tags.length && (overwrite || features.length === 0)) setFeatures(tags);
-    }
-
-    if (parsed.specLines.length > 0) {
-      const incoming: MotorcycleSpecRowInput[] = parsed.specLines.map((s, i) => ({
+    const selectedSpecs = parsed.specLines.filter((_, i) =>
+      selectedKeys.has(`spec:${i}:${parsed.specLines[i]!.label}`),
+    );
+    if (selectedSpecs.length > 0) {
+      const incoming: MotorcycleSpecRowInput[] = selectedSpecs.map((s, i) => ({
         groupName: s.groupName ?? "",
         label: s.label,
         value: s.value,
         sortOrder: i,
         isPublic: true,
       }));
-      if (overwrite || specRows.length === 0) {
-        setSpecRows(incoming);
-      } else {
+      if (overwrite || specRows.length === 0) setSpecRows(incoming);
+      else {
         const existingLabels = new Set(specRows.map((r) => r.label.toLowerCase()));
-        setSpecRows([
-          ...specRows,
-          ...incoming.filter((r) => !existingLabels.has(r.label.toLowerCase())),
-        ]);
+        setSpecRows([...specRows, ...incoming.filter((r) => !existingLabels.has(r.label.toLowerCase()))]);
       }
     }
 
@@ -270,6 +253,7 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
     fd.set("id", motorcycle.id);
     fd.set("featureTags", features.join(","));
     fd.set("highlightTags", highlights.join(","));
+    fd.set("expectedVersion", String(motorcycle.version));
     const result = await updateMotorcycle(null, fd);
     setPending(false);
     if (result.error) {
@@ -286,10 +270,10 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="mt-8 space-y-8">
-      <PasteSummaryAutofill
-        buildPreviewRows={(t) => previewRowsFromMotorcycleParse(parseMotorcycleSummaryForAutofill(t))}
-        onApply={applyMotorcycleSummary}
-        placeholder="Paste motorcycle summary: Make Yamaha, Model MT-07, Year 2024, Engine CC 689, Price GHS 95000, Torque 68 Nm…"
+      <input type="hidden" name="expectedVersion" value={motorcycle.version} />
+      <MotorcycleSummaryAutofill
+        getCurrentValues={getCurrentFormValues}
+        onApplySelected={applySelectedSummary}
       />
       <AutofillUnmappedHint items={autofillUnmapped} />
 
@@ -447,6 +431,44 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
         </div>
       </details>
 
+      <details className="rounded-lg border border-border p-4 dark:border-white/10" open>
+        <summary className="cursor-pointer text-sm font-medium">Chassis, brakes &amp; dimensions</summary>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs">Cylinders<input name="cylinders" type="number" defaultValue={motorcycle.cylinders ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Gears<input name="gears" type="number" defaultValue={motorcycle.gears ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Clutch<input name="clutchType" defaultValue={motorcycle.clutchType ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Manufacture date<input name="manufactureDate" defaultValue={motorcycle.manufactureDate ?? ""} className={inputCls} /></label>
+          <label className="flex items-center gap-2 text-xs sm:mt-6">
+            <input name="absEquipped" type="checkbox" defaultChecked={motorcycle.absEquipped === true} />
+            ABS equipped
+          </label>
+          <label className="flex items-center gap-2 text-xs sm:mt-6">
+            <input name="tractionControl" type="checkbox" defaultChecked={motorcycle.tractionControl === true} />
+            Traction control
+          </label>
+          <label className="text-xs">Length (mm)<input name="lengthMm" type="number" defaultValue={motorcycle.lengthMm ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Width (mm)<input name="widthMm" type="number" defaultValue={motorcycle.widthMm ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Height (mm)<input name="heightMm" type="number" defaultValue={motorcycle.heightMm ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Wheelbase (mm)<input name="wheelbaseMm" type="number" defaultValue={motorcycle.wheelbaseMm ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Ground clearance (mm)<input name="groundClearanceMm" type="number" defaultValue={motorcycle.groundClearanceMm ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Front tyre<input name="frontTyre" defaultValue={motorcycle.frontTyre ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Rear tyre<input name="rearTyre" defaultValue={motorcycle.rearTyre ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Front brake<input name="frontBrake" defaultValue={motorcycle.frontBrake ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Rear brake<input name="rearBrake" defaultValue={motorcycle.rearBrake ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Front suspension<input name="frontSuspension" defaultValue={motorcycle.frontSuspension ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Rear suspension<input name="rearSuspension" defaultValue={motorcycle.rearSuspension ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Previous owners<input name="previousOwners" type="number" defaultValue={motorcycle.previousOwners ?? ""} className={inputCls} /></label>
+          <label className="text-xs">Registration status<input name="registrationStatus" defaultValue={motorcycle.registrationStatus ?? ""} className={inputCls} /></label>
+          <label className="text-xs sm:col-span-2">Service history<textarea name="serviceHistory" rows={2} defaultValue={motorcycle.serviceHistory ?? ""} className={inputCls} /></label>
+          <label className="text-xs sm:col-span-2">Known issues<textarea name="knownIssues" rows={2} defaultValue={motorcycle.knownIssues ?? ""} className={inputCls} /></label>
+          <label className="text-xs sm:col-span-2">Selling points<textarea name="sellingPoints" rows={2} defaultValue={motorcycle.sellingPoints ?? ""} className={inputCls} /></label>
+          <label className="text-xs sm:col-span-2">Admin notes (internal)<textarea name="adminNotes" rows={2} defaultValue={motorcycle.adminNotes ?? ""} className={inputCls} /></label>
+          <label className="text-xs sm:col-span-2">Short summary<input name="shortDescription" defaultValue={motorcycle.shortDescription ?? ""} className={inputCls} /></label>
+          <label className="text-xs">SEO title<input name="seoTitle" defaultValue={motorcycle.seoTitle ?? ""} className={inputCls} /></label>
+          <label className="text-xs">SEO description<input name="seoDescription" defaultValue={motorcycle.seoDescription ?? ""} className={inputCls} /></label>
+        </div>
+      </details>
+
       <MotorcycleSpecsEditor rows={specRows} onRowsChange={setSpecRows} />
 
       <div>
@@ -558,25 +580,24 @@ export function MotorcycleEditForm({ motorcycle }: Props) {
           type="button"
           variant="destructive"
           disabled={pending}
-          onClick={async () => {
-            if (!confirmDel) {
-              setConfirmDel(true);
-              toast.message("Click again to permanently delete.");
-              return;
-            }
-            const r = await deleteMotorcycle(motorcycle.id);
-            if (r.error) {
-              toast.error(r.error);
-              setConfirmDel(false);
-            } else {
-              toast.success("Deleted");
-              router.push("/admin/motorcycles");
-            }
-          }}
+          onClick={() => setDeleteOpen(true)}
         >
-          {confirmDel ? "Confirm delete" : "Delete"}
+          Delete
         </Button>
       </div>
+      <MotorcycleDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        motorcycle={{
+          id: motorcycle.id,
+          slug: motorcycle.slug,
+          title: motorcycle.title,
+          year: motorcycle.year,
+          brand: motorcycle.brand,
+          model: motorcycle.model,
+        }}
+        onDeleted={() => router.push("/admin/motorcycles")}
+      />
     </form>
   );
 }

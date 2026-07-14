@@ -63,6 +63,7 @@ export default async function MotorcyclesBrowsePage(props: { searchParams: Searc
   const globalDepositPct = globalReservationDepositPercentFromSettings(fx);
 
   const andClauses: Prisma.MotorcycleWhereInput[] = [
+    { deletedAt: null },
     { sourceType: { in: BROWSE_SOURCE_TYPES } },
     { availabilityStatus: { not: AvailabilityStatus.IN_TRANSIT_STOCK } },
     { listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },

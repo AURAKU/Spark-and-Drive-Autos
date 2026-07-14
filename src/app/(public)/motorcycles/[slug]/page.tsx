@@ -29,7 +29,7 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata(props: Props) {
   const { slug } = await props.params;
   const m = await prisma.motorcycle.findFirst({
-    where: { slug, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
+    where: { slug, deletedAt: null, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
     select: { seoTitle: true, seoDescription: true, title: true, coverImageUrl: true },
   });
   if (!m) return { title: "Motorcycle" };
@@ -43,7 +43,7 @@ export async function generateMetadata(props: Props) {
 export default async function MotorcycleDetailPage(props: Props) {
   const { slug } = await props.params;
   const motorcycle = await prisma.motorcycle.findFirst({
-    where: { slug, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
+    where: { slug, deletedAt: null, listingState: { in: [CarListingState.PUBLISHED, CarListingState.SOLD] } },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
       videos: { orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }] },
@@ -80,6 +80,7 @@ export default async function MotorcycleDetailPage(props: Props) {
   const related = await prisma.motorcycle.findMany({
     where: {
       id: { not: motorcycle.id },
+      deletedAt: null,
       listingState: CarListingState.PUBLISHED,
       OR: [{ brand: motorcycle.brand }, { motorcycleType: motorcycle.motorcycleType }],
     },
@@ -136,7 +137,22 @@ export default async function MotorcycleDetailPage(props: Props) {
               {engineTypeLabel(motorcycle.engineType)} · {motorcycle.motorcycleType.replace(/_/g, " ")} · {motorcycle.year}
               {motorcycle.mileage != null ? ` · ${motorcycle.mileage.toLocaleString()} km` : ""}
               {motorcycle.location ? ` · ${motorcycle.location}` : ""}
+              {motorcycle.engineCc != null ? ` · ${motorcycle.engineCc} cc` : ""}
             </p>
+            {(motorcycle.absEquipped ||
+              motorcycle.tractionControl ||
+              motorcycle.frontTyre ||
+              motorcycle.seatHeight ||
+              motorcycle.weightKg) && (
+              <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {motorcycle.absEquipped ? <li>ABS</li> : null}
+                {motorcycle.tractionControl ? <li>Traction control</li> : null}
+                {motorcycle.seatHeight != null ? <li>Seat {motorcycle.seatHeight} mm</li> : null}
+                {motorcycle.weightKg != null ? <li>{motorcycle.weightKg} kg</li> : null}
+                {motorcycle.frontTyre ? <li>Front {motorcycle.frontTyre}</li> : null}
+                {motorcycle.rearTyre ? <li>Rear {motorcycle.rearTyre}</li> : null}
+              </ul>
+            )}
           </div>
 
           {highlightTags.length > 0 ? (

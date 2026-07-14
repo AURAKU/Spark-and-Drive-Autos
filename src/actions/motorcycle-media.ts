@@ -5,11 +5,16 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { cloudinaryVideoFramePosterUrl } from "@/lib/cloudinary-video-poster";
+import { destroyCloudinaryAsset, destroyCloudinaryVideoAsset } from "@/lib/motorcycles/media-cleanup";
 import { prisma } from "@/lib/prisma";
 
 const urlIn = z.object({
   url: z.string().url(),
   publicId: z.string().min(1).max(500).optional().nullable(),
+  width: z.number().int().positive().optional().nullable(),
+  height: z.number().int().positive().optional().nullable(),
+  altText: z.string().max(300).optional().nullable(),
+  caption: z.string().max(500).optional().nullable(),
 });
 
 function revalidateMotorcyclePaths(motorcycleId: string, slug: string) {
@@ -44,6 +49,10 @@ export async function addMotorcycleImage(motorcycleId: string, input: z.infer<ty
       publicId: parsed.data.publicId ?? undefined,
       sortOrder,
       isCover: makeCover,
+      width: parsed.data.width ?? undefined,
+      height: parsed.data.height ?? undefined,
+      altText: parsed.data.altText ?? undefined,
+      caption: parsed.data.caption ?? undefined,
     },
   });
 
@@ -116,6 +125,7 @@ export async function deleteMotorcycleImage(imageId: string) {
   if (!img) return { error: "Not found" };
 
   await prisma.motorcycleImage.delete({ where: { id: imageId } });
+  void destroyCloudinaryAsset(img.publicId);
 
   if (img.motorcycle.coverImageUrl === img.url || img.isCover) {
     const next = await prisma.motorcycleImage.findFirst({
@@ -161,6 +171,7 @@ export async function deleteMotorcycleVideo(videoId: string) {
   });
   if (!vid) return { error: "Not found" };
   await prisma.motorcycleVideo.delete({ where: { id: videoId } });
+  void destroyCloudinaryVideoAsset(vid.publicId);
 
   if (vid.isFeatured) {
     const next = await prisma.motorcycleVideo.findFirst({
@@ -263,5 +274,61 @@ export async function setFeaturedMotorcycleVideo(motorcycleId: string, videoId: 
     prisma.motorcycleVideo.update({ where: { id: videoId }, data: { isFeatured: true } }),
   ]);
   revalidateMotorcyclePaths(motorcycleId, row.motorcycle.slug);
+  return { ok: true };
+}
+
+export async function updateMotorcycleImageMeta(
+  imageId: string,
+  input: { altText?: string | null; caption?: string | null },
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return { error: "Not allowed" };
+  }
+  const parsed = z
+    .object({
+      altText: z.string().max(300).optional().nullable(),
+      caption: z.string().max(500).optional().nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: "Invalid metadata" };
+  const img = await prisma.motorcycleImage.findUnique({
+    where: { id: imageId },
+    include: { motorcycle: { select: { id: true, slug: true } } },
+  });
+  if (!img) return { error: "Not found" };
+  await prisma.motorcycleImage.update({
+    where: { id: imageId },
+    data: {
+      altText: parsed.data.altText?.trim() || null,
+      caption: parsed.data.caption?.trim() || null,
+    },
+  });
+  revalidateMotorcyclePaths(img.motorcycle.id, img.motorcycle.slug);
+  return { ok: true };
+}
+
+export async function updateMotorcycleVideoMeta(
+  videoId: string,
+  input: { caption?: string | null },
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return { error: "Not allowed" };
+  }
+  const parsed = z.object({ caption: z.string().max(500).optional().nullable() }).safeParse(input);
+  if (!parsed.success) return { error: "Invalid metadata" };
+  const vid = await prisma.motorcycleVideo.findUnique({
+    where: { id: videoId },
+    include: { motorcycle: { select: { id: true, slug: true } } },
+  });
+  if (!vid) return { error: "Not found" };
+  await prisma.motorcycleVideo.update({
+    where: { id: videoId },
+    data: { caption: parsed.data.caption?.trim() || null },
+  });
+  revalidateMotorcyclePaths(vid.motorcycle.id, vid.motorcycle.slug);
   return { ok: true };
 }
