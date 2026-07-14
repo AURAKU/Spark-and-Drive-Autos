@@ -1,19 +1,36 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EngineType, MotorcycleType, SourceType, CarListingState } from "@prisma/client";
 import { toast } from "sonner";
 
 import { createMotorcycle } from "@/actions/motorcycles";
+import { AutofillUnmappedHint } from "@/components/admin/autofill-unmapped-hint";
 import { InventoryMediaSourcePicker } from "@/components/admin/inventory-media-source-picker";
+import { MotorcycleSpecsEditor } from "@/components/admin/motorcycles/motorcycle-specs-editor";
+import { PasteSummaryAutofill } from "@/components/admin/paste-summary-autofill";
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload-client";
+import {
+  AUTOFILL_TOAST_REVIEW,
+  getFormControlString,
+  setFormControlString,
+  shouldApplyAutofillEnum,
+  shouldApplyAutofillNumber,
+  shouldApplyAutofillText,
+  shouldApplyListingPrice,
+} from "@/lib/admin-summary-autofill";
 import {
   MOTORCYCLE_FEATURE_TAGS,
   MOTORCYCLE_HIGHLIGHT_TAGS,
 } from "@/lib/motorcycle-spec-parser";
+import type { MotorcycleSpecRowInput } from "@/lib/motorcycle-specs";
+import {
+  parseMotorcycleSummaryForAutofill,
+  previewRowsFromMotorcycleParse,
+} from "@/lib/motorcycle-summary-autofill";
 
 const STEPS = ["Basic", "Media", "Price & Shipping", "Advanced"] as const;
 const MOTORCYCLE_TYPES = Object.values(MotorcycleType);
@@ -21,6 +38,7 @@ const ENGINE_TYPES = Object.values(EngineType);
 
 export function MotorcycleFastForm() {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +47,8 @@ export function MotorcycleFastForm() {
   const [coverUrl, setCoverUrl] = useState("");
   const [coverPublicId, setCoverPublicId] = useState("");
   const [coverUploading, setCoverUploading] = useState(false);
+  const [autofillUnmapped, setAutofillUnmapped] = useState<string[]>([]);
+  const [specRows, setSpecRows] = useState<MotorcycleSpecRowInput[]>([]);
 
   async function onCoverFilesReady(files: File[]) {
     const file = files[0];
@@ -48,6 +68,76 @@ export function MotorcycleFastForm() {
 
   const inputCls =
     "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40";
+
+  async function applyMotorcycleSummary(raw: string, opts?: { overwrite?: boolean }) {
+    const overwrite = opts?.overwrite ?? false;
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setAutofillUnmapped([]);
+      toast.error("Paste or type something in the summary box first.");
+      return;
+    }
+    const parsed = parseMotorcycleSummaryForAutofill(trimmed);
+    setAutofillUnmapped(parsed.unmappedConcepts);
+    const form = formRef.current;
+    if (!form) return;
+
+    if (
+      parsed.listingPrice &&
+      shouldApplyListingPrice(getFormControlString(form, "basePriceAmount"), "", parsed.listingPrice, overwrite)
+    ) {
+      setFormControlString(form, "basePriceAmount", String(parsed.listingPrice.amount));
+      setFormControlString(form, "basePriceCurrency", parsed.listingPrice.currency);
+    }
+
+    for (const [name, field] of Object.entries(parsed.stringFields)) {
+      if (!field?.value) continue;
+      if (name === "featureTags") {
+        const tags = field.value.split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+        if (tags.length && (overwrite || features.length === 0)) setFeatures(tags);
+        continue;
+      }
+      if (shouldApplyAutofillText(getFormControlString(form, name), "", field, overwrite)) {
+        setFormControlString(form, name, field.value);
+      }
+    }
+    for (const [name, field] of Object.entries(parsed.numberFields)) {
+      if (!field) continue;
+      if (shouldApplyAutofillNumber(getFormControlString(form, name), "", field, overwrite)) {
+        setFormControlString(form, name, String(field.value));
+      }
+    }
+    if (
+      parsed.engineTypeEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "engineType"), EngineType.GASOLINE_PETROL, parsed.engineTypeEnum, overwrite)
+    ) {
+      setFormControlString(form, "engineType", parsed.engineTypeEnum.value);
+    }
+    if (
+      parsed.motorcycleTypeEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "motorcycleType"), MotorcycleType.SPORT, parsed.motorcycleTypeEnum, overwrite)
+    ) {
+      setFormControlString(form, "motorcycleType", parsed.motorcycleTypeEnum.value);
+    }
+    if (
+      parsed.sourceTypeEnum &&
+      shouldApplyAutofillEnum(getFormControlString(form, "sourceType"), SourceType.IN_CHINA, parsed.sourceTypeEnum, overwrite)
+    ) {
+      setFormControlString(form, "sourceType", parsed.sourceTypeEnum.value);
+    }
+    if (parsed.specLines.length > 0) {
+      const incoming = parsed.specLines.map((s, i) => ({
+        groupName: s.groupName ?? "",
+        label: s.label,
+        value: s.value,
+        sortOrder: i,
+        isPublic: true,
+      }));
+      setSpecRows(overwrite || specRows.length === 0 ? incoming : [...specRows, ...incoming]);
+    }
+    toast.success(AUTOFILL_TOAST_REVIEW);
+    setStep(0);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -76,21 +166,19 @@ export function MotorcycleFastForm() {
     setPending(false);
   }
 
-  function goToNextStep() {
-    if (step === 1 && !coverUrl.trim()) {
-      setError("Upload or paste a cover photo before continuing.");
-      return;
-    }
-    setError(null);
-    setStep(step + 1);
-  }
-
   function toggleTag(list: string[], setList: (v: string[]) => void, tag: string) {
     setList(list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag]);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      <PasteSummaryAutofill
+        buildPreviewRows={(t) => previewRowsFromMotorcycleParse(parseMotorcycleSummaryForAutofill(t))}
+        onApply={applyMotorcycleSummary}
+        placeholder="Paste motorcycle summary: Make Honda, Model CBR500R, Year 2023, Engine CC 471, Price GHS 45000…"
+      />
+      <AutofillUnmappedHint items={autofillUnmapped} />
+
       <nav className="flex gap-2">
         {STEPS.map((label, i) => (
           <button
@@ -191,16 +279,20 @@ export function MotorcycleFastForm() {
 
       {step === 3 && (
         <div className="space-y-4">
-          <details className="rounded-lg border border-border p-4 dark:border-white/10">
+          <details className="rounded-lg border border-border p-4 dark:border-white/10" open>
             <summary className="cursor-pointer text-sm font-medium">Advanced specifications (optional)</summary>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-xs">Engine CC<input name="engineCc" type="number" className={inputCls} /></label>
               <label className="text-xs">VIN<input name="vin" className={inputCls} /></label>
               <label className="text-xs">Color<input name="color" className={inputCls} /></label>
               <label className="text-xs">Transmission<input name="transmission" className={inputCls} /></label>
-              <label className="text-xs sm:col-span-2">Specifications (plain text)
-                <textarea name="specificationsText" rows={6} className={inputCls} placeholder={"Engine: 249cc\nPower: 28HP\nRange: 150km"} />
-              </label>
+              <label className="text-xs">Torque<input name="torque" className={inputCls} /></label>
+              <label className="text-xs">Weight (kg)<input name="weightKg" type="number" className={inputCls} /></label>
+              <label className="text-xs">Location<input name="location" className={inputCls} /></label>
+              <label className="text-xs">Tyres<input name="tyreSize" className={inputCls} /></label>
+            </div>
+            <div className="mt-4">
+              <MotorcycleSpecsEditor rows={specRows} onRowsChange={setSpecRows} />
             </div>
           </details>
           <div>

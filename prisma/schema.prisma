@@ -1061,15 +1061,21 @@ model MotorcycleVideo {
 }
 
 model MotorcycleSpecification {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   motorcycleId String
+  /// Optional section heading (e.g. Engine, Chassis, Features).
+  groupName    String?
   label        String
   value        String
-  sortOrder    Int    @default(0)
+  unit         String?
+  sortOrder    Int     @default(0)
+  /// When false, row stays admin-only and is omitted from the public listing.
+  isPublic     Boolean @default(true)
 
   motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
 
   @@index([motorcycleId])
+  @@index([motorcycleId, sortOrder])
 }
 
 model MotorcycleFavorite {

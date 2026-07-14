@@ -14,8 +14,9 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { adminAmountToCanonicalRmb, getCarDisplayPrice, getGlobalCurrencySettings } from "@/lib/currency";
+import { auditLog } from "@/lib/leads";
 import { generateMotorcycleSeo } from "@/lib/motorcycle-seo";
-import { parseSpecificationsText } from "@/lib/motorcycle-spec-parser";
+import { resolveMotorcycleSpecRows, specsToPlainText } from "@/lib/motorcycle-specs";
 import { prisma } from "@/lib/prisma";
 
 function slugify(title: string) {
@@ -56,6 +57,7 @@ const motorcycleSchema = z.object({
   transmission: optionalStr(80),
   driveType: optionalStr(80),
   color: optionalStr(80),
+  location: optionalStr(120),
   vin: optionalStr(32),
   frameNumber: optionalStr(64),
   engineNumber: optionalStr(64),
@@ -77,6 +79,7 @@ const motorcycleSchema = z.object({
     return Number.isFinite(n) ? n : undefined;
   }, z.number().nonnegative().optional()),
   specificationsText: optionalStr(20000),
+  specificationsJson: optionalStr(200_000),
   featureTags: z.string().optional(),
   highlightTags: z.string().optional(),
   warranty: optionalStr(500),
@@ -110,12 +113,25 @@ const motorcycleSchema = z.object({
   wheelSize: optionalStr(40),
   tyreSize: optionalStr(40),
   listingState: z.nativeEnum(CarListingState).default(CarListingState.DRAFT),
-  featured: z.preprocess((v) => v === "on" || v === "true", z.boolean()).optional().default(false),
+  featured: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()).optional().default(false),
   coverImageUrl: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.union([z.string().url(), z.undefined()]).optional(),
   ),
   coverImagePublicId: optionalStr(200),
+  supplierDealerName: optionalStr(200),
+  supplierDealerPhone: optionalStr(40),
+  supplierDealerReference: optionalStr(500),
+  supplierDealerNotes: optionalStr(2000),
+  supplierCostAmount: z.preprocess((v) => {
+    if (v === "" || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.number().positive().optional()),
+  supplierCostCurrency: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    vehicleCurrencySchema.optional(),
+  ),
 });
 
 const updateSchema = motorcycleSchema.extend({
@@ -126,27 +142,38 @@ const updateSchema = motorcycleSchema.extend({
   ),
 });
 
+const listingStateSchema = z.object({
+  id: z.string().cuid(),
+  listingState: z.nativeEnum(CarListingState),
+});
+
 function buildTitle(d: { year: number; brand: string; model: string; variant?: string | null }) {
   return [d.year, d.brand, d.model, d.variant].filter(Boolean).join(" ");
 }
 
-async function syncSpecsFromText(motorcycleId: string, text: string | undefined) {
+async function syncSpecs(
+  motorcycleId: string,
+  specsInput: { specificationsJson?: string; specificationsText?: string },
+) {
+  const rows = resolveMotorcycleSpecRows(specsInput);
   await prisma.motorcycleSpecification.deleteMany({ where: { motorcycleId } });
-  const rows = parseSpecificationsText(text);
   if (rows.length === 0) return;
   await prisma.motorcycleSpecification.createMany({
-    data: rows.map((r) => ({
+    data: rows.map((r, i) => ({
       motorcycleId,
-      label: r.label,
-      value: r.value,
-      sortOrder: r.sortOrder,
+      groupName: r.groupName?.trim() || null,
+      label: r.label.trim(),
+      value: r.value.trim(),
+      unit: r.unit?.trim() || null,
+      sortOrder: r.sortOrder ?? i,
+      isPublic: r.isPublic !== false,
     })),
   });
 }
 
 export async function createMotorcycle(_prev: unknown, formData: FormData) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
     const raw = Object.fromEntries(formData.entries());
     const parsed = motorcycleSchema.safeParse(raw);
     if (!parsed.success) {
@@ -166,6 +193,16 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
     });
     const featureTags = parseTagList(d.featureTags);
     const highlightTags = parseTagList(d.highlightTags);
+    const specRows = resolveMotorcycleSpecRows({
+      specificationsJson: d.specificationsJson,
+      specificationsText: d.specificationsText,
+    });
+    const specificationsText = d.specificationsText?.trim() || specsToPlainText(specRows) || undefined;
+
+    let supplierCostRmb: number | undefined;
+    if (d.supplierCostAmount != null && d.supplierCostCurrency) {
+      supplierCostRmb = adminAmountToCanonicalRmb(d.supplierCostAmount, d.supplierCostCurrency, settings);
+    }
 
     const motorcycle = await prisma.motorcycle.create({
       data: {
@@ -181,6 +218,7 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
         driveType: d.driveType,
         mileage: d.mileage,
         color: d.color,
+        location: d.location,
         vin: d.vin,
         frameNumber: d.frameNumber,
         engineNumber: d.engineNumber,
@@ -197,6 +235,14 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
         basePriceAmount: new Prisma.Decimal(d.basePriceAmount),
         basePriceCurrency: d.basePriceCurrency,
         basePriceRmb: new Prisma.Decimal(basePriceRmb),
+        supplierCostAmount:
+          d.supplierCostAmount != null ? new Prisma.Decimal(d.supplierCostAmount) : null,
+        supplierCostCurrency: d.supplierCostCurrency,
+        supplierCostRmb: supplierCostRmb != null ? new Prisma.Decimal(supplierCostRmb) : null,
+        supplierDealerName: d.supplierDealerName,
+        supplierDealerPhone: d.supplierDealerPhone,
+        supplierDealerReference: d.supplierDealerReference,
+        supplierDealerNotes: d.supplierDealerNotes,
         price: new Prisma.Decimal(priceGhs),
         priceGhs: new Prisma.Decimal(priceGhs),
         currency: "GHS",
@@ -206,7 +252,7 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
         highlightTags: highlightTags.length ? highlightTags : Prisma.JsonNull,
         shortDescription: d.longDescription.slice(0, 500),
         longDescription: d.longDescription,
-        specificationsText: d.specificationsText,
+        specificationsText,
         warranty: d.warranty,
         batteryCapacity: d.batteryCapacity,
         motorPower: d.motorPower,
@@ -228,7 +274,26 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
       },
     });
 
-    await syncSpecsFromText(motorcycle.id, d.specificationsText);
+    await syncSpecs(motorcycle.id, {
+      specificationsJson: d.specificationsJson,
+      specificationsText,
+    });
+
+    if (d.coverImageUrl) {
+      await prisma.motorcycleImage.create({
+        data: {
+          motorcycleId: motorcycle.id,
+          url: d.coverImageUrl,
+          publicId: d.coverImagePublicId,
+          sortOrder: 0,
+          isCover: true,
+        },
+      });
+    }
+
+    await auditLog(session.user.id, "motorcycle.create", "Motorcycle", motorcycle.id, {
+      slug: motorcycle.slug,
+    });
 
     revalidatePath("/motorcycles");
     revalidatePath("/admin/motorcycles");
@@ -241,7 +306,7 @@ export async function createMotorcycle(_prev: unknown, formData: FormData) {
 
 export async function updateMotorcycle(_prev: unknown, formData: FormData) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
     const raw = Object.fromEntries(formData.entries());
     const parsed = updateSchema.safeParse(raw);
     if (!parsed.success) {
@@ -264,6 +329,18 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
     });
     const featureTags = parseTagList(d.featureTags);
     const highlightTags = parseTagList(d.highlightTags);
+    const specRows = resolveMotorcycleSpecRows({
+      specificationsJson: d.specificationsJson,
+      specificationsText: d.specificationsText,
+    });
+    const specificationsText = d.specificationsText?.trim() || specsToPlainText(specRows) || null;
+
+    let supplierCostRmb: number | null | undefined;
+    if (d.supplierCostAmount != null && d.supplierCostCurrency) {
+      supplierCostRmb = adminAmountToCanonicalRmb(d.supplierCostAmount, d.supplierCostCurrency, settings);
+    } else if (d.supplierCostAmount == null) {
+      supplierCostRmb = null;
+    }
 
     const motorcycle = await prisma.motorcycle.update({
       where: { id: d.id },
@@ -280,6 +357,7 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
         driveType: d.driveType,
         mileage: d.mileage,
         color: d.color,
+        location: d.location,
         vin: d.vin,
         frameNumber: d.frameNumber,
         engineNumber: d.engineNumber,
@@ -294,6 +372,14 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
         basePriceAmount: new Prisma.Decimal(d.basePriceAmount),
         basePriceCurrency: d.basePriceCurrency,
         basePriceRmb: new Prisma.Decimal(basePriceRmb),
+        supplierCostAmount:
+          d.supplierCostAmount != null ? new Prisma.Decimal(d.supplierCostAmount) : null,
+        supplierCostCurrency: d.supplierCostCurrency ?? null,
+        supplierCostRmb: supplierCostRmb != null ? new Prisma.Decimal(supplierCostRmb) : null,
+        supplierDealerName: d.supplierDealerName,
+        supplierDealerPhone: d.supplierDealerPhone,
+        supplierDealerReference: d.supplierDealerReference,
+        supplierDealerNotes: d.supplierDealerNotes,
         price: new Prisma.Decimal(priceGhs),
         priceGhs: new Prisma.Decimal(priceGhs),
         listingState: d.listingState,
@@ -302,7 +388,7 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
         highlightTags: highlightTags.length ? highlightTags : Prisma.JsonNull,
         shortDescription: d.longDescription.slice(0, 500),
         longDescription: d.longDescription,
-        specificationsText: d.specificationsText,
+        specificationsText,
         warranty: d.warranty,
         batteryCapacity: d.batteryCapacity,
         motorPower: d.motorPower,
@@ -319,12 +405,19 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
         tyreSize: d.tyreSize,
         seoTitle: seo.seoTitle,
         seoDescription: seo.seoDescription,
-        coverImageUrl: d.coverImageUrl,
-        coverImagePublicId: d.coverImagePublicId,
+        coverImageUrl: d.coverImageUrl ?? existing.coverImageUrl,
+        coverImagePublicId: d.coverImagePublicId ?? existing.coverImagePublicId,
       },
     });
 
-    await syncSpecsFromText(motorcycle.id, d.specificationsText);
+    await syncSpecs(motorcycle.id, {
+      specificationsJson: d.specificationsJson,
+      specificationsText: specificationsText ?? undefined,
+    });
+
+    await auditLog(session.user.id, "motorcycle.update", "Motorcycle", motorcycle.id, {
+      slug: motorcycle.slug,
+    });
 
     revalidatePath("/motorcycles");
     revalidatePath(`/motorcycles/${motorcycle.slug}`);
@@ -337,13 +430,62 @@ export async function updateMotorcycle(_prev: unknown, formData: FormData) {
   }
 }
 
+export async function setMotorcycleListingState(id: string, listingState: CarListingState) {
+  try {
+    const session = await requireAdmin();
+    const parsed = listingStateSchema.safeParse({ id, listingState });
+    if (!parsed.success) return { error: "Invalid listing state." };
+    const m = await prisma.motorcycle.findUnique({ where: { id: parsed.data.id }, select: { slug: true } });
+    if (!m) return { error: "Not found." };
+    await prisma.motorcycle.update({
+      where: { id: parsed.data.id },
+      data: { listingState: parsed.data.listingState },
+    });
+    await auditLog(session.user.id, "motorcycle.listingState", "Motorcycle", parsed.data.id, {
+      listingState: parsed.data.listingState,
+      slug: m.slug,
+    });
+    revalidatePath("/motorcycles");
+    revalidatePath(`/motorcycles/${m.slug}`);
+    revalidatePath("/admin/motorcycles");
+    revalidatePath(`/admin/motorcycles/${parsed.data.id}/edit`);
+    return { ok: true };
+  } catch {
+    return { error: "Could not update listing state." };
+  }
+}
+
+/** Soft-archive: hide from public inventory without deleting media/records. */
+export async function archiveMotorcycle(id: string) {
+  return setMotorcycleListingState(id, CarListingState.HIDDEN);
+}
+
+export async function publishMotorcycle(id: string) {
+  return setMotorcycleListingState(id, CarListingState.PUBLISHED);
+}
+
+export async function unpublishMotorcycle(id: string) {
+  return setMotorcycleListingState(id, CarListingState.DRAFT);
+}
+
 export async function deleteMotorcycle(id: string) {
   try {
-    await requireAdmin();
-    const m = await prisma.motorcycle.findUnique({ where: { id }, select: { slug: true } });
+    const session = await requireAdmin();
+    const m = await prisma.motorcycle.findUnique({
+      where: { id },
+      select: { slug: true, _count: { select: { orders: true } } },
+    });
     if (!m) return { error: "Not found." };
+    if (m._count.orders > 0) {
+      return {
+        error:
+          "This motorcycle has orders. Archive (hide) it instead of deleting to preserve order history.",
+      };
+    }
     await prisma.motorcycle.delete({ where: { id } });
+    await auditLog(session.user.id, "motorcycle.delete", "Motorcycle", id, { slug: m.slug });
     revalidatePath("/motorcycles");
+    revalidatePath(`/motorcycles/${m.slug}`);
     revalidatePath("/admin/motorcycles");
     return { ok: true };
   } catch {
@@ -353,10 +495,10 @@ export async function deleteMotorcycle(id: string) {
 
 export async function duplicateMotorcycle(id: string) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
     const src = await prisma.motorcycle.findUnique({
       where: { id },
-      include: { specs: true, images: true },
+      include: { specs: true, images: { orderBy: { sortOrder: "asc" } }, videos: { orderBy: { sortOrder: "asc" } } },
     });
     if (!src) return { error: "Not found." };
 
@@ -375,6 +517,7 @@ export async function duplicateMotorcycle(id: string) {
         driveType: src.driveType,
         mileage: src.mileage,
         color: src.color,
+        location: src.location,
         engineCc: src.engineCc,
         condition: src.condition,
         sourceType: src.sourceType,
@@ -387,6 +530,13 @@ export async function duplicateMotorcycle(id: string) {
         basePriceAmount: src.basePriceAmount,
         basePriceCurrency: src.basePriceCurrency,
         basePriceRmb: src.basePriceRmb,
+        supplierCostAmount: src.supplierCostAmount,
+        supplierCostCurrency: src.supplierCostCurrency,
+        supplierCostRmb: src.supplierCostRmb,
+        supplierDealerName: src.supplierDealerName,
+        supplierDealerPhone: src.supplierDealerPhone,
+        supplierDealerReference: src.supplierDealerReference,
+        supplierDealerNotes: src.supplierDealerNotes,
         price: src.price,
         priceGhs: src.priceGhs,
         priceUsd: src.priceUsd,
@@ -399,6 +549,20 @@ export async function duplicateMotorcycle(id: string) {
         shortDescription: src.shortDescription,
         longDescription: src.longDescription,
         specificationsText: src.specificationsText,
+        warranty: src.warranty,
+        batteryCapacity: src.batteryCapacity,
+        motorPower: src.motorPower,
+        electricRange: src.electricRange,
+        chargingTime: src.chargingTime,
+        topSpeedKmh: src.topSpeedKmh,
+        horsepower: src.horsepower,
+        torque: src.torque,
+        coolingType: src.coolingType,
+        fuelTankCapacity: src.fuelTankCapacity,
+        weightKg: src.weightKg,
+        seatHeight: src.seatHeight,
+        wheelSize: src.wheelSize,
+        tyreSize: src.tyreSize,
         seoTitle: src.seoTitle,
         seoDescription: src.seoDescription,
         coverImageUrl: src.coverImageUrl,
@@ -410,12 +574,48 @@ export async function duplicateMotorcycle(id: string) {
       await prisma.motorcycleSpecification.createMany({
         data: src.specs.map((s) => ({
           motorcycleId: copy.id,
+          groupName: s.groupName,
           label: s.label,
           value: s.value,
+          unit: s.unit,
           sortOrder: s.sortOrder,
+          isPublic: s.isPublic,
         })),
       });
     }
+
+    if (src.images.length > 0) {
+      await prisma.motorcycleImage.createMany({
+        data: src.images.map((img) => ({
+          motorcycleId: copy.id,
+          url: img.url,
+          publicId: img.publicId,
+          sortOrder: img.sortOrder,
+          altText: img.altText,
+          isCover: img.isCover,
+        })),
+      });
+    }
+
+    if (src.videos.length > 0) {
+      await prisma.motorcycleVideo.createMany({
+        data: src.videos.map((v) => ({
+          motorcycleId: copy.id,
+          url: v.url,
+          publicId: v.publicId,
+          sortOrder: v.sortOrder,
+          durationSec: v.durationSec,
+          thumbnailUrl: v.thumbnailUrl,
+          mimeType: v.mimeType,
+          isFeatured: v.isFeatured,
+        })),
+      });
+    }
+
+    await auditLog(session.user.id, "motorcycle.duplicate", "Motorcycle", copy.id, {
+      fromId: id,
+      slug: copy.slug,
+    });
 
     revalidatePath("/admin/motorcycles");
     return { ok: true, id: copy.id };

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MotorcycleInventoryRowActions } from "@/components/admin/motorcycles/motorcycle-inventory-row-actions";
 import { PageHeading } from "@/components/typography/page-headings";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { formatVehiclePriceFromRmb, getGlobalCurrencySettings } from "@/lib/currency";
@@ -84,9 +85,7 @@ export default async function AdminMotorcyclesPage(props: { searchParams: Search
                 <td className="p-3">{formatVehiclePriceFromRmb(Number(m.basePriceRmb), "GHS", fx)}</td>
                 <td className="p-3">{m.viewCount}</td>
                 <td className="p-3">
-                  <Link href={`/admin/motorcycles/${m.id}/edit`} className="text-[var(--brand)] hover:underline">Edit</Link>
-                  {" · "}
-                  <Link href={`/motorcycles/${m.slug}`} className="text-zinc-400 hover:underline">View</Link>
+                  <MotorcycleInventoryRowActions id={m.id} slug={m.slug} listingState={m.listingState} />
                 </td>
               </tr>
             ))}
