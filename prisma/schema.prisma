@@ -1005,6 +1005,35 @@ model Motorcycle {
   seatHeight         Int?
   wheelSize          String?
   tyreSize           String?
+  /// Advanced chassis / powertrain detail (nullable — additive for existing inventory).
+  cylinders          Int?
+  gears              Int?
+  clutchType         String?
+  absEquipped        Boolean?
+  tractionControl    Boolean?
+  lengthMm           Int?
+  widthMm            Int?
+  heightMm           Int?
+  wheelbaseMm        Int?
+  groundClearanceMm  Int?
+  frontTyre          String?
+  rearTyre           String?
+  frontBrake         String?
+  rearBrake          String?
+  frontSuspension    String?
+  rearSuspension     String?
+  manufactureDate    String?
+  previousOwners     Int?
+  registrationStatus String?
+  knownIssues        String?            @db.Text
+  serviceHistory     String?            @db.Text
+  sellingPoints      String?            @db.Text
+  adminNotes         String?            @db.Text
+  /// Soft-delete / archive axes (listingState HIDDEN still used for unpublish).
+  deletedAt          DateTime?
+  archivedAt         DateTime?
+  /// Optimistic concurrency token for admin edit conflicts.
+  version            Int                @default(1)
   seoTitle           String?
   seoDescription     String?
   coverImageUrl      String?
@@ -1026,6 +1055,8 @@ model Motorcycle {
   @@index([availabilityStatus])
   @@index([motorcycleType])
   @@index([engineType])
+  @@index([deletedAt])
+  @@index([archivedAt])
 }
 
 model MotorcycleImage {
@@ -1035,6 +1066,9 @@ model MotorcycleImage {
   publicId     String?
   sortOrder    Int      @default(0)
   altText      String?
+  caption      String?
+  width        Int?
+  height       Int?
   isCover      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
@@ -1052,6 +1086,10 @@ model MotorcycleVideo {
   durationSec  Int?
   thumbnailUrl String?
   mimeType     String?  @db.VarChar(120)
+  caption      String?
+  width        Int?
+  height       Int?
+  fileSizeBytes Int?
   isFeatured   Boolean  @default(false)
   createdAt    DateTime @default(now())
 
@@ -1061,15 +1099,21 @@ model MotorcycleVideo {
 }
 
 model MotorcycleSpecification {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   motorcycleId String
+  /// Optional section heading (e.g. Engine, Chassis, Features).
+  groupName    String?
   label        String
   value        String
-  sortOrder    Int    @default(0)
+  unit         String?
+  sortOrder    Int     @default(0)
+  /// When false, row stays admin-only and is omitted from the public listing.
+  isPublic     Boolean @default(true)
 
   motorcycle Motorcycle @relation(fields: [motorcycleId], references: [id], onDelete: Cascade)
 
   @@index([motorcycleId])
+  @@index([motorcycleId, sortOrder])
 }
 
 model MotorcycleFavorite {

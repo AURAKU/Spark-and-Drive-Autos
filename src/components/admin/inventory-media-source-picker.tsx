@@ -28,6 +28,8 @@ type ImagePickerProps = {
 type VideoPickerProps = {
   kind: "video";
   disabled?: boolean;
+  /** Allow selecting multiple walkthrough clips at once. */
+  multiple?: boolean;
   onFilesReady: (files: File[]) => void | Promise<void>;
   uploadLabel?: string;
 };
@@ -72,6 +74,10 @@ export function InventoryMediaSourcePicker(props: Props) {
     const files = Array.from(fileList);
     if (props.kind === "video") {
       resetDeviceInput();
+      if (props.multiple && files.length > 1) {
+        void props.onFilesReady(files);
+        return;
+      }
       const file = files[0];
       if (!file) return;
       setVideoPreview({ file, url: URL.createObjectURL(file) });
@@ -85,6 +91,10 @@ export function InventoryMediaSourcePicker(props: Props) {
     const files = Array.from(fileList);
     if (props.kind === "video") {
       resetCameraInput();
+      if (props.multiple && files.length > 1) {
+        void props.onFilesReady(files);
+        return;
+      }
       const file = files[0];
       if (!file) return;
       setVideoPreview({ file, url: URL.createObjectURL(file) });
@@ -169,7 +179,11 @@ export function InventoryMediaSourcePicker(props: Props) {
         ref={deviceInputRef}
         type="file"
         accept={props.kind === "image" ? "image/*" : VIDEO_ACCEPT}
-        multiple={props.kind === "image" ? props.multiple !== false : false}
+        multiple={
+          props.kind === "image"
+            ? props.multiple !== false
+            : Boolean(props.multiple)
+        }
         className="sr-only"
         disabled={disabled}
         onChange={(e) => onDeviceChange(e.target.files)}

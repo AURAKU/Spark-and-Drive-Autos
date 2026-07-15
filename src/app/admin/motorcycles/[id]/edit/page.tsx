@@ -18,6 +18,7 @@ export default async function EditMotorcyclePage(props: Props) {
     include: {
       images: { orderBy: { sortOrder: "asc" } },
       videos: { orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }] },
+      specs: { orderBy: { sortOrder: "asc" } },
     },
   });
   if (!motorcycle) notFound();
@@ -38,7 +39,9 @@ export default async function EditMotorcyclePage(props: Props) {
       <MotorcycleEditForm motorcycle={motorcycle} />
       <div className="mt-12 border-t border-white/10 pt-10">
         <h2 className="text-lg font-semibold text-white">Photos &amp; video</h2>
-        <p className="mt-1 text-sm text-zinc-500">Upload gallery images and walkthrough clips.</p>
+        <p className="mt-1 text-sm text-zinc-500">
+          Multiple uploads, reorder, cover image, and featured walkthrough video.
+        </p>
         <div className="mt-6">
           <MotorcycleMediaPanel motorcycleId={motorcycle.id} images={motorcycle.images} videos={motorcycle.videos} />
         </div>
