@@ -126,7 +126,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Identity verification is required before manual payment flows can continue. Submit verification in Dashboard → Verification.",
+            "This payment could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

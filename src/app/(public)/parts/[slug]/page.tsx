@@ -18,6 +18,7 @@ import { computeChinaQuotesForPartIds } from "@/lib/shipping/parts-china-fees";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
 import { publicPartDetailSelect } from "@/lib/part-public-data";
+import { publicStockHint } from "@/lib/part-stock-class";
 import { parsePartOptionsMeta } from "@/lib/part-variant-options";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
@@ -141,10 +142,21 @@ export default async function PartDetailPage(props: Props) {
             {part.title}
           </PageHeading>
           <p className="mt-4 text-3xl font-bold text-white">{formatConverted(amount, currency)}</p>
+          {part.oemNumber || part.partNumber ? (
+            <p className="mt-3 text-sm font-medium text-zinc-200">
+              OEM {part.oemNumber || part.partNumber}
+              {part.partNumber && part.oemNumber && part.partNumber !== part.oemNumber ? ` · Ref ${part.partNumber}` : ""}
+            </p>
+          ) : null}
+          {[part.compatibleMake, part.compatibleModel, part.compatibleYearNote].filter(Boolean).length > 0 ? (
+            <p className="mt-1 text-sm text-zinc-400">
+              {[part.compatibleMake, part.compatibleModel, part.compatibleYearNote].filter(Boolean).join(" ")}
+            </p>
+          ) : null}
           <p className="mt-1 text-xs text-zinc-500">
             {part.origin === "GHANA"
-              ? "Listed in Ghana, priced and settled in GHS."
-              : `Listed in China, currency options ${allowedCurrencies.join(" / ")}.`}
+              ? "Available in Ghana. Priced and settled in GHS."
+              : `${publicStockHint(part.origin)}. Currency options ${allowedCurrencies.join(" / ")}.`}
           </p>
           <p className="mt-2 text-sm text-zinc-500">
             Stock: {part.stockQty} · {part.stockStatus.replaceAll("_", " ")}

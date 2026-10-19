@@ -105,19 +105,6 @@ export async function getUserVerificationStatus(userId: string) {
   } as const;
 }
 
-async function userHasRiskTagRequiringVerification(userId: string): Promise<boolean> {
-  const rows = await prisma.userRiskTag.findMany({
-    where: {
-      userId,
-      isActive: true,
-      tag: { in: [...VERIFICATION_RISK_TAGS] },
-    },
-    select: { tag: true },
-    take: 1,
-  });
-  return rows.length > 0;
-}
-
 export async function requireVerification(input: {
   userId: string;
   context: VerificationContext;
@@ -133,44 +120,8 @@ export async function requireVerification(input: {
     return { required: false, status: VerificationStatus.VERIFIED, bypass: "ADMIN_ROLE" as const };
   }
 
-  const riskTagged = await userHasRiskTagRequiringVerification(input.userId);
-  const highValue =
-    typeof input.amountGhs === "number" &&
-    Number.isFinite(input.amountGhs) &&
-    input.amountGhs >= verificationHighValueThresholdGhs();
-  const alwaysRequiredContexts: VerificationContext[] = [
-    "VEHICLE_PURCHASE",
-    "SOURCING_DEPOSIT",
-    "MANUAL_PAYMENT",
-    "PAYMENT_DISPUTE",
-    "REFUND_REVIEW",
-  ];
-  const shouldRequire = riskTagged || highValue || alwaysRequiredContexts.includes(input.context);
-  if (!shouldRequire) {
-    return { required: false, status: VerificationStatus.NOT_REQUIRED } as const;
-  }
-
-  const current = await getUserVerificationStatus(input.userId);
-  if (current.status === VerificationStatus.VERIFIED) {
-    return { required: true, status: VerificationStatus.VERIFIED, verification: current.verification } as const;
-  }
-
-  await logVerificationAction({
-    userId: input.userId,
-    verificationId: current.verification?.id,
-    action: "VERIFICATION_REQUIRED_FOR_FLOW",
-    metadata: {
-      context: input.context,
-      amountGhs: input.amountGhs ?? null,
-      riskTagged,
-      highValue,
-      status: current.status,
-    },
-    ipAddress: input.ipAddress,
-    userAgent: input.userAgent,
-  });
-
-  throw new Error("IDENTITY_VERIFICATION_REQUIRED");
+  // Passport, licence, and selfie-with-document files are not a lawful identity check for this shop.
+  return { required: false, status: VerificationStatus.NOT_REQUIRED, bypass: "PHOTO_ID_NOT_COLLECTED" as const };
 }
 
 export async function submitVerification(input: {

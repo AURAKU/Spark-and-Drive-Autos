@@ -38,7 +38,7 @@ export default async function DashboardInquiryRequestsPage({ searchParams }: { s
   const [inquiryTotal, carTotal, partTotal] = await Promise.all([
     prisma.inquiry.count({ where: { userId: session.user.id } }),
     prisma.carRequest.count({ where: { userId: session.user.id } }),
-    prisma.partSourcingRequest.count({ where: { userId: session.user.id } }),
+    prisma.partSourcingRequest.count({ where: { userId: session.user.id, paymentState: "PAID" } }),
   ]);
 
   const inquiryTotalPages = Math.max(1, Math.ceil(Math.max(0, inquiryTotal) / INQUIRY_PAGE_SIZE));
@@ -67,7 +67,7 @@ export default async function DashboardInquiryRequestsPage({ searchParams }: { s
       take: REQUEST_PAGE_SIZE,
     }),
     prisma.partSourcingRequest.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, paymentState: "PAID" },
       orderBy: { createdAt: "desc" },
       skip: (partPage - 1) * REQUEST_PAGE_SIZE,
       take: REQUEST_PAGE_SIZE,
@@ -229,6 +229,11 @@ export default async function DashboardInquiryRequestsPage({ searchParams }: { s
                   {r.urgency ? ` · ${r.urgency}` : ""} · {r.createdAt.toLocaleString()}
                 </p>
                 <p className="mt-2 line-clamp-4 text-zinc-400">{r.description}</p>
+                {r.chatThreadId ? (
+                  <Link href="/dashboard/chats" className="mt-2 inline-flex text-xs text-[var(--brand)] hover:underline">
+                    Open messages
+                  </Link>
+                ) : null}
                 {r.imageUrls.length > 0 ? (
                   <p className="mt-2 text-xs text-zinc-500">{r.imageUrls.length} reference image(s) on file</p>
                 ) : null}

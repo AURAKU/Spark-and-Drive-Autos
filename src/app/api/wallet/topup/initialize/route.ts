@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Identity verification is required before this wallet funding request can continue. Submit verification in Dashboard → Verification.",
+            "This wallet funding request could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

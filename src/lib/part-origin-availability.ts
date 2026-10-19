@@ -1,19 +1,22 @@
 import { PartOrigin, PartStockStatus, type Part } from "@prisma/client";
 
+import { publicStockLabel } from "@/lib/part-stock-class";
+
 export type PartOriginAvailabilityUi = {
   label: string;
   className: string;
 };
 
 /**
- * Storefront copy: Ghana local stock vs China, with pre-order called out for ON_REQUEST.
+ * Public labels are Ghana Stock and Overseas Stock.
+ * CHINA remains the stored origin and is shown as Overseas Stock.
  */
 export function partOriginAvailabilityUi(
   part: Pick<Part, "origin" | "stockStatus">,
 ): PartOriginAvailabilityUi {
   if (part.origin === PartOrigin.GHANA) {
     return {
-      label: "Available in Ghana",
+      label: publicStockLabel(part.origin),
       className:
         "border-emerald-500/40 bg-emerald-500/15 text-emerald-100 dark:border-emerald-400/35 dark:bg-emerald-500/10 dark:text-emerald-100",
     };
@@ -21,13 +24,13 @@ export function partOriginAvailabilityUi(
   if (part.origin === PartOrigin.CHINA) {
     if (part.stockStatus === PartStockStatus.ON_REQUEST) {
       return {
-        label: "China (Pre-order)",
+        label: "Overseas Stock · Pre-order",
         className:
           "border-amber-500/40 bg-amber-500/15 text-amber-100 dark:border-amber-400/35 dark:bg-amber-500/10 dark:text-amber-100",
       };
     }
     return {
-      label: "Available from China",
+      label: publicStockLabel(part.origin),
       className:
         "border-sky-500/40 bg-sky-500/12 text-sky-100 dark:border-sky-400/35 dark:bg-sky-500/10 dark:text-sky-100",
     };

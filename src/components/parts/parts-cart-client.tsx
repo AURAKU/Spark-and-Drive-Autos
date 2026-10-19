@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { depositAmountGhsFromFull } from "@/lib/checkout-amount";
 import { isChinaPreOrderPart } from "@/lib/part-china-preorder-delivery";
+import { publicStockLabel } from "@/lib/part-stock-class";
 import { formatOptionsLine } from "@/lib/part-variant-options";
 import type { PartStockStatus } from "@prisma/client";
 import { Heart } from "lucide-react";
@@ -237,7 +238,7 @@ export function PartsCartClient({
       return;
     }
     if (hasBillableChinaSelected && chinaQuotes && !chinaMode) {
-      toast.error("Choose Air or Sea for China in-stock items.");
+      toast.error("Choose Air or Sea for Overseas Stock items.");
       return;
     }
     setLoading(true);
@@ -314,7 +315,7 @@ export function PartsCartClient({
         <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-50">
           <p className="font-semibold text-amber-100">Cannot complete purchase yet</p>
           <p className="mt-1 text-amber-50/95">
-            Some selected in-stock items are unavailable at the shown quantity. China pre-order lines are ordered on
+            Some selected in-stock items are unavailable at the shown quantity. Overseas pre-order lines are ordered on
             request; reduce other lines to stock shown or deselect them.
           </p>
         </div>
@@ -357,9 +358,9 @@ export function PartsCartClient({
                     {row.part.title}
                   </Link>
                   <p className="mt-1 text-xs text-zinc-500">
-                    GHS {row.part.unitPriceGhs.toLocaleString()} each · {row.part.origin}
+                    GHS {row.part.unitPriceGhs.toLocaleString()} each · {publicStockLabel(row.part.origin)}
                     {isChinaPreOrderPart(row.part) ? (
-                      <span> · Pre-order (China) — intl delivery paid after checkout</span>
+                      <span> · Pre-order. International shipping is paid after checkout.</span>
                     ) : (
                       <>
                         {" "}
@@ -430,7 +431,7 @@ export function PartsCartClient({
         <h2 className="text-sm font-semibold text-white">Checkout summary</h2>
         {hasChinaSelected ? (
           <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.07] p-3 text-[11px] leading-relaxed text-cyan-50/95">
-            Shipping and delivery fees for China stock, available-in-China, or preorder parts are{" "}
+            Shipping and delivery fees for Overseas Stock, including pre-order parts, are{" "}
             <strong className="font-semibold text-white">not charged at checkout</strong>. Our support team will confirm
             weight/CBM and contact you when the item arrives or is ready for collection. Delivery fees are settled manually
             upon collection or delivery.
@@ -495,22 +496,22 @@ export function PartsCartClient({
         </div>
         {chinaQuoteReference ? (
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-            China warehouse freight reference (~GHS {chinaQuoteReference.feeGhs.toLocaleString()}, {chinaQuoteReference.eta}
+            Overseas freight reference (~GHS {chinaQuoteReference.feeGhs.toLocaleString()}, {chinaQuoteReference.eta}
             ) — not charged at checkout. Operations will confirm the international fee for separate payment.
           </p>
         ) : null}
         {hasChinaSelected && hasBillableChinaSelected && !chinaQuotes ? (
           <p className="mt-3 text-[11px] leading-relaxed text-amber-200/90">
-            China in-stock intl add-on: ensure delivery templates are set in admin. Pre-order (China) lines are billed
+            Overseas in-stock shipping add-on: ensure delivery templates are set in admin. Pre-order lines are billed
             separately after purchase.
           </p>
         ) : null}
         {chinaQuotes && hasBillableChinaSelected ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
-            <p className="text-xs font-semibold text-white">China in-stock — delivery mode preference</p>
+            <p className="text-xs font-semibold text-white">Overseas Stock — delivery preference</p>
             <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
               Choose how we should plan the international leg. Your wallet charge is parts only; freight is quoted for
-              reference and invoiced after confirmation. Pre-order (China) lines follow the separate pre-order flow.
+              reference and invoiced after confirmation. Pre-order lines follow the separate pre-order flow.
             </p>
             <div className="mt-3 grid gap-2">
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">

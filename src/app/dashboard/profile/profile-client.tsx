@@ -302,8 +302,10 @@ export function ProfileClient({
       <div id="legal-requirements" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h2 className="text-lg font-semibold text-white">Legal requirements</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Review the documents below, then accept once here. Vehicle checkout, reservation deposits, online and offline
-          payments, and other protected flows stay unlocked until administrators publish new versions (shown as pending).
+          Review the documents below, then accept once here. They include the 19 October 2026 Ghana rules: no Ghana Card
+          photos, NIA biometric checks where the law requires them, and the Cybersecurity Act, 2020. Vehicle checkout,
+          reservation deposits, online and offline payments, and other protected flows stay unlocked until administrators
+          publish new versions (shown as pending).
         </p>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Reference documents</p>

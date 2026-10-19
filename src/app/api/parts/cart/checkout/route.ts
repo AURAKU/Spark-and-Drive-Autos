@@ -99,7 +99,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Identity verification is required before this checkout can continue. Submit verification under Dashboard → Verification.",
+            "This checkout could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

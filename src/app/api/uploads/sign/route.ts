@@ -6,7 +6,6 @@ import { getRequestIp } from "@/lib/client-ip";
 import {
   CLOUDINARY_USER_MESSAGE,
   createAutoFolderUploadSignature,
-  createGhanaCardClientUploadSignature,
   isCloudinaryMissingConfigError,
 } from "@/lib/cloudinary";
 import { recordSecurityObservation } from "@/lib/security-observation";
@@ -21,7 +20,7 @@ const looseBody = z.object({
 /**
  * Signed Cloudinary upload.
  *
- * - `ghana-card`: authenticated user; folder derived server-side.
+ * - `ghana-card`: rejected. L.I. 2523 prohibits Ghana Card images.
  * - `admin-inventory`: admin only; client sends `folder` (allowlisted in cloudinary.ts).
  *
  * Returns: timestamp, signature, apiKey, cloudName, folder, uploadUrl (…/auto/upload).
@@ -128,25 +127,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const mimeType = parsedLoose.data.mimeType ?? "image/jpeg";
-  const folder = `sda/users/${session.user.id}/ghana-card`;
-
-  try {
-    const sig = await createGhanaCardClientUploadSignature({ folder, mimeType });
-    return NextResponse.json({
-      timestamp: sig.timestamp,
-      signature: sig.signature,
-      apiKey: sig.apiKey,
-      cloudName: sig.cloudName,
-      folder: sig.folder,
-      uploadUrl: sig.uploadUrl,
-    });
-  } catch (e) {
-    if (isCloudinaryMissingConfigError(e)) {
-      console.warn("[api/uploads/sign] Cloudinary credentials missing (ghana-card)");
-      return NextResponse.json({ error: CLOUDINARY_USER_MESSAGE }, { status: 501 });
-    }
-    const msg = e instanceof Error ? e.message : "Upload sign failed";
-    return NextResponse.json({ error: msg }, { status: 400 });
-  }
+  return NextResponse.json(
+    {
+      error:
+        "Ghana Card photos are not accepted. L.I. 2523 prohibits requesting or storing an image, scan, or photocopy of the Ghana Card.",
+    },
+    { status: 400 },
+  );
 }

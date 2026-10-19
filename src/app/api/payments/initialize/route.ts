@@ -210,7 +210,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Identity verification is required before this payment can continue. Visit Dashboard → Verification to submit your Ghana Card or valid ID.",
+            "This payment could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

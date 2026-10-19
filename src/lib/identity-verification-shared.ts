@@ -1,11 +1,7 @@
 import { VerificationDocumentType } from "@prisma/client";
 
 export const ID_VERIFICATION_CONSENT_TEXT =
-  "I consent to Spark & Drive Gear collecting and processing my identification document for payment verification, fraud prevention, dispute resolution, sourcing protection, and compliance purposes. I understand that my document will be stored securely and accessed only by authorized personnel.";
+  "Spark & Drive Autos does not collect photographs of a Ghana Card, passport, or driver's licence, and does not collect a selfie holding an identity document. Where Ghana law requires an identity check, it is done through the National Identification Authority.";
 
-/** Customer-facing allowed verification IDs (restricted product scope). */
-export const ALLOWED_VERIFICATION_DOCUMENT_TYPES: VerificationDocumentType[] = [
-  VerificationDocumentType.GHANA_CARD,
-  VerificationDocumentType.PASSPORT,
-  VerificationDocumentType.DRIVER_LICENSE,
-];
+/** Customer photo KYC is closed. Identity documents are not uploaded on this shop. */
+export const ALLOWED_VERIFICATION_DOCUMENT_TYPES: VerificationDocumentType[] = [];

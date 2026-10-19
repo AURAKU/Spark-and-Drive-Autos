@@ -74,7 +74,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         {
           ok: false,
           error:
-            "Identity verification is required before dispute processing. Upload your Ghana Card or valid ID in Dashboard → Verification.",
+            "This dispute could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

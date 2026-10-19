@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-import { CLOUDINARY_USER_MESSAGE, createPaymentProofUploadSignature, isCloudinaryMissingConfigError } from "@/lib/cloudinary";
 import { getRequestIp } from "@/lib/client-ip";
 import { rateLimitForm } from "@/lib/rate-limit";
 import { safeAuth } from "@/lib/safe-auth";
-
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
-
-const schema = z.object({
-  kind: z.enum(["front", "back", "selfie"]),
-  mimeType: z.string().min(3).max(100),
-  sizeBytes: z.number().int().positive().max(MAX_IMAGE_BYTES),
-});
 
 export const runtime = "nodejs";
 
@@ -29,31 +18,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid upload payload" }, { status: 400 });
-  }
-
-  if (!allowedImageTypes.includes(parsed.data.mimeType)) {
-    return NextResponse.json({ error: "Unsupported file type. Use JPG, PNG, or WebP." }, { status: 400 });
-  }
-
-  const folder = `sda/verification/${session.user.id}/${parsed.data.kind}`;
-  try {
-    const sig = await createPaymentProofUploadSignature({ folder, kind: "image" });
-    return NextResponse.json(sig);
-  } catch (e) {
-    if (isCloudinaryMissingConfigError(e)) {
-      console.warn("[api/upload/verification-signature] Cloudinary credentials missing");
-      return NextResponse.json({ error: CLOUDINARY_USER_MESSAGE }, { status: 501 });
-    }
-    const msg = e instanceof Error ? e.message : "Upload sign failed";
-    return NextResponse.json({ error: msg }, { status: 400 });
-  }
+  return NextResponse.json(
+    {
+      error:
+        "Passport, driver's licence, and selfie identity photos are not accepted. This shop does not store those images.",
+    },
+    { status: 400 },
+  );
 }

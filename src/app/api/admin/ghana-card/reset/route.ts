@@ -49,7 +49,7 @@ export async function POST(req: Request) {
         userId,
         type: NotificationType.SYSTEM,
         title: "Identification verification reset",
-        body: "Your previous ID verification expired. Please upload a new valid ID for admin approval.",
+        body: "Your saved Ghana Card number record was cleared. Do not upload a photo of the card. You may enter the number and expiry again if you want that account reference.",
         href: "/dashboard/profile?view=verification",
       })),
     }),

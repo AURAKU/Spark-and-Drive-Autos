@@ -3,16 +3,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { normalizeGhanaCardId } from "@/lib/ghana-card-id";
-import { extractGhanaCardDetailsFromImageUrl } from "@/lib/ghana-card-vision";
 import { safeDateToIso } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
 
 const schema = z.object({
   ghanaCardIdNumber: z.string().trim().min(3).max(80),
-  imageUrl: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().url()),
-  imagePublicId: z.string().trim().min(1).max(500),
   expiryDate: z.string().trim().date(),
+  imageUrl: z.string().optional(),
+  imagePublicId: z.string().optional(),
 });
 
 async function findPendingOrCanonicalConflict(excludeUserId: string, normalizedId: string) {
@@ -57,11 +56,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: first }, { status: 400 });
     }
 
+    if (parsed.data.imageUrl?.trim() || parsed.data.imagePublicId?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "Ghana Card images are not accepted. L.I. 2523 prohibits requesting, retaining, or reproducing a photo, scan, or photocopy of the Ghana Card.",
+        },
+        { status: 400 },
+      );
+    }
+
     const userNormalized = normalizeGhanaCardId(parsed.data.ghanaCardIdNumber);
     if (!userNormalized) {
       return NextResponse.json({ error: "Ghana Card ID number is required." }, { status: 400 });
     }
-    const ai = await extractGhanaCardDetailsFromImageUrl(parsed.data.imageUrl);
     const pendingNumber = userNormalized;
     const pendingExpiryDate = new Date(parsed.data.expiryDate);
     if (Number.isNaN(pendingExpiryDate.getTime())) {
@@ -83,9 +91,9 @@ export async function POST(req: Request) {
       data: {
         ghanaCardVerificationStatus: GhanaCardVerificationStatus.PENDING_REVIEW,
         ghanaCardPendingIdNumber: pendingNumber,
-        ghanaCardAiSuggestedNumber: ai.normalizedIdNumber,
-        ghanaCardPendingImageUrl: parsed.data.imageUrl,
-        ghanaCardPendingImagePublicId: parsed.data.imagePublicId.trim(),
+        ghanaCardAiSuggestedNumber: null,
+        ghanaCardPendingImageUrl: null,
+        ghanaCardPendingImagePublicId: null,
         ghanaCardPendingExpiresAt: pendingExpiryDate,
         ghanaCardRejectedReason: null,
         ghanaCardReviewedAt: null,
@@ -98,8 +106,8 @@ export async function POST(req: Request) {
       status: GhanaCardVerificationStatus.PENDING_REVIEW,
       pendingIdNumber: pendingNumber,
       pendingExpiryDate: safeDateToIso(pendingExpiryDate),
-      aiSuggested: ai.normalizedIdNumber,
-      aiUsed: ai.usedAi,
+      aiSuggested: null,
+      aiUsed: false,
     });
   } catch (e) {
     console.error("[api/profile/ghana-card]", e);

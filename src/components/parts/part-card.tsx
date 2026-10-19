@@ -4,6 +4,7 @@ import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { formatConverted, type DisplayCurrency, type FxRatesInput } from "@/lib/currency";
 import { getPartDisplayPrice } from "@/lib/parts-pricing";
 import { partStockStatusLabel } from "@/lib/part-stock";
+import { publicStockHint } from "@/lib/part-stock-class";
 import type { Part, PartOrigin } from "@prisma/client";
 import { PartCardActions } from "@/components/parts/part-card-actions";
 import { PartOriginAvailabilityBadge } from "@/components/parts/part-origin-availability-badge";
@@ -24,14 +25,20 @@ type Props = {
     | "stockQty"
     | "coverImageUrl"
     | "metaJson"
+    | "oemNumber"
+    | "partNumber"
+    | "compatibleMake"
+    | "compatibleModel"
+    | "compatibleYearNote"
   >;
   displayCurrency: DisplayCurrency;
   fx: FxRatesInput;
   isFavorite: boolean;
   canFavorite: boolean;
+  fitsVehicle?: boolean;
 };
 
-export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }: Props) {
+export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite, fitsVehicle = false }: Props) {
   const { amount, currency } = getPartDisplayPrice(
     {
       origin: part.origin as PartOrigin,
@@ -44,6 +51,8 @@ export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }:
   const cover = part.coverImageUrl ?? "/brand/logo-emblem.png";
   const lists = parsePartOptionsMeta(part.metaJson);
   const requiresOptions = lists.colors.length + lists.sizes.length + lists.types.length > 0;
+  const code = part.oemNumber || part.partNumber;
+  const vehicle = [part.compatibleMake, part.compatibleModel, part.compatibleYearNote].filter(Boolean).join(" ");
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition hover:border-[var(--brand)]/35 hover:bg-muted/60 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
@@ -69,9 +78,14 @@ export function PartCard({ part, displayCurrency, fx, isFavorite, canFavorite }:
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h2 className="text-base font-semibold text-foreground group-hover:text-[var(--brand)] dark:text-white">{part.title}</h2>
-        {part.shortDescription ? (
-          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{part.shortDescription}</p>
+        {code ? <p className="mt-1 text-xs font-medium text-zinc-300">OEM {code}</p> : null}
+        {vehicle ? <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{vehicle}</p> : null}
+        {fitsVehicle ? (
+          <p className="mt-2 w-fit rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
+            Fits your vehicle
+          </p>
         ) : null}
+        <p className="mt-2 text-xs text-zinc-400">{publicStockHint(part.origin)}</p>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 dark:border-white/10">
           <span className="text-lg font-semibold text-foreground dark:text-white">{formatConverted(amount, currency)}</span>
           <span className="text-xs text-muted-foreground">{partStockStatusLabel(part.stockStatus)}</span>

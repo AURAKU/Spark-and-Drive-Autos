@@ -1,40 +1,66 @@
 import { PartListingState } from "@prisma/client";
 import { cookies } from "next/headers";
+import Link from "next/link";
 
-import { SourcingFlags } from "@/components/landing/sourcing-flags";
 import { CartIconButton } from "@/components/parts/cart-icon-button";
 import { PartCard } from "@/components/parts/part-card";
-import { SharePageButton } from "@/components/sharing/share-page-button";
-import { getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
-import { getPublicAppUrl } from "@/lib/app-url";
-import { publicPartListSelect } from "@/lib/part-public-data";
-import { getPartDisplayPrice } from "@/lib/parts-pricing";
+import { PartsCatalogSearch } from "@/components/parts/parts-catalog-search";
+import { PartsShopNav, shopIcons } from "@/components/parts/parts-shop-nav";
+import { PartsWalletPanel } from "@/components/parts/parts-wallet-panel";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
+import { normalizeIntelListPage } from "@/lib/ops";
+import { buildPartCatalogWhere, normalizePartSearch, partExactCodeWhere } from "@/lib/part-catalog-query";
+import { publicPartListSelect } from "@/lib/part-public-data";
+import { parsePublicStockFilter, stockFilterToOrigin, type PublicStockFilter } from "@/lib/part-stock-class";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
-import { PartsWalletPanel } from "@/components/parts/parts-wallet-panel";
 import { z } from "zod";
-import { normalizeIntelListPage } from "@/lib/ops";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Parts & Accessories | Spark and Drive Autos",
-  description: "Browse parts and accessories in a dedicated catalog separate from vehicle inventory.",
+  description: "Search OEM numbers and shop Ghana Stock or Overseas Stock parts and accessories.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-const PAGE_SIZE = 10;
-const sortSchema = z
-  .enum(["newest", "price_asc", "price_desc", "only_autoparts", "only_car_accessories"])
-  .catch("newest");
+const PAGE_SIZE = 12;
+const sortSchema = z.enum(["newest", "price_asc", "price_desc", "only_autoparts", "only_car_accessories"]).catch("newest");
 
-function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
-  const v = sp[key];
-  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
-  if (s == null || s === "") return 1;
-  const n = parseInt(s, 10);
-  return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
+function readString(sp: Record<string, string | string[] | undefined>, key: string): string {
+  const value = sp[key];
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.find((item) => typeof item === "string")?.trim() ?? "";
+  return "";
+}
+
+function readPage(sp: Record<string, string | string[] | undefined>): number {
+  const raw = readString(sp, "page");
+  if (!raw) return 1;
+  const parsed = parseInt(raw, 10);
+  return normalizeIntelListPage(Number.isFinite(parsed) ? parsed : undefined);
+}
+
+function catalogHref(input: {
+  q: string;
+  category: string;
+  stock: PublicStockFilter;
+  sort: string;
+  make: string;
+  model: string;
+  page?: number;
+}) {
+  const params = new URLSearchParams();
+  if (input.q) params.set("q", input.q);
+  if (input.category) params.set("category", input.category);
+  if (input.stock !== "all") params.set("stock", input.stock);
+  if (input.sort && input.sort !== "newest") params.set("sort", input.sort);
+  if (input.make) params.set("make", input.make);
+  if (input.model) params.set("model", input.model);
+  if (input.page && input.page > 1) params.set("page", String(input.page));
+  const qs = params.toString();
+  return qs ? `/parts?${qs}` : "/parts";
 }
 
 export default async function PartsStorefrontPage(props: { searchParams: SearchParams }) {
@@ -42,27 +68,19 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   const cookieStore = await cookies();
   const displayCurrency = parseDisplayCurrency(cookieStore.get("sda_currency")?.value);
   const fx = await getGlobalCurrencySettings();
-  const q = typeof sp.q === "string" ? sp.q.trim() : "";
-  const category = typeof sp.category === "string" ? sp.category.trim() : "";
-  const origin = typeof sp.origin === "string" ? sp.origin.trim() : "";
-  const sort = sortSchema.parse(typeof sp.sort === "string" ? sp.sort.trim() : "newest");
-  const pageReq = readPage(sp, "page");
+  const q = normalizePartSearch(readString(sp, "q"));
+  const category = readString(sp, "category");
+  const stock = parsePublicStockFilter(readString(sp, "stock"), readString(sp, "origin"));
+  const sort = sortSchema.parse(readString(sp, "sort") || "newest");
+  const make = readString(sp, "make");
+  const model = readString(sp, "model");
+  const pageReq = readPage(sp);
   const session = await safeAuth();
+  const origin = stockFilterToOrigin(stock);
 
   const where = {
-    listingState: PartListingState.PUBLISHED,
     AND: [
-      q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" as const } },
-              { shortDescription: { contains: q, mode: "insensitive" as const } },
-              { category: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
-        : {},
-      category ? { category: { equals: category, mode: "insensitive" as const } } : {},
-      origin === "GHANA" || origin === "CHINA" ? { origin: origin as "GHANA" | "CHINA" } : {},
+      buildPartCatalogWhere({ q, category, origin, make, model }),
       sort === "only_autoparts"
         ? {
             OR: [
@@ -92,274 +110,318 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
   const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
   const page = Math.min(Math.max(1, pageReq), totalPages);
 
-  let parts = await prisma.part.findMany({
-    where,
-    orderBy,
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-    select: publicPartListSelect,
-  });
+  const [parts, exactMatches, categories, vehicles, me, favoriteRows] = await Promise.all([
+    prisma.part.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      select: publicPartListSelect,
+    }),
+    q
+      ? prisma.part.findMany({
+          where: { AND: [where, partExactCodeWhere(q)] },
+          take: 8,
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    prisma.partCategory.findMany({
+      where: { active: true },
+      select: { name: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    prisma.part.groupBy({
+      by: ["compatibleMake", "compatibleModel"],
+      where: {
+        listingState: PartListingState.PUBLISHED,
+        compatibleMake: { not: null },
+      },
+    }),
+    session?.user?.id
+      ? prisma.user.findUnique({ where: { id: session.user.id }, select: { walletBalance: true } })
+      : Promise.resolve(null),
+    session?.user?.id
+      ? prisma.partFavorite.findMany({ where: { userId: session.user.id }, select: { partId: true } })
+      : Promise.resolve([]),
+  ]);
 
-  if (sort === "newest") {
-    parts = [...parts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-  const pageHref = (nextPage: number) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (category) params.set("category", category);
-    if (origin) params.set("origin", origin);
-    if (sort) params.set("sort", sort);
-    if (nextPage > 1) params.set("page", String(nextPage));
-    const qs = params.toString();
-    return qs ? `/parts?${qs}` : "/parts";
+  const exactIds = new Set(exactMatches.map((part) => part.id));
+  const orderedParts =
+    exactIds.size > 0
+      ? [...parts].sort((a, b) => Number(exactIds.has(b.id)) - Number(exactIds.has(a.id)))
+      : parts;
+  const favoriteIds = new Set(favoriteRows.map((row) => row.partId));
+  const makes = [...new Set(vehicles.map((row) => row.compatibleMake).filter((value): value is string => Boolean(value)))].sort();
+  const models = [
+    ...new Set(
+      vehicles
+        .filter((row) => !make || row.compatibleMake?.toLowerCase() === make.toLowerCase())
+        .map((row) => row.compatibleModel)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort();
+
+  const href = (next: Partial<{ q: string; category: string; stock: PublicStockFilter; sort: string; make: string; model: string; page: number }>) =>
+    catalogHref({
+      q: next.q ?? q,
+      category: next.category ?? category,
+      stock: next.stock ?? stock,
+      sort: next.sort ?? sort,
+      make: next.make ?? make,
+      model: next.model ?? model,
+      page: next.page,
+    });
+
+  const sourcingParams = new URLSearchParams();
+  if (q) sourcingParams.set("q", q);
+  if (make) sourcingParams.set("vehicleMake", make);
+  if (model) sourcingParams.set("vehicleModel", model);
+  const sourcingHref = sourcingParams.toString() ? `/request-autoparts?${sourcingParams.toString()}` : "/request-autoparts";
+  const categoryNames = categories.map((item) => item.name);
+  const matchCategory = (words: string[]) =>
+    categoryNames.find((name) => words.some((word) => name.toLowerCase().includes(word))) ?? "";
+  const browseHref = (words: string[], fallbackQuery: string) => {
+    const matched = matchCategory(words);
+    return matched ? href({ category: matched, q: "", page: 1 }) : href({ category: "", q: fallbackQuery, page: 1 });
   };
+  const isBrowseActive = (words: string[], fallbackQuery: string) => {
+    const matched = matchCategory(words);
+    if (matched) return category.toLowerCase() === matched.toLowerCase();
+    return q.toLowerCase() === fallbackQuery.toLowerCase();
+  };
+  const knownWords = ["brake", "engine", "filter", "light", "lamp", "electrical", "suspension", "shock", "oil", "fluid", "wheel", "tyre", "tire", "tool", "accessor"];
+  const extraCategories = categoryNames.filter((name) => !knownWords.some((word) => name.toLowerCase().includes(word)));
 
-  const shareParams = new URLSearchParams();
-  if (q) shareParams.set("q", q);
-  if (category) shareParams.set("category", category);
-  if (origin) shareParams.set("origin", origin);
-  if (sort) shareParams.set("sort", sort);
-  if (page > 1) shareParams.set("page", String(page));
-  const sharePath = shareParams.toString() ? `/parts?${shareParams.toString()}` : "/parts";
-  const shareUrl = `${getPublicAppUrl()}${sharePath}`;
-
-  const pageHrefs = totalPages > 1 ? Array.from({ length: totalPages }, (_, i) => pageHref(i + 1)) : undefined;
-
-  const categories = await prisma.partCategory.findMany({
-    where: { active: true },
-    select: { name: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
-
-  const me =
-    session?.user?.id != null
-      ? await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: { walletBalance: true },
-        })
-      : null;
-  const favoriteRows =
-    session?.user?.id != null
-      ? await prisma.partFavorite.findMany({
-          where: { userId: session.user.id },
-          select: { partId: true },
-        })
-      : [];
-  const favoriteIds = new Set(favoriteRows.map((f) => f.partId));
+  const chips = [
+    q ? { label: q, href: href({ q: "", page: 1 }) } : null,
+    category ? { label: category, href: href({ category: "", page: 1 }) } : null,
+    stock !== "all" ? { label: stock === "ghana" ? "Ghana Stock" : "Overseas Stock", href: href({ stock: "all", page: 1 }) } : null,
+    make ? { label: make, href: href({ make: "", model: "", page: 1 }) } : null,
+    model ? { label: model, href: href({ model: "", page: 1 }) } : null,
+  ].filter((chip): chip is { label: string; href: string } => Boolean(chip));
 
   return (
     <div className="parts-theme relative isolate [--brand:#ef4444]">
-      <div
-        className="parts-theme-bg pointer-events-none absolute inset-0 z-0 opacity-80"
-        style={{
-          backgroundImage:
-            "radial-gradient(980px 520px at 10% 8%, rgba(239,68,68,0.24), transparent), radial-gradient(760px 440px at 92% 16%, rgba(255,255,255,0.1), transparent), linear-gradient(180deg, rgba(4,4,5,0.95), rgba(10,10,12,0.9)), url('/brand/gear-storefront-theme.png')",
-          backgroundBlendMode: "screen,screen,normal,overlay",
-          backgroundSize: "auto,auto,auto,cover",
-        }}
-      />
-      <div className="relative z-[1] mx-auto min-w-0 max-w-7xl px-4 py-12 sm:px-6">
-        <div className="parts-hero relative overflow-hidden rounded-3xl border border-red-300/25 bg-black/40 p-6 shadow-[0_0_55px_-24px_rgba(239,68,68,0.65)] sm:p-8">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-500/18 via-transparent to-white/5" />
-          <div className="relative flex flex-col gap-6">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-                <span className="inline-block bg-gradient-to-r from-white via-red-100 to-red-300 bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(239,68,68,0.65)]">
-                  Spark and Drive Gear Storefront
-                </span>
-              </h1>
-              <div className="mt-4">
-                <SourcingFlags tone="gear" className="justify-start" />
-              </div>
-              <p className="mt-5 text-xl font-bold tracking-wide text-zinc-100 sm:text-2xl">Find Parts &amp; Accessories</p>
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-zinc-200 sm:text-lg">
-                Upgrade, replace, and personalize your vehicle with OEM parts or high-quality aftermarket options
-                perfectly suited to your car.
-              </p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex shrink-0 items-center gap-2">
-                  <CartIconButton className="size-11 rounded-xl border border-red-300/40 bg-red-500/20 text-red-100 shadow-[0_0_26px_-10px_rgba(239,68,68,0.9)] transition hover:bg-red-500/30" />
-                  <SharePageButton
-                    url={shareUrl}
-                    title="Parts & Accessories | Spark and Drive Autos"
-                    text="Browse parts and accessories in our gear storefront."
-                    className="h-11 rounded-xl border border-red-300/40 bg-red-500/20 px-3 text-red-100 shadow-[0_0_26px_-10px_rgba(239,68,68,0.9)] transition hover:bg-red-500/30 dark:border-red-300/40 dark:bg-red-500/20 dark:text-red-100 dark:hover:bg-red-500/30"
-                  />
-                </div>
-                <form action="/parts" method="get" className="flex h-11 w-full max-w-xl items-center overflow-hidden rounded-xl border border-red-300/35 bg-black/40 shadow-[0_0_26px_-14px_rgba(239,68,68,0.85)]">
-                  {category ? <input type="hidden" name="category" value={category} /> : null}
-                  {origin ? <input type="hidden" name="origin" value={origin} /> : null}
-                  {sort ? <input type="hidden" name="sort" value={sort} /> : null}
-                  <label htmlFor="hero-q" className="sr-only">
-                    Search parts
-                  </label>
-                  <input
-                    id="hero-q"
-                    name="q"
-                    defaultValue={q}
-                    placeholder="Search parts and accessories..."
-                    className="h-full w-full bg-transparent px-4 text-sm font-semibold text-white outline-none placeholder:text-zinc-300"
-                  />
-                  <button
-                    type="submit"
-                    className="h-full shrink-0 bg-red-500 px-4 text-sm font-bold text-white transition hover:bg-red-400"
-                  >
-                    Search
-                  </button>
-                </form>
-              </div>
-            </div>
+      <div className="relative z-[1] mx-auto min-w-0 max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 basis-48">
+            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Parts &amp; Accessories</h1>
+            <p className="mt-1 text-sm text-zinc-400">Pick a group, then the part. Ghana Stock is ready locally. Overseas Stock ships in.</p>
+          </div>
+          <div className="flex w-max shrink-0 items-center gap-2">
+            <PartsWalletPanel walletBalance={Number(me?.walletBalance ?? 0)} isSignedIn={Boolean(session?.user?.id)} />
+            <CartIconButton className="size-11 shrink-0 rounded-xl border border-white/15 bg-white/5 text-white" />
           </div>
         </div>
 
-      <div className="mt-6">
-        <PartsWalletPanel walletBalance={Number(me?.walletBalance ?? 0)} isSignedIn={Boolean(session?.user?.id)} />
-      </div>
-
-      <form
-        className="parts-filters mt-8 flex flex-col gap-3 rounded-2xl border border-red-300/20 bg-black/35 p-4 shadow-[0_0_34px_-24px_rgba(239,68,68,0.9)] sm:flex-row sm:items-end"
-        action="/parts"
-        method="get"
-      >
-        {q ? <input type="hidden" name="q" value={q} /> : null}
-        <div className="w-full space-y-2 sm:w-56">
-          <label className="text-xs font-semibold text-zinc-300" htmlFor="category">
-            Category
-          </label>
-          <select
-            id="category"
-            name="category"
-            defaultValue={category}
-            className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-          >
-            <option value="">All</option>
-            {categories.map((c) => (
-              <option key={c.name} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="w-full space-y-2 sm:w-52">
-          <label className="text-xs font-semibold text-zinc-300" htmlFor="origin">
-            Origin
-          </label>
-          <select
-            id="origin"
-            name="origin"
-            defaultValue={origin}
-            className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-          >
-            <option value="">All</option>
-            <option value="GHANA">Listed in Ghana</option>
-            <option value="CHINA">Listed in China</option>
-          </select>
-        </div>
-        <div className="w-full space-y-2 sm:w-56">
-          <label className="text-xs font-semibold text-zinc-300" htmlFor="sort">
-            Filter
-          </label>
-          <select
-            id="sort"
-            name="sort"
-            defaultValue={sort}
-            className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-          >
-            <option value="newest">All items</option>
-            <option value="price_asc">Price: lowest to highest</option>
-            <option value="price_desc">(highest to lowest)</option>
-            <option value="only_autoparts">Car Parts only</option>
-            <option value="only_car_accessories">Accessories only</option>
-          </select>
-        </div>
-        <button
-          type="submit"
-          className="h-10 rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_-14px_rgba(239,68,68,1)] transition hover:brightness-110"
-        >
-          Apply filters
-        </button>
-      </form>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <a
-          href={(() => {
-            const params = new URLSearchParams();
-            if (q) params.set("q", q);
-            if (category) params.set("category", category);
-            if (origin) params.set("origin", origin);
-            params.set("sort", "only_autoparts");
-            return `/parts?${params.toString()}`;
-          })()}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-            sort === "only_autoparts" ? "bg-[var(--brand)] text-white" : "border border-white/20 text-zinc-300"
-          }`}
-        >
-          Car Parts
-        </a>
-        <a
-          href={(() => {
-            const params = new URLSearchParams();
-            if (q) params.set("q", q);
-            if (category) params.set("category", category);
-            if (origin) params.set("origin", origin);
-            params.set("sort", "only_car_accessories");
-            return `/parts?${params.toString()}`;
-          })()}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-            sort === "only_car_accessories"
-              ? "bg-[var(--brand)] text-white"
-              : "border border-white/20 text-zinc-300"
-          }`}
-        >
-          Accessories
-        </a>
-        <a
-          href={(() => {
-            const params = new URLSearchParams();
-            if (q) params.set("q", q);
-            if (category) params.set("category", category);
-            if (origin) params.set("origin", origin);
-            params.set("sort", "newest");
-            return `/parts?${params.toString()}`;
-          })()}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-            sort === "newest" ? "bg-[var(--brand)] text-white" : "border border-white/20 text-zinc-300"
-          }`}
-        >
-          All
-        </a>
-      </div>
-
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {parts.length === 0 ? (
-          <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
-            No published parts yet. Check back soon, or reach out via chat for specific requests.
-          </p>
-        ) : (
-          parts.map((p) => (
-            <PartCard
-              key={p.id}
-              part={p}
-              displayCurrency={displayCurrency}
-              fx={fx}
-              isFavorite={favoriteIds.has(p.id)}
-              canFavorite={Boolean(session?.user?.id)}
-            />
-          ))
-        )}
-      </div>
-      {total > 0 ? (
-        <ListPaginationFooter
-          page={page}
-          totalPages={totalPages}
-          totalItems={total}
-          pageSize={PAGE_SIZE}
-          itemLabel="Products"
-          prevHref={page > 1 ? pageHref(page - 1) : null}
-          nextHref={page < totalPages ? pageHref(page + 1) : null}
-          pageHrefs={pageHrefs}
+        <PartsShopNav
+          lanes={[
+            {
+              id: "parts",
+              label: "Parts",
+              hint: "Everything in the shop",
+              href: href({ category: "", q: "", page: 1 }),
+              active: !category && !q,
+              icon: shopIcons.parts,
+            },
+            {
+              id: "tools",
+              label: "Tools",
+              hint: "Workshop and hand tools",
+              href: browseHref(["tool"], "tools"),
+              active: isBrowseActive(["tool"], "tools"),
+              icon: shopIcons.tools,
+            },
+            {
+              id: "accessories",
+              label: "Accessories",
+              hint: "Add-ons for the car",
+              href: browseHref(["accessor"], "accessories"),
+              active: isBrowseActive(["accessor"], "accessories"),
+              icon: shopIcons.accessories,
+            },
+          ]}
+          departments={[
+            { id: "brakes", label: "Brakes", hint: "Pads, discs, sensors", href: browseHref(["brake"], "brakes"), active: isBrowseActive(["brake"], "brakes"), icon: shopIcons.brakes },
+            { id: "engine", label: "Engine", hint: "Belts, pumps, mounts", href: browseHref(["engine"], "engine"), active: isBrowseActive(["engine"], "engine"), icon: shopIcons.engine },
+            { id: "filters", label: "Filters", hint: "Oil, air, cabin", href: browseHref(["filter"], "filters"), active: isBrowseActive(["filter"], "filters"), icon: shopIcons.filters },
+            { id: "lights", label: "Lights", hint: "Bulbs and lamps", href: browseHref(["light", "lamp", "electrical"], "lights"), active: isBrowseActive(["light", "lamp", "electrical"], "lights"), icon: shopIcons.lights },
+            { id: "suspension", label: "Suspension", hint: "Shocks and arms", href: browseHref(["suspension", "shock"], "suspension"), active: isBrowseActive(["suspension", "shock"], "suspension"), icon: shopIcons.suspension },
+            { id: "fluids", label: "Fluids", hint: "Oil and coolants", href: browseHref(["oil", "fluid"], "fluids"), active: isBrowseActive(["oil", "fluid"], "fluids"), icon: shopIcons.fluids },
+            { id: "wheels", label: "Wheels", hint: "Tyres and rims", href: browseHref(["wheel", "tyre", "tire"], "wheels"), active: isBrowseActive(["wheel", "tyre", "tire"], "wheels"), icon: shopIcons.wheels },
+          ]}
+          stock={[
+            { id: "all", label: "All Stock", hint: "", href: href({ stock: "all", page: 1 }), active: stock === "all", icon: shopIcons.all },
+            { id: "ghana", label: "Ghana Stock", hint: "", href: href({ stock: "ghana", page: 1 }), active: stock === "ghana", icon: shopIcons.ghana },
+            { id: "overseas", label: "Overseas Stock", hint: "", href: href({ stock: "overseas", page: 1 }), active: stock === "overseas", icon: shopIcons.overseas },
+          ]}
         />
-      ) : null}
+
+        <div className="mt-4">
+          <PartsCatalogSearch
+            initialQuery={q}
+            hidden={{
+              category,
+              stock: stock === "all" ? "" : stock,
+              sort: sort === "newest" ? "" : sort,
+              make,
+              model,
+            }}
+          />
+        </div>
+
+        {extraCategories.length > 0 ? (
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="More categories">
+            {extraCategories.map((name) => (
+              <Link
+                key={name}
+                href={href({ category: name, q: "", page: 1 })}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  category.toLowerCase() === name.toLowerCase()
+                    ? "bg-white text-black"
+                    : "border border-white/15 text-zinc-200"
+                }`}
+              >
+                {name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+
+        {makes.length > 0 ? (
+          <form action="/parts" method="get" className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+            {q ? <input type="hidden" name="q" value={q} /> : null}
+            {category ? <input type="hidden" name="category" value={category} /> : null}
+            {stock !== "all" ? <input type="hidden" name="stock" value={stock} /> : null}
+            {sort !== "newest" ? <input type="hidden" name="sort" value={sort} /> : null}
+            <label className="text-xs text-zinc-400">
+              Shop for your vehicle
+              <select name="make" defaultValue={make} className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/40 px-3 text-sm text-white">
+                <option value="">Any make</option>
+                {makes.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-zinc-400">
+              Model
+              <select name="model" defaultValue={model} className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-black/40 px-3 text-sm text-white">
+                <option value="">Any model</option>
+                {models.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="h-10 self-end rounded-lg bg-white/10 px-4 text-sm font-semibold text-white">
+              Apply
+            </button>
+            {make || model ? (
+              <Link href={href({ make: "", model: "", page: 1 })} className="self-end text-sm text-zinc-300 underline">
+                Clear vehicle
+              </Link>
+            ) : null}
+          </form>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <Link key={chip.label} href={chip.href} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200">
+                {chip.label} ×
+              </Link>
+            ))}
+            {chips.length > 1 ? (
+              <Link href="/parts" className="rounded-full px-3 py-1 text-xs text-zinc-400 underline">
+                Clear all
+              </Link>
+            ) : null}
+          </div>
+          <form action="/parts" method="get" className="flex items-center gap-2">
+            {q ? <input type="hidden" name="q" value={q} /> : null}
+            {category ? <input type="hidden" name="category" value={category} /> : null}
+            {stock !== "all" ? <input type="hidden" name="stock" value={stock} /> : null}
+            {make ? <input type="hidden" name="make" value={make} /> : null}
+            {model ? <input type="hidden" name="model" value={model} /> : null}
+            <label htmlFor="parts-sort" className="sr-only">
+              Sort
+            </label>
+            <select
+              id="parts-sort"
+              name="sort"
+              defaultValue={sort === "only_autoparts" || sort === "only_car_accessories" ? "newest" : sort}
+              className="h-10 rounded-lg border border-white/10 bg-black/40 px-3 text-sm text-white"
+            >
+              <option value="newest">Recommended</option>
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+            </select>
+            <button type="submit" className="h-10 rounded-lg border border-white/15 px-3 text-sm text-white">
+              Sort
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {orderedParts.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 sm:col-span-2 lg:col-span-3">
+              <p className="text-base font-semibold text-white">No matching parts found.</p>
+              <p className="mt-2 text-sm text-zinc-400">Try another OEM number, clear a filter, or ask us to source it.</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href="/parts" className="inline-flex h-10 items-center rounded-lg border border-white/15 px-4 text-sm text-white">
+                  Clear filters
+                </Link>
+                <Link href="/parts-finder" className="inline-flex h-10 items-center rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-white">
+                  Use Parts Finder
+                </Link>
+                <Link href={sourcingHref} className="inline-flex h-10 items-center rounded-lg border border-white/15 px-4 text-sm text-white">
+                  Request sourcing
+                </Link>
+              </div>
+            </div>
+          ) : (
+            orderedParts.map((part) => (
+              <PartCard
+                key={part.id}
+                part={part}
+                displayCurrency={displayCurrency}
+                fx={fx}
+                isFavorite={favoriteIds.has(part.id)}
+                canFavorite={Boolean(session?.user?.id)}
+                fitsVehicle={Boolean(
+                  make &&
+                    model &&
+                    part.compatibleMake?.toLowerCase() === make.toLowerCase() &&
+                    part.compatibleModel?.toLowerCase() === model.toLowerCase(),
+                )}
+              />
+            ))
+          )}
+        </div>
+
+        {total > 0 ? (
+          <ListPaginationFooter
+            page={page}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={PAGE_SIZE}
+            itemLabel="Products"
+            prevHref={page > 1 ? href({ page: page - 1 }) : null}
+            nextHref={page < totalPages ? href({ page: page + 1 }) : null}
+            pageHrefs={totalPages > 1 ? Array.from({ length: totalPages }, (_, index) => href({ page: index + 1 })) : undefined}
+          />
+        ) : null}
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-sm text-zinc-300">Can’t find the right part?</p>
+          <Link href="/parts-finder" className="text-sm font-semibold text-[var(--brand)]">
+            Check with Parts Finder
+          </Link>
+        </div>
+
       </div>
     </div>
   );

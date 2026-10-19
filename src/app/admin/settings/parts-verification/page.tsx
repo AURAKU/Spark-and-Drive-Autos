@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireSuperAdmin } from "@/lib/auth-helpers";
 import { getVerifiedPartSettings } from "@/lib/verified-parts";
 
@@ -9,6 +11,13 @@ export default async function PartsVerificationSettingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Parts Verification Settings</h1>
+      <p className="text-sm text-muted-foreground">
+        The public parts request fee is separate.{" "}
+        <Link href="/admin/settings/parts-request-fee" className="text-[var(--brand)] hover:underline">
+          Change the parts request fee
+        </Link>
+        .
+      </p>
       <PartsVerificationSettingsClient
         initial={{
           enabled: settings.enabled,

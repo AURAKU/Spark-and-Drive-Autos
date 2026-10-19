@@ -120,7 +120,7 @@ export async function POST(req: Request) {
           {
             ok: false,
             error:
-              "Identity verification is required before this wallet activation flow can continue. Visit Dashboard → Verification.",
+              "This wallet activation could not continue. Contact support if a lawful identity check is still required.",
             code: "IDENTITY_VERIFICATION_REQUIRED",
           },
           { status: 409 },

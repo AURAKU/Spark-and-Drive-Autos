@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Ghana2026LegalNotice } from "@/components/legal/ghana-2026-legal-notice";
 import { LegalPage } from "@/components/legal/legal-page";
 import { LEGAL_EFFECTIVE_DATE } from "@/lib/legal";
 
@@ -37,6 +38,10 @@ export default function LegalPartsFinderNoticePage() {
         {
           title: "Liability",
           body: <p>Spark &amp; Drive Gear is not liable for damages arising from reliance on unverified results.</p>,
+        },
+        {
+          title: "Ghana law and identity",
+          body: <Ghana2026LegalNotice />,
         },
       ]}
       footer={

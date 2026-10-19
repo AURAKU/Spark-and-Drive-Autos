@@ -1,3 +1,4 @@
+import { Ghana2026LegalNotice } from "@/components/legal/ghana-2026-legal-notice";
 import { LegalPage } from "@/components/legal/legal-page";
 import { DISPUTE_FLOW_TEXT, LEGAL_COMPANY, LEGAL_EFFECTIVE_DATE } from "@/lib/legal";
 
@@ -57,6 +58,10 @@ export default function ReservationPolicyPage() {
               be non-refundable.
             </p>
           ),
+        },
+        {
+          title: "6. Ghana law and identity",
+          body: <Ghana2026LegalNotice />,
         },
       ]}
       footer={

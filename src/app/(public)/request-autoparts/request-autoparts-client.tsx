@@ -3,16 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeading } from "@/components/typography/page-headings";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
-import { cn } from "@/lib/utils";
 
 const CALLBACK = "/request-autoparts";
 const MAX_IMAGES = 8;
@@ -71,11 +71,43 @@ export function RequestAutopartsClient() {
   const { data: session, status } = useSession();
   const uploadSessionId = useRef(crypto.randomUUID());
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const searchParams = useSearchParams();
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [feeGhs, setFeeGhs] = useState(30);
+  const [feeEnabled, setFeeEnabled] = useState(true);
+  const [paidNote, setPaidNote] = useState<string | null>(null);
+  const signedIn = status === "authenticated" && Boolean(session?.user);
 
   const registerHref = `/register?callbackUrl=${encodeURIComponent(CALLBACK)}`;
   const loginHref = `/login?callbackUrl=${encodeURIComponent(CALLBACK)}`;
+
+  useEffect(() => {
+    void fetch("/api/part-sourcing-requests/fee")
+      .then((res) => res.json())
+      .then((data: { feeGhs?: number; enabled?: boolean }) => {
+        if (typeof data.feeGhs === "number") setFeeGhs(data.feeGhs);
+        if (typeof data.enabled === "boolean") setFeeEnabled(data.enabled);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const reference = searchParams.get("reference");
+    if (!reference) return;
+    void fetch(`/api/part-sourcing-requests/confirm?reference=${encodeURIComponent(reference)}`)
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; threadId?: string | null }) => {
+        if (data.ok) {
+          setPaidNote(
+            data.threadId
+              ? "Payment received. Your request is with the team, and replies will appear in your messages."
+              : "Payment received. Your request is with the team.",
+          );
+        }
+      })
+      .catch(() => undefined);
+  }, [searchParams]);
 
   async function onPickImages(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -114,19 +146,15 @@ export function RequestAutopartsClient() {
     setImageUrls((prev) => prev.filter((u) => u !== url));
   }
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!session?.user) {
-      toast.error("Sign in to submit this form.");
-      return;
-    }
-    const fd = new FormData(e.currentTarget);
+  async function pay(method: "wallet" | "paystack", form: HTMLFormElement) {
+    const fd = new FormData(form);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/part-sourcing-requests", {
+      const res = await fetch("/api/part-sourcing-requests/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          method,
           summaryTitle: (fd.get("summaryTitle") as string)?.trim() || null,
           description: fd.get("description"),
           vehicleMake: (fd.get("vehicleMake") as string)?.trim() || null,
@@ -136,15 +164,23 @@ export function RequestAutopartsClient() {
           quantity: fd.get("quantity") ? Number(fd.get("quantity")) : 1,
           urgency: fd.get("urgency") || "normal",
           deliveryCity: (fd.get("deliveryCity") as string)?.trim() || null,
+          guestName: (fd.get("guestName") as string)?.trim() || null,
+          guestEmail: (fd.get("guestEmail") as string)?.trim() || null,
+          guestPhone: (fd.get("guestPhone") as string)?.trim() || null,
           imageUrls,
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Could not submit");
-      toast.success("Request sent. Our parts team will follow up.");
-      e.currentTarget.reset();
+      const data = (await res.json().catch(() => ({}))) as { error?: string; authorizationUrl?: string; threadId?: string | null };
+      if (!res.ok) throw new Error(data.error ?? "Payment could not start.");
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl;
+        return;
+      }
+      toast.success("Payment received. Your request is with the team.");
+      form.reset();
       setImageUrls([]);
       uploadSessionId.current = crypto.randomUUID();
+      if (data.threadId) setPaidNote("Replies will appear in your messages.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error");
     } finally {
@@ -158,55 +194,42 @@ export function RequestAutopartsClient() {
     );
   }
 
-  if (status !== "authenticated" || !session.user) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
-        <PageHeading>Request AutoParts or Accessories</PageHeading>
-        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          Submitting a sourcing request (including reference photos) requires a free account so we can match your
-          enquiry to you, send updates, and keep everything in one thread. Create Account or sign in to continue.
-        </p>
-        <p className="mt-3 text-sm text-zinc-500">
-          You can still{" "}
-          <Link href="/parts" className="text-[var(--brand)] hover:underline">
-            browse the parts catalog
-          </Link>{" "}
-          without signing in.
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href={registerHref}
-            className={cn(
-              buttonVariants({ size: "default" }),
-              "bg-[var(--brand)] text-center font-semibold text-black hover:opacity-90",
-            )}
-          >
-            Create Account
-          </Link>
-          <Link
-            href={loginHref}
-            className={cn(buttonVariants({ variant: "outline", size: "default" }), "border-white/20 text-center")}
-          >
-            Sign in
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <PageHeading>Request AutoParts or Accessories</PageHeading>
       <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-        Describe what you need — part numbers, symptoms, or photos of labels and damage all help. You can attach up to{" "}
-        {MAX_IMAGES} reference images. Track submissions alongside vehicle requests in{" "}
-        <Link href="/dashboard/inquiry-requests#sourcing" className="text-[var(--brand)] hover:underline">
-          your dashboard
+        Tell us the part and the vehicle. A request fee of GHS {feeGhs.toLocaleString()} is charged before we start.
+        Replies come back in{" "}
+        <Link href="/dashboard/chats" className="text-[var(--brand)] hover:underline">
+          your messages
         </Link>
         .
       </p>
+      {paidNote ? <p className="mt-3 text-sm text-emerald-200">{paidNote}</p> : null}
 
-      <form onSubmit={onSubmit} className="mt-10 grid gap-4 sm:grid-cols-2">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void pay("paystack", event.currentTarget);
+        }}
+        className="mt-10 grid gap-4 sm:grid-cols-2"
+      >
+        {signedIn ? null : (
+          <>
+            <div>
+              <Label htmlFor="guestName">Your name</Label>
+              <Input id="guestName" name="guestName" required className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="guestEmail">Email</Label>
+              <Input id="guestEmail" name="guestEmail" type="email" required className="mt-1" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="guestPhone">Phone</Label>
+              <Input id="guestPhone" name="guestPhone" required className="mt-1" />
+            </div>
+          </>
+        )}
         <div className="sm:col-span-2">
           <Label htmlFor="summaryTitle">Short title (optional)</Label>
           <Input
@@ -215,6 +238,7 @@ export function RequestAutopartsClient() {
             placeholder="e.g. Front brake pads + sensor for 2019 RAV4"
             className="mt-1"
             maxLength={200}
+            defaultValue={searchParams.get("q") ?? ""}
           />
         </div>
         <div className="sm:col-span-2">
@@ -226,15 +250,16 @@ export function RequestAutopartsClient() {
             rows={6}
             className="mt-1"
             placeholder="Brand, part type, condition (new / OEM / aftermarket), timeline, and anything else we should know."
+            defaultValue={searchParams.get("description") ?? ""}
           />
         </div>
         <div>
           <Label htmlFor="vehicleMake">Vehicle make (optional)</Label>
-          <Input id="vehicleMake" name="vehicleMake" className="mt-1" placeholder="Toyota" />
+          <Input id="vehicleMake" name="vehicleMake" className="mt-1" placeholder="Toyota" defaultValue={searchParams.get("vehicleMake") ?? ""} />
         </div>
         <div>
           <Label htmlFor="vehicleModel">Vehicle model (optional)</Label>
-          <Input id="vehicleModel" name="vehicleModel" className="mt-1" placeholder="RAV4" />
+          <Input id="vehicleModel" name="vehicleModel" className="mt-1" placeholder="RAV4" defaultValue={searchParams.get("vehicleModel") ?? ""} />
         </div>
         <div>
           <Label htmlFor="vehicleYear">Year (optional)</Label>
@@ -242,7 +267,7 @@ export function RequestAutopartsClient() {
         </div>
         <div>
           <Label htmlFor="partNumber">Part / OEM number (optional)</Label>
-          <Input id="partNumber" name="partNumber" className="mt-1" />
+          <Input id="partNumber" name="partNumber" className="mt-1" defaultValue={searchParams.get("partNumber") ?? ""} />
         </div>
         <div>
           <Label htmlFor="quantity">Quantity</Label>
@@ -266,6 +291,7 @@ export function RequestAutopartsClient() {
           <Input id="deliveryCity" name="deliveryCity" className="mt-1" placeholder="Accra" />
         </div>
 
+        {signedIn ? (
         <div className="sm:col-span-2">
           <Label>Reference photos (optional, up to {MAX_IMAGES})</Label>
           <p className="mt-1 text-xs text-zinc-500">PNG or JPEG, max 5 MB each. Photos of old parts, VIN plates, or packaging help.</p>
@@ -297,11 +323,37 @@ export function RequestAutopartsClient() {
             </ul>
           ) : null}
         </div>
+        ) : null}
 
-        <div className="sm:col-span-2">
-          <Button type="submit" disabled={submitting || uploading}>
-            {submitting ? "Submitting…" : "Submit request"}
-          </Button>
+        <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-sm font-medium text-white">Request fee · GHS {feeGhs.toLocaleString()}</p>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+            Payment is the last step. We receive the request only after it succeeds
+            {signedIn ? ", from your wallet or Paystack" : " through Paystack"}.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            {signedIn ? (
+              <Button type="button" disabled={submitting || uploading || !feeEnabled} onClick={(event) => void pay("wallet", event.currentTarget.form!)}>
+                {submitting ? "Processing…" : "Pay with wallet"}
+              </Button>
+            ) : (
+              <Link href={loginHref} className="text-sm text-[var(--brand)] hover:underline">
+                Sign in to pay with wallet
+              </Link>
+            )}
+            <Button type="submit" disabled={submitting || uploading || !feeEnabled} variant="outline">
+              {submitting ? "Processing…" : "Pay with Paystack"}
+            </Button>
+          </div>
+          {!signedIn ? (
+            <p className="mt-3 text-xs text-zinc-500">
+              Photos can be attached after you{" "}
+              <Link href={registerHref} className="text-[var(--brand)] hover:underline">
+                create an account
+              </Link>
+              . Guests can still pay, and the reply stays in messages on this browser.
+            </p>
+          ) : null}
         </div>
       </form>
     </div>

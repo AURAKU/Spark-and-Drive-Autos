@@ -164,6 +164,14 @@ export async function POST(req: Request) {
   }
 
   if (payment.status === "SUCCESS") {
+    if (payment.paymentType === "SOURCING_FEE") {
+      const details = payment.methodDetails;
+      const kind = details && typeof details === "object" && !Array.isArray(details) ? (details as { kind?: string }).kind : null;
+      if (kind === "PARTS_REQUEST_FEE") {
+        const { fulfillPaidPartsRequest } = await import("@/lib/parts-request-fee");
+        await fulfillPaidPartsRequest(payment.id);
+      }
+    }
     await prisma.paymentWebhookEvent.update({ where: { id: webhook.id }, data: { processed: true } });
     return NextResponse.json({ received: true, duplicate: true });
   }
@@ -246,6 +254,14 @@ export async function POST(req: Request) {
           entityId: linked.id,
           metadataJson: { paymentId: payment.id, reference },
         });
+      }
+    }
+    if (payment.paymentType === "SOURCING_FEE") {
+      const details = payment.methodDetails;
+      const kind = details && typeof details === "object" && !Array.isArray(details) ? (details as { kind?: string }).kind : null;
+      if (kind === "PARTS_REQUEST_FEE") {
+        const { fulfillPaidPartsRequest } = await import("@/lib/parts-request-fee");
+        await fulfillPaidPartsRequest(payment.id);
       }
     }
     await writeAuditLog({

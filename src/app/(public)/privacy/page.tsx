@@ -1,3 +1,4 @@
+import { Ghana2026LegalNotice } from "@/components/legal/ghana-2026-legal-notice";
 import { LegalPage } from "@/components/legal/legal-page";
 import { LEGAL_COMPANY, LEGAL_EFFECTIVE_DATE } from "@/lib/legal";
 
@@ -129,7 +130,13 @@ export default function PrivacyPage() {
               <ul className="mt-3 list-disc space-y-2 pl-5">
                 <li>Data Protection Act, 2012 (Act 843)</li>
                 <li>Electronic Transactions Act, 2008 (Act 772)</li>
+                <li>Cybersecurity Act, 2020 (Act 1038)</li>
+                <li>National Identity Register (Amendment) Regulations, 2026 (L.I. 2523)</li>
+                <li>Payment Systems and Services Act, 2019 (Act 987)</li>
               </ul>
+              <div className="mt-3">
+                <Ghana2026LegalNotice />
+              </div>
             </>
           ),
         },
@@ -143,14 +150,16 @@ export default function PrivacyPage() {
                 resolution, and fraud prevention.
               </p>
               <p className="mt-3">
-                Verification may require submission of identification documents such as a Ghana Card, passport, or other
-                valid identification.
+                We do not request or store photographs, scans, or photocopies of a Ghana Card, passport, or driver&apos;s
+                licence, and we do not ask for a selfie holding an identity document. Where a Ghana Card number is
+                collected, it is an account reference only. Where the law requires biometric confirmation, that is done
+                through the National Identification Authority.
               </p>
               <ul className="mt-3 list-disc space-y-2 pl-5">
-                <li>be used solely for verification, compliance, fraud prevention, and dispute handling</li>
-                <li>be stored securely using appropriate technical safeguards</li>
-                <li>be accessible only to authorized personnel</li>
-                <li>not be shared except where required by law or for compliance purposes</li>
+                <li>A saved Ghana Card number and expiry date are used only as an account reference.</li>
+                <li>They are stored with access limited to authorized staff.</li>
+                <li>They are not shared except where the law requires it.</li>
+                <li>They are kept only as long as the account purpose requires.</li>
               </ul>
               <p className="mt-3">
                 We retain such data only for as long as necessary for these purposes, after which it may be securely deleted.

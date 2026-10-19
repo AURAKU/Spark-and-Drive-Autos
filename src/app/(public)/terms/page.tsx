@@ -1,5 +1,6 @@
+import { Ghana2026LegalNotice } from "@/components/legal/ghana-2026-legal-notice";
 import { LegalPage } from "@/components/legal/legal-page";
-import { LEGAL_COMPANY } from "@/lib/legal";
+import { LEGAL_COMPANY, LEGAL_EFFECTIVE_DATE } from "@/lib/legal";
 
 export default function TermsPage() {
   return (
@@ -12,7 +13,7 @@ export default function TermsPage() {
           using our platform, you agree to these Terms.
           <br />
           <br />
-          <strong>Effective Date:</strong> [21-May_2025]
+          <strong>Effective Date:</strong> {LEGAL_EFFECTIVE_DATE}
         </p>
       }
       sections={[
@@ -99,9 +100,13 @@ export default function TermsPage() {
                 <li>cancellation of transactions where appropriate</li>
               </ul>
               <p className="mt-3">
-                All verification processes are conducted in accordance with applicable data protection laws and internal
-                security procedures.
+                We do not request or keep a photograph of a Ghana Card, passport, or driver&apos;s licence, and we do not
+                ask for a selfie holding an identity document. Where the law requires biometric confirmation, that check
+                is through the National Identification Authority, not a picture you upload.
               </p>
+              <div className="mt-3">
+                <Ghana2026LegalNotice />
+              </div>
             </>
           ),
         },

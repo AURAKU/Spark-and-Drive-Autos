@@ -148,7 +148,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
           <Link href="/dashboard/profile?view=verification" className="text-[var(--brand)] hover:underline">
             Identity verification
           </Link>{" "}
-          for Ghana Card photo and ID number used at checkout and delivery.{" "}
+          for the Ghana Card number used at checkout and delivery.{" "}
           <Link href="/dashboard/profile?view=legal" className="text-[var(--brand)] hover:underline">
             Legal requirements
           </Link>{" "}
@@ -156,7 +156,7 @@ export default async function ProfilePage(props: { searchParams: SearchParams })
         </p>
       ) : (
         <p className="mt-2 text-sm text-zinc-400">
-          Ghana Card details for checkout and delivery, plus full identity verification for protected flows.
+          Add your Ghana Card number and expiry date for checkout and delivery.
         </p>
       )}
 

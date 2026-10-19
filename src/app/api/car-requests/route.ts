@@ -97,7 +97,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Identity verification is required before submitting sourcing requests. Visit Dashboard → Verification and upload a valid Ghana Card or ID.",
+            "This sourcing request could not continue. Contact support if a lawful identity check is still required.",
           code: "IDENTITY_VERIFICATION_REQUIRED",
         },
         { status: 409 },

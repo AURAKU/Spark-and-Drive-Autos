@@ -404,7 +404,7 @@ export function PartDetailActions({
             <p className="text-zinc-300">Quantity: {Math.max(1, qty)}</p>
             {chinaQuotes ? (
               <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">China freight</p>
+                <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">International shipping</p>
                 <label className="flex cursor-pointer items-start gap-2 rounded-md border border-transparent p-2 hover:border-white/10">
                   <input
                     type="radio"

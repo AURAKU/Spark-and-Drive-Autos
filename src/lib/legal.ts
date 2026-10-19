@@ -8,7 +8,7 @@ export const LEGAL_COMPANY = {
   workingHours: "Monday – Saturday, 8:30 AM – 5:30 PM (GMT)",
 } as const;
 
-export const LEGAL_EFFECTIVE_DATE = "[21-May_2025]";
+export const LEGAL_EFFECTIVE_DATE = "19 October 2026";
 
 export const DISPUTE_FLOW_TEXT =
   "If you have a complaint, please contact us first so we can attempt an internal resolution. If we cannot resolve the issue, either party may refer the matter to ADR in Ghana under the Alternative Dispute Resolution Act, 2010 (Act 798), before proceeding to the courts in Ghana where applicable.";
