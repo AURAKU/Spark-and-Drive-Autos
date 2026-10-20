@@ -157,26 +157,6 @@ function PartnerBrandSlideshow({ brands }: { brands: BrandCell[] }) {
           </motion.div>
         </AnimatePresence>
       </div>
-      <div className="mt-3 flex items-center justify-center gap-1.5" role="tablist" aria-label="Marque groups">
-        {pages.map((group, index) => {
-          const start = index * PAGE_SIZE + 1;
-          const end = start + group.length - 1;
-          const active = index === page;
-          return (
-            <button
-              key={group[0]?.label ?? index}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              aria-label={`Show marques ${start} to ${end}`}
-              onClick={() => setPage(index)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                active ? "w-5 bg-[var(--brand)]" : "w-1.5 bg-foreground/25 hover:bg-foreground/45"
-              }`}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }

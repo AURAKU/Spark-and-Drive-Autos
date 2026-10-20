@@ -85,7 +85,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ip = getRequestIp(request);
         const userAgent = request?.headers?.get("user-agent") ?? null;
         const { rateLimitAuth } = await import("@/lib/rate-limit");
-        const rl = await rateLimitAuth(`login:${ip}`);
+        let rl: { success: boolean } = { success: true };
+        try {
+          rl = await rateLimitAuth(`login:${ip}`);
+        } catch (error) {
+          console.error("[auth] login rate limit unavailable; continuing sign-in", error);
+        }
         if (!rl.success) {
           await recordSecurityObservation({
             severity: "HIGH",
@@ -306,7 +311,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.role = dbUser.role;
           token.accountBlocked = dbUser.accountBlocked;
           token.dbRefreshedAt = now;
+          const { getEffectiveAdminPageKeys } = await import("@/lib/rbac/access");
+          token.adminPages = await getEffectiveAdminPageKeys(dbUser.role);
         }
+      } else if (user && token.role) {
+        const { getEffectiveAdminPageKeys } = await import("@/lib/rbac/access");
+        token.adminPages = await getEffectiveAdminPageKeys(token.role as UserRole);
       }
 
       return token;

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeading } from "@/components/typography/page-headings";
+import { LazyVideo } from "@/components/media/lazy-video";
 import { PartImageGallery } from "@/components/parts/part-image-gallery";
 import { buildPartGalleryImageList } from "@/lib/part-gallery-images";
 import { PartOriginAvailabilityBadge } from "@/components/parts/part-origin-availability-badge";
 import { PartDetailActions } from "@/components/parts/part-detail-actions";
 import { PartReviewsSection } from "@/components/parts/part-reviews-section";
+import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import { formatConverted, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { getCheckoutLegalVersions } from "@/lib/legal-enforcement";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
@@ -132,8 +134,36 @@ export default async function PartDetailPage(props: Props) {
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Availability</p>
           <PartOriginAvailabilityBadge part={part} className="w-fit px-3 py-1 text-xs" />
         </div>
-        <div>
+        <div className="space-y-4">
           <PartImageGallery productTitle={part.title} images={galleryImages} />
+          {part.videos.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Videos</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {part.videos.map((v) => (
+                  <div
+                    key={v.id}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-black/40"
+                  >
+                    {v.isFeatured ? (
+                      <p className="border-b border-white/10 bg-white/[0.06] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--brand)]">
+                        Featured
+                      </p>
+                    ) : null}
+                    <div className="p-1">
+                      <LazyVideo
+                        src={v.url}
+                        poster={resolveCarVideoPosterUrl(v, cover)}
+                        featured={v.isFeatured}
+                        clickToLoad
+                        title={v.isFeatured ? "Featured part video" : "Part video"}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div>

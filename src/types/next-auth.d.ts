@@ -7,6 +7,8 @@ declare module "next-auth" {
       id: string;
       role: UserRole;
       accountBlocked: boolean;
+      /** Effective admin page keys (from defaults + RoleAccessOverride). */
+      adminPages?: string[];
     };
   }
 
@@ -22,5 +24,7 @@ declare module "next-auth/jwt" {
     accountBlocked?: boolean;
     /** Last time role/block flags were synced from DB (ms). */
     dbRefreshedAt?: number;
+    /** AdminPageKey[] for middleware path gates. */
+    adminPages?: string[];
   }
 }

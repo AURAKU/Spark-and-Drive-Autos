@@ -280,24 +280,32 @@ export function UsersTable({
                           >
                             <MessageCircle className="size-4" strokeWidth={2} aria-hidden />
                           </Link>
-                          <form action={roleAction} className="inline-flex max-w-full flex-wrap items-center justify-end gap-1.5">
-                            <input type="hidden" name="userId" value={u.id} />
-                            <select
-                              key={`${u.id}-${u.role}`}
-                              name="role"
-                              defaultValue={u.role}
-                              className="h-9 max-w-[10.5rem] rounded-lg border border-border bg-background px-2 text-xs text-foreground outline-none dark:border-white/10 dark:bg-black/40 dark:text-white"
-                            >
-                              {ROLE_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value}>
-                                  {o.label}
-                                </option>
-                              ))}
-                            </select>
-                            <Button type="submit" size="sm" variant="secondary" className="h-9 shrink-0 text-xs">
-                              Save
-                            </Button>
-                          </form>
+                          {canManagePrivileged && u.role !== "SUPER_ADMIN" ? (
+                            <form action={roleAction} className="inline-flex max-w-full flex-wrap items-center justify-end gap-1.5">
+                              <input type="hidden" name="userId" value={u.id} />
+                              <select
+                                key={`${u.id}-${u.role}`}
+                                name="role"
+                                defaultValue={u.role}
+                                className="h-9 max-w-[10.5rem] rounded-lg border border-border bg-background px-2 text-xs text-foreground outline-none dark:border-white/10 dark:bg-black/40 dark:text-white"
+                              >
+                                {ROLE_OPTIONS.map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button type="submit" size="sm" variant="secondary" className="h-9 shrink-0 text-xs">
+                                Save
+                              </Button>
+                            </form>
+                          ) : (
+                            <span className="inline-flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 text-xs text-foreground dark:border-white/10 dark:bg-black/40">
+                              {u.role === "SUPER_ADMIN"
+                                ? "Super admin"
+                                : (ROLE_OPTIONS.find((o) => o.value === u.role)?.label ?? u.role)}
+                            </span>
+                          )}
                         </div>
                         {u.role !== "SUPER_ADMIN" ? (
                           <div className="flex flex-wrap justify-end gap-1.5">

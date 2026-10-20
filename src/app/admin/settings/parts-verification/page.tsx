@@ -13,7 +13,7 @@ export default async function PartsVerificationSettingsPage() {
       <h1 className="text-xl font-semibold">Parts Verification Settings</h1>
       <p className="text-sm text-muted-foreground">
         The public parts request fee is separate.{" "}
-        <Link href="/admin/settings/parts-request-fee" className="text-[var(--brand)] hover:underline">
+        <Link href="/admin/parts-finder/parts-request-fee" className="text-[var(--brand)] hover:underline">
           Change the parts request fee
         </Link>
         .

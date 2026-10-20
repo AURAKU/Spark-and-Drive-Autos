@@ -1,5 +1,6 @@
 import { LegalAcceptanceStatusCard } from "@/components/dashboard/legal-acceptance-status-card";
 import { DashboardIntelligenceView } from "@/components/dashboard/dashboard-intelligence-view";
+import { RoleAccessSummary } from "@/components/dashboard/role-access-summary";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
 import { getDashboardIntelligence } from "@/lib/dashboard-intelligence";
 import { getUserPolicyAcceptanceSnapshot } from "@/lib/legal-acceptance-guard";
@@ -24,6 +25,9 @@ export default async function DashboardHome() {
 
   return (
     <>
+      <div className="mb-6">
+        <RoleAccessSummary role={session.user.role} />
+      </div>
       <LegalAcceptanceStatusCard rows={legalRows} />
       <DashboardIntelligenceView data={data} />
     </>

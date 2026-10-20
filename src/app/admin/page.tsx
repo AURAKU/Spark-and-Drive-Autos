@@ -24,8 +24,13 @@ function readActivityPage(sp: Record<string, string | string[] | undefined>): nu
 export default async function AdminHome(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
   const session = await safeAuth();
-  if (session?.user?.role === "SERVICE_ASSISTANT") {
-    redirect("/admin/comms");
+  const role = session?.user?.role;
+  if (role && role !== "SUPER_ADMIN") {
+    const { getEffectiveAdminPageKeys, getStaffLandingHref } = await import("@/lib/rbac/access");
+    const keys = await getEffectiveAdminPageKeys(role);
+    if (!keys.includes("command_center")) {
+      redirect(await getStaffLandingHref(role));
+    }
   }
 
   const [

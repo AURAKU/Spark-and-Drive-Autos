@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-export type AdminPartsFinderHubView = "overview" | "verifications" | "verified-parts";
+export type AdminPartsFinderHubView = "overview" | "verifications" | "verified-parts" | "parts-request-fee";
 
 export function AdminPartsFinderHubTabs(props: { active: AdminPartsFinderHubView }) {
   const { active } = props;
@@ -26,6 +26,7 @@ export function AdminPartsFinderHubTabs(props: { active: AdminPartsFinderHubView
       {tab("/admin/parts-finder", "Overview", "overview")}
       {tab("/admin/parts-finder?view=verifications", "Identity verifications", "verifications")}
       {tab("/admin/parts-finder?view=verified-parts", "Verified part requests", "verified-parts")}
+      {tab("/admin/parts-finder/parts-request-fee", "Parts request fee", "parts-request-fee")}
     </div>
   );
 }

@@ -68,6 +68,7 @@ export const publicPartDetailSelect = {
   tags: true,
   coverImagePublicId: true,
   images: { orderBy: { sortOrder: "asc" as const } },
+  videos: { orderBy: [{ isFeatured: "desc" as const }, { sortOrder: "asc" as const }] },
   deliveryOptions: {
     where: { enabled: true },
     orderBy: { createdAt: "asc" as const },

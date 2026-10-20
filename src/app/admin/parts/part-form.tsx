@@ -117,7 +117,7 @@ export function PartForm({
 
   useEffect(() => {
     if (state?.ok && state.id && mode === "create") {
-      toast.success("Part created");
+      toast.success("Part created — add more photos and videos below");
       if (onCreated) {
         onCreated(state.id);
         return;
@@ -636,13 +636,34 @@ export function PartForm({
         />
       </div>
 
-      <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-        <PartCoverField
-          key={part?.id ?? "new-part-cover"}
-          initialUrl={part?.coverImageUrl ?? null}
-          initialPublicId={part?.coverImagePublicId ?? null}
-        />
-      </div>
+      {mode === "create" ? (
+        <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <PartCoverField
+            key="new-part-cover"
+            initialUrl={part?.coverImageUrl ?? null}
+            initialPublicId={part?.coverImagePublicId ?? null}
+          />
+        </div>
+      ) : (
+        <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-sm font-medium text-white">Photos and videos</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Use the media panel below this form to upload multiple images and videos, set the cover, and reorder
+            gallery items — the same flow as car inventory.
+          </p>
+          {part?.coverImageUrl ? (
+            <>
+              <input type="hidden" name="coverImageUrl" value={part.coverImageUrl} readOnly />
+              <input type="hidden" name="coverImagePublicId" value={part.coverImagePublicId ?? ""} readOnly />
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="coverImageUrl" value="" readOnly />
+              <input type="hidden" name="coverImagePublicId" value="" readOnly />
+            </>
+          )}
+        </div>
+      )}
 
       <div className="sm:col-span-2 flex flex-wrap gap-3">
         <Button type="submit">{mode === "create" ? "Create part" : "Save changes"}</Button>

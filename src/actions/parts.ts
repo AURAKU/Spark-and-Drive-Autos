@@ -230,6 +230,17 @@ export async function createPart(_prev: PartActionState, formData: FormData): Pr
         supplierDistributorPhone: d.supplierDistributorPhone?.trim() || null,
       },
     });
+    if (d.coverImageUrl) {
+      await prisma.partImage.create({
+        data: {
+          partId: part.id,
+          url: d.coverImageUrl,
+          publicId: d.coverImagePublicId ?? null,
+          sortOrder: 0,
+          isCover: true,
+        },
+      });
+    }
     await ensureChinaPreOrderDeliveryOptions(part.id);
     if (duplicates.length > 0) {
       const summary =
@@ -365,8 +376,7 @@ export async function updatePart(_prev: PartActionState, formData: FormData): Pr
         listingState: d.listingState,
         tags,
         featured: d.featured,
-        coverImageUrl: d.coverImageUrl ?? null,
-        coverImagePublicId: d.coverImagePublicId ?? null,
+        // Cover is owned by PartMediaPanel (set cover / uploads) — do not overwrite from the listing form.
         metaJson: nextMeta,
         supplierDistributorRef: d.supplierDistributorRef?.trim() || null,
         supplierDistributorPhone: d.supplierDistributorPhone?.trim() || null,

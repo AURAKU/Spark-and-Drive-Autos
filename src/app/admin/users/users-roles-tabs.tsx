@@ -18,6 +18,9 @@ export function UsersRolesTabs({ panel }: { panel: Panel }) {
       <Link href="/admin/users?panel=roles" className={cn(base, panel === "roles" ? active : idle)} scroll={false}>
         Role reference
       </Link>
+      <Link href="/admin/roles" className={cn(base, idle)} scroll={false}>
+        Edit access
+      </Link>
     </nav>
   );
 }

@@ -23,10 +23,16 @@ export function isSuperAdminRole(role: UserRole | string | undefined | null): bo
 }
 
 /**
- * Where “operations” entry points should send staff. Assistants are restricted to support routes.
+ * Where “operations” entry points should send staff.
+ * Prefer role defaults (overrides apply after JWT refresh / landing via middleware).
  */
 export function getStaffOperationsHref(role: UserRole | string | undefined | null): string {
-  if (isAdminRole(role)) return "/admin";
+  if (role === "SUPER_ADMIN") return "/admin";
   if (role === "SERVICE_ASSISTANT") return "/admin/comms";
+  if (role === "SALES_ADMIN") return "/admin";
+  if (role === "SOURCING_MANAGER") return "/admin/parts";
+  if (role === "LOGISTICS_MANAGER") return "/admin/shipping";
+  if (role === "FINANCE_ADMIN") return "/admin/payments/intelligence";
+  if (isAdminRole(role)) return "/admin";
   return "/dashboard";
 }

@@ -2,62 +2,48 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { isSuperAdminRole } from "@/auth";
-import { AdminMobileNav, type AdminNavLink } from "@/components/layout/admin-mobile-nav";
+import { AdminMobileNav } from "@/components/layout/admin-mobile-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
+import { getEffectiveAdminPageKeys } from "@/lib/rbac/access";
+import { buildAdminNavLinks } from "@/lib/rbac/nav";
+import { isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { safeAuth } from "@/lib/safe-auth";
-
-const fullAdminLinks: AdminNavLink[] = [
-  { href: "/admin", label: "Command Center" },
-  { href: "/admin/users", label: "All Users" },
-  { href: "/admin/cars", label: "Cars Inventory" },
-  { href: "/admin/motorcycles", label: "Motorcycle Inventory" },
-  { href: "/admin/parts", label: "Parts Management" },
-  { href: "/admin/settings/parts-request-fee", label: "Parts request fee" },
-  { href: "/admin/orders", label: "All Orders" },
-  { href: "/admin/deposit-balances", label: "Deposit balances" },
-  { href: "/admin/payments/intelligence", label: "Payment intelligence" },
-  { href: "/admin/shipping", label: "Shipping & Delivery Tracking" },
-  { href: "/admin/duty", label: "Duty Tracking" },
-  { href: "/admin/duty-intelligence", label: "Duty Intelligence" },
-  { href: "/admin/security", label: "Security Surveillance" },
-  { href: "/admin/settings/currency", label: "Exchange Rates" },
-  { href: "/admin/legal", label: "Legal Controls" },
-  { href: "/admin/disputes", label: "Disputes & Chargebacks" },
-  { href: "/admin/parts-finder", label: "Parts Finder" },
-  { href: "/admin/comms", label: "Live Support Chat" },
-  { href: "/admin/settings/receipt-template", label: "Receipt Templates" },
-  { href: "/admin/settings", label: "API Providers and Environment" },
-  { href: "/admin/reviews", label: "All Reviews" },
-  { href: "/admin/import-export", label: "BULK Imports & Export Inventory" },
-  { href: "/admin/duplicates", label: "Duplicate Inventory" },
-  { href: "/admin/audit", label: "Audit logs" },
-  { href: "/admin/health", label: "System health" },
-];
-
-const assistantLinks: AdminNavLink[] = [
-  { href: "/admin/comms", label: "Live Support Chat" },
-];
-
-const superAdminOnlyLinks = new Set(["/admin/settings"]);
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await safeAuth();
-  if (session?.user?.accountBlocked) {
+  if (!session?.user?.id) {
+    redirect("/login?callbackUrl=" + encodeURIComponent("/admin"));
+  }
+  if (session.user.accountBlocked) {
     redirect("/login?error=account-suspended&callbackUrl=" + encodeURIComponent("/admin"));
   }
-  const isAssistant = session?.user?.role === "SERVICE_ASSISTANT";
-  const isSuperAdmin = Boolean(session?.user?.role && isSuperAdminRole(session.user.role));
-  const links = (isAssistant ? assistantLinks : fullAdminLinks).filter((link) => isSuperAdmin || !superAdminOnlyLinks.has(link.href));
+
+  const role = session.user.role;
+  const isStaff = Boolean(role && (isAdminRole(role) || isSupportStaffRole(role)));
+  if (!isStaff) {
+    redirect("/dashboard");
+  }
+
+  const isSuperAdmin = Boolean(role && isSuperAdminRole(role));
+  const pageKeys = await getEffectiveAdminPageKeys(role);
+  if (pageKeys.length === 0 && !isSuperAdmin) {
+    redirect("/dashboard");
+  }
+
+  const links = buildAdminNavLinks(isSuperAdmin ? ["*"] : pageKeys);
+  const sectionLabel =
+    role === "SERVICE_ASSISTANT" ? "Support inbox" : isSuperAdmin ? "Operations" : "Your ops desk";
 
   return (
     <div className="flex min-h-screen min-w-0 flex-col">
       <DashboardTopHeader showPartnerStrip={false} />
       <div className="flex min-h-0 min-w-0 flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-5 text-sidebar-foreground lg:block">
-          <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-            {isAssistant ? "Support inbox" : "Operations"}
+          <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">{sectionLabel}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Role: <span className="font-medium text-sidebar-foreground">{role}</span>
           </p>
           <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 dark:border-white/10 dark:bg-white/[0.03]">
             <ViewModeButton targetMode="user" redirectTo="/dashboard" className="w-full">
@@ -83,9 +69,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="relative border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
             <div className="flex min-h-10 items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <AdminMobileNav links={links} sectionLabel={isAssistant ? "Support inbox" : "Operations"} />
-                <Link href="/admin" className="truncate text-sm font-medium text-[var(--brand)]">
-                  Command Center
+                <AdminMobileNav links={links} sectionLabel={sectionLabel} />
+                <Link href={links[0]?.href ?? "/dashboard"} className="truncate text-sm font-medium text-[var(--brand)]">
+                  {links[0]?.label ?? "Dashboard"}
                 </Link>
               </div>
               <ViewModeButton targetMode="user" redirectTo="/dashboard" className="shrink-0 text-[11px]">

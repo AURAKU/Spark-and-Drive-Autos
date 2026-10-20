@@ -59,8 +59,12 @@ async function run(
   memoryWindowMs = 60_000
 ): Promise<LimitResult> {
   if (redis) {
-    const r = await redis.limit(`${memoryKey}:${identifier}`);
-    return { success: r.success, remaining: r.remaining, reset: r.reset };
+    try {
+      const r = await redis.limit(`${memoryKey}:${identifier}`);
+      return { success: r.success, remaining: r.remaining, reset: r.reset };
+    } catch (error) {
+      console.warn("[rate-limit] Redis check failed; using in-memory fallback.", error);
+    }
   }
   return memoryLimit(`${memoryKey}:${identifier}`, limit, memoryWindowMs);
 }

@@ -3,7 +3,10 @@ import type { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { getAuthCookieDomain, getAuthSecrets, getUseSecureCookies } from "@/lib/env-auth";
-import { isAdminRole } from "@/lib/roles";
+import { firstAllowedAdminHref } from "@/lib/rbac/catalog";
+import { defaultAdminPageKeysForRole } from "@/lib/rbac/defaults";
+import { canRoleAccessAdminPath } from "@/lib/rbac/edge";
+import { isAdminRole, isSupportStaffRole } from "@/lib/roles";
 
 const useSecureCookies = getUseSecureCookies();
 const authCookieDomain = getAuthCookieDomain();
@@ -15,13 +18,6 @@ const sharedSessionCookieOptions = {
   secure: useSecureCookies,
   ...(authCookieDomain ? { domain: authCookieDomain } : {}),
 };
-
-/** Service assistants may only access support surfaces under `/admin` (not inventory, payments, etc.). */
-function isServiceAssistantAllowedAdminPath(pathname: string): boolean {
-  if (pathname === "/admin/comms" || pathname.startsWith("/admin/comms/")) return true;
-  if (pathname === "/admin/inquiries" || pathname.startsWith("/admin/inquiries/")) return true;
-  return false;
-}
 
 /**
  * Edge-safe config (no bcrypt / Prisma / Upstash). Used by `middleware.ts`.
@@ -57,6 +53,9 @@ export const authConfig = {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
         session.user.accountBlocked = Boolean(token.accountBlocked);
+        if (Array.isArray(token.adminPages)) {
+          session.user.adminPages = token.adminPages as string[];
+        }
       }
       return session;
     },
@@ -69,10 +68,21 @@ export const authConfig = {
       if (path.startsWith("/admin")) {
         const role = auth?.user?.role;
         if (!auth?.user?.id || !role) return false;
-        if (role === "SERVICE_ASSISTANT") {
-          return isServiceAssistantAllowedAdminPath(path);
+        if (!isSupportStaffRole(role) && !isAdminRole(role)) return false;
+
+        const tokenPages = (auth.user as { adminPages?: string[] }).adminPages;
+        const allowed = canRoleAccessAdminPath(role, path, tokenPages);
+        if (!allowed) {
+          const keys =
+            role === "SUPER_ADMIN"
+              ? ["*"]
+              : Array.isArray(tokenPages) && tokenPages.length > 0
+                ? tokenPages
+                : defaultAdminPageKeysForRole(role);
+          const dest = firstAllowedAdminHref(keys);
+          if (dest === path) return false;
+          return NextResponse.redirect(new URL(dest, request.url));
         }
-        if (!isAdminRole(role)) return false;
       }
       if (path.startsWith("/dashboard")) {
         if (!auth?.user?.id) return false;

@@ -64,6 +64,9 @@ export default async function AdminPartsFinderOverviewPage(props: { searchParams
           <Link href="/admin/parts-finder/settings" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted/40">
             Settings
           </Link>
+          <Link href="/admin/parts-finder/parts-request-fee" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted/40">
+            Parts request fee
+          </Link>
           <Link href="/admin/parts-finder/memberships" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted/40">
             Memberships
           </Link>

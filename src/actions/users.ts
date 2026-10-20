@@ -95,7 +95,7 @@ async function purgeUserRelatedRecordsBeforeDelete(tx: Prisma.TransactionClient,
 
 export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormData): Promise<UpdateUserRoleState> {
   try {
-    const session = await requireAdmin();
+    const session = await requireSuperAdmin();
     const parsed = updateRoleSchema.safeParse({
       userId: formData.get("userId"),
       role: formData.get("role"),
@@ -127,7 +127,7 @@ export async function updateUserRole(_prev: UpdateUserRoleState, formData: FormD
     return { ok: true };
   } catch (e) {
     if (e instanceof Error && e.message === "FORBIDDEN") {
-      return { error: "Admin access required" };
+      return { error: "Only Super Admin can change user roles." };
     }
     console.error("[updateUserRole]", e);
     return { error: e instanceof Error ? e.message : "Could not update role" };

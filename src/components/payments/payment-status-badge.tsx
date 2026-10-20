@@ -7,7 +7,7 @@ const STYLES: Record<PaymentStatus, string> = {
   PENDING:
     "border-amber-700/40 bg-amber-100 text-amber-950 shadow-sm dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-100 dark:shadow-none",
   AWAITING_PROOF:
-    "border-amber-800/35 bg-amber-50 text-amber-950 shadow-sm dark:border-amber-400/45 dark:bg-amber-400/12 dark:text-amber-50 dark:shadow-none",
+    "border-amber-700 bg-amber-200 text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-950 dark:text-amber-100 dark:shadow-none",
   PROCESSING:
     "border-sky-700/40 bg-sky-100 text-sky-950 shadow-sm dark:border-sky-500/35 dark:bg-sky-500/12 dark:text-sky-100 dark:shadow-none",
   UNDER_REVIEW:

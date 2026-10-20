@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { deletePart } from "@/actions/parts";
 import { PageHeading } from "@/components/typography/page-headings";
-import { PartGalleryPanel } from "@/components/admin/part-gallery-panel";
+import { PartMediaPanel } from "@/components/admin/part-media-panel";
 import { canonicalRmbToAdminAmount, getGlobalCurrencySettings, parseDisplayCurrency } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 
@@ -19,6 +19,7 @@ export default async function AdminEditPartPage(props: Props) {
     where: { id },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
+      videos: { orderBy: { sortOrder: "asc" } },
     },
   });
   const categories = await prisma.partCategory.findMany({
@@ -103,8 +104,21 @@ export default async function AdminEditPartPage(props: Props) {
 
       <PartForm mode="edit" part={partForForm} categories={categories} />
 
-      <div className="mt-12 max-w-3xl border-t border-white/10 pt-10">
-        <PartGalleryPanel partId={part.id} images={part.images} />
+      <div className="mt-12 border-t border-white/10 pt-10">
+        <h2 className="text-lg font-semibold text-white">Media</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          Upload multiple photos and videos, drag to reorder, and set the storefront cover.
+        </p>
+        <div className="mt-6">
+          <PartMediaPanel
+            partId={part.id}
+            images={part.images.map((img) => ({
+              ...img,
+              isCover: img.isCover || img.url === part.coverImageUrl,
+            }))}
+            videos={part.videos}
+          />
+        </div>
       </div>
 
       <p className="mt-10 text-sm text-zinc-500">
