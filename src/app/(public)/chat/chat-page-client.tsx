@@ -24,7 +24,7 @@ export function ChatPageClient() {
     return (
       <div className="mx-auto max-w-lg px-4 py-12 sm:px-6">
         <PageHeading variant="dashboard">Customer Service Live Support Chat</PageHeading>
-        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+        <p className="mt-4 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           Live support chat is available to signed-in customers only, so we can tie your conversation to your account,
           send updates, and help you securely. Create Account or sign in to start or continue a chat.
         </p>
@@ -52,11 +52,11 @@ export function ChatPageClient() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
       <PageHeading variant="dashboard">Customer Service Live Support Chat</PageHeading>
-      <p className="mt-2 text-sm text-zinc-400">
+      <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
         Send text, images, video, documents, and voice notes — use the round mic in the composer: tap once to record,
         tap again to send. Messages update in real time when configured, with quick refresh otherwise.
       </p>
-      <div className="mt-8">
+      <div className="mt-8 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50 to-white p-3 dark:border-white/10 dark:from-white/[0.04] dark:to-transparent sm:p-5">
         <ChatThreadView />
       </div>
     </div>

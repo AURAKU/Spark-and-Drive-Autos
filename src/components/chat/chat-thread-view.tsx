@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
+import { SPARK_ASSISTANT_LABEL } from "@/lib/live-support-assistant";
 import { isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { useChatThreadRealtime } from "@/hooks/use-chat-thread-realtime";
@@ -57,6 +58,9 @@ export type ChatMessageDto = {
 export type ChatThreadDto = {
   id: string;
   subject: string | null;
+  status?: string | null;
+  adminId?: string | null;
+  assistantActive?: boolean;
   guestName: string | null;
   guestEmail: string | null;
   guestPhone?: string | null;
@@ -248,6 +252,14 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
     setMessages(normalizeMessages(data.messages));
     setThreadMeta(data.thread);
     setHasMore(Boolean(data.hasMore));
+    const id = data.thread?.id;
+    if (id) {
+      void fetch("/api/chat/messages/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: id }),
+      }).catch(() => {});
+    }
   }, [pollUrl, normalizeMessages]);
 
   useChatThreadRealtime(threadId ?? null, load);
@@ -337,6 +349,11 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
       }
       await load();
       toast.success("Sent");
+      if (!staff) {
+        window.setTimeout(() => void load(), 900);
+        window.setTimeout(() => void load(), 2800);
+        window.setTimeout(() => void load(), 6500);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
@@ -415,6 +432,7 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
 
   function canEditMessage(m: ChatMessageDto): boolean {
     if (m.deletedAt) return false;
+    if (m.senderType === MessageSenderType.SYSTEM && !staff) return false;
     if (staff) return true;
     if (!session?.user?.id || m.senderUserId !== session.user.id) return false;
     return Date.now() - new Date(m.createdAt).getTime() <= EDIT_WINDOW_MS;
@@ -516,6 +534,29 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
 
   const isAdminMessage = (m: ChatMessageDto) => m.senderType === MessageSenderType.ADMIN;
   const isUserMessage = (m: ChatMessageDto) => m.senderType === MessageSenderType.USER;
+  const isAssistantMessage = (m: ChatMessageDto) => m.senderType === MessageSenderType.SYSTEM;
+
+  const assistantActive = threadMeta ? Boolean(threadMeta.assistantActive) : true;
+
+  async function setAssistantHandling(action: "claim" | "release") {
+    if (!threadId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/chat/threads/${encodeURIComponent(threadId)}/assistant`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      await load();
+      toast.success(action === "release" ? "Spark assistant will reply again" : "You’re on this conversation");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function staffSenderLabel(m: ChatMessageDto): string {
     if (!isAdminMessage(m)) return "";
@@ -616,7 +657,7 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
     <>
       <div
         ref={messagesContainerRef}
-        className="max-h-[min(70vh,720px)] space-y-3 overflow-y-auto rounded-2xl border border-white/[0.07] bg-gradient-to-b from-white/[0.045] to-transparent p-4 shadow-inner"
+        className="max-h-[min(70vh,720px)] space-y-3 overflow-y-auto rounded-2xl border border-sky-200/70 bg-gradient-to-b from-sky-50/90 to-white p-4 shadow-inner dark:border-white/[0.07] dark:from-white/[0.045] dark:to-transparent dark:bg-transparent"
       >
         {hasMore && messages.length > 0 ? (
           <div className="flex justify-center pb-1">
@@ -633,7 +674,7 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
           </div>
         ) : null}
         {messages.length === 0 ? (
-          <p className="text-sm text-zinc-500">No messages yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">No messages yet.</p>
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`flex ${isAdminMessage(m) ? "justify-end" : "justify-start"}`}>
@@ -641,15 +682,17 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
                 className={cn(
                   "max-w-[min(100%,520px)] rounded-2xl px-4 py-3 text-sm shadow-lg transition-[box-shadow,transform] duration-200 will-change-transform hover:shadow-xl",
                   isAdminMessage(m)
-                    ? "border border-[var(--brand)]/25 bg-gradient-to-br from-[var(--brand)]/18 via-[var(--brand)]/8 to-zinc-950/80 text-zinc-100"
-                    : "border border-white/[0.06] bg-zinc-900/70 text-zinc-100 backdrop-blur-sm",
+                    ? "border border-[var(--brand)]/25 bg-gradient-to-br from-[var(--brand)]/18 via-[var(--brand)]/8 to-sky-100 text-zinc-900 dark:to-zinc-950/80 dark:text-zinc-100"
+                    : isAssistantMessage(m)
+                      ? "border border-[var(--brand)]/30 bg-[var(--brand)]/12 text-zinc-900 dark:bg-[var(--brand)]/10 dark:text-zinc-100"
+                      : "border border-zinc-200/80 bg-white text-zinc-900 backdrop-blur-sm dark:border-white/[0.06] dark:bg-zinc-900/70 dark:text-zinc-100",
                 )}
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px] text-zinc-500">
-                  <span className="font-medium text-zinc-400">
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">
                     {isAdminMessage(m) ? (
                       <>
-                        <span className="mr-1.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-200">
+                        <span className="mr-1.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
                           {staffSenderLabel(m)}
                         </span>
                         <span className="text-zinc-500">
@@ -660,12 +703,14 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
                         </span>
                       </>
                     ) : isUserMessage(m) ? (
-                      <span className="text-zinc-400">Customer</span>
+                      <span className="text-zinc-500 dark:text-zinc-400">Customer</span>
+                    ) : isAssistantMessage(m) ? (
+                      <span className="text-zinc-600 dark:text-zinc-300">{SPARK_ASSISTANT_LABEL}</span>
                     ) : (
                       <span>{m.senderType}</span>
                     )}
                   </span>
-                  <time className="shrink-0 tabular-nums text-zinc-600" dateTime={m.createdAt}>
+                  <time className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-600" dateTime={m.createdAt}>
                     {new Date(m.createdAt).toLocaleString()}
                   </time>
                 </div>
@@ -677,7 +722,7 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
                 ) : (
                   <>
                     {m.body && m.body.trim() !== "\u00a0" && editingId !== m.id && (
-                      <p className="mt-2 whitespace-pre-wrap text-zinc-200">{m.body.trim()}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{m.body.trim()}</p>
                     )}
                     {editingId === m.id ? (
                       <div className="mt-2 space-y-2">
@@ -806,7 +851,33 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-white/[0.08] bg-zinc-950/60 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md">
+      {showAdminMeta && threadId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200/80 bg-white/70 px-3 py-2 text-[11px] text-zinc-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400">
+          <span>
+            {assistantActive
+              ? "Spark assistant is covering this thread until a teammate replies."
+              : "A teammate is handling this thread. The assistant will stay quiet."}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 border-zinc-200 text-[11px] dark:border-white/15"
+            disabled={loading}
+            onClick={() => void setAssistantHandling(assistantActive ? "claim" : "release")}
+          >
+            {assistantActive ? "I’ll take this" : "Release to Spark assistant"}
+          </Button>
+        </div>
+      ) : null}
+
+      <p className="px-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-500">
+        {assistantActive
+          ? "Spark assistant · a teammate will join if needed"
+          : "A teammate is on this conversation"}
+      </p>
+
+      <div className="rounded-2xl border border-zinc-300/80 bg-zinc-800 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur-md dark:border-white/[0.08] dark:bg-zinc-950/60 dark:shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}

@@ -44,6 +44,7 @@ export async function sendPrivateUserMessage(
     data: {
       customerId: user.id,
       subject: t,
+      adminId: session.user.id,
     },
   });
 

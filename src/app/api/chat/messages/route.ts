@@ -1,6 +1,6 @@
 import { AttachmentKind, MessageSenderType } from "@prisma/client";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -16,6 +16,11 @@ import { rateLimitChat } from "@/lib/rate-limit";
 import { assertChatAttachmentsSafe } from "@/lib/chat-attachments";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { recordSecurityObservation } from "@/lib/security-observation";
+import {
+  claimThreadForStaff,
+  maybePostLiveSupportAssistantReply,
+  threadAssistantState,
+} from "@/lib/live-support-auto-reply";
 
 const attachmentSchema = z.object({
   url: z.string().url(),
@@ -174,6 +179,19 @@ export async function POST(req: Request) {
       senderType: msg.senderType,
     });
 
+    if (isStaff) {
+      await claimThreadForStaff(threadId!, senderUserId);
+    } else {
+      const capturedThreadId = threadId!;
+      const capturedMessageId = msg.id;
+      after(() => {
+        void maybePostLiveSupportAssistantReply({
+          threadId: capturedThreadId,
+          triggerMessageId: capturedMessageId,
+        });
+      });
+    }
+
     const res = NextResponse.json({
       threadId,
       messageId: msg.id,
@@ -285,11 +303,15 @@ export async function GET(req: Request) {
   const guestPhone =
     thread.inquiry?.guestPhone ?? thread.carRequest?.guestPhone ?? null;
 
+  const assistant = await threadAssistantState(threadId);
+
   return NextResponse.json({
     thread: {
       id: thread.id,
       subject: thread.subject,
       status: thread.status,
+      adminId: thread.adminId,
+      assistantActive: Boolean(assistant?.assistantActive),
       lastMessageAt: thread.lastMessageAt,
       unreadForAdmin: thread.unreadForAdmin,
       unreadForCustomer: thread.unreadForCustomer,

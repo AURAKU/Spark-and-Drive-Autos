@@ -588,6 +588,43 @@
   .sda-ink-panel .text-muted-foreground {
     color: rgb(161 161 170) !important;
   }
+
+  /**
+   * Status chips — high contrast in light mode, soft glass in dark.
+   * Prefer these over ad-hoc `text-amber-100` + `bg-amber-500/10` pairs.
+   */
+  .sda-chip-warn {
+    @apply inline-flex items-center rounded-full border border-amber-700/45 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-950 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100 dark:shadow-none;
+  }
+
+  .sda-chip-danger {
+    @apply inline-flex items-center rounded-full border border-red-700/45 bg-red-100 px-3 py-1 text-xs font-semibold text-red-950 shadow-sm dark:border-red-500/40 dark:bg-red-500/20 dark:text-red-100 dark:shadow-none;
+  }
+
+  .sda-chip-ok {
+    @apply inline-flex items-center rounded-full border border-emerald-700/45 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-950 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/20 dark:text-emerald-100 dark:shadow-none;
+  }
+
+  .sda-chip-info {
+    @apply inline-flex items-center rounded-full border border-sky-700/45 bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-950 shadow-sm dark:border-sky-500/40 dark:bg-sky-500/20 dark:text-sky-100 dark:shadow-none;
+  }
+
+  .sda-chip-neutral {
+    @apply inline-flex items-center rounded-full border border-zinc-500/45 bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900 shadow-sm dark:border-zinc-500/40 dark:bg-zinc-500/20 dark:text-zinc-100 dark:shadow-none;
+  }
+
+  /** Soft alert wells — readable body copy on tinted backgrounds */
+  .sda-alert-warn {
+    @apply rounded-xl border border-amber-700/35 bg-amber-50 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100;
+  }
+
+  .sda-alert-danger {
+    @apply rounded-xl border border-red-700/35 bg-red-50 text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100;
+  }
+
+  .sda-alert-ok {
+    @apply rounded-xl border border-emerald-700/35 bg-emerald-50 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100;
+  }
 }
 
 @layer utilities {
@@ -637,6 +674,108 @@
   .dark textarea::placeholder,
   .dark select::placeholder {
     color: rgb(161 161 170); /* zinc-400 */
+  }
+
+  /*
+   * Status / accent text on light surfaces.
+   * Catch solid utilities AND opacity variants (text-amber-100/90, text-rose-200/80, …)
+   * that were authored for dark glass and wash out on white / soft tinted wells.
+   */
+  /* Skip already-dark tones (*-800/900/950) — only lift washed pastel utilities */
+  html:not(.dark) [class*="text-amber-5"]:not([class*="text-amber-8"]):not([class*="text-amber-9"]),
+  html:not(.dark) [class*="text-amber-1"]:not([class*="text-amber-8"]):not([class*="text-amber-9"]),
+  html:not(.dark) [class*="text-amber-2"]:not([class*="text-amber-8"]):not([class*="text-amber-9"]),
+  html:not(.dark) [class*="text-amber-3"]:not([class*="text-amber-8"]):not([class*="text-amber-9"]) {
+    color: rgb(120 53 15) !important; /* amber-900 */
+  }
+
+  html:not(.dark) [class*="text-yellow-5"],
+  html:not(.dark) [class*="text-yellow-1"],
+  html:not(.dark) [class*="text-yellow-2"],
+  html:not(.dark) [class*="text-orange-5"],
+  html:not(.dark) [class*="text-orange-1"],
+  html:not(.dark) [class*="text-orange-2"],
+  html:not(.dark) [class*="text-orange-3"] {
+    color: rgb(154 52 18) !important; /* orange-900 */
+  }
+
+  html:not(.dark) [class*="text-red-5"],
+  html:not(.dark) [class*="text-red-1"],
+  html:not(.dark) [class*="text-red-2"],
+  html:not(.dark) [class*="text-red-3"],
+  html:not(.dark) [class*="text-rose-5"],
+  html:not(.dark) [class*="text-rose-1"],
+  html:not(.dark) [class*="text-rose-2"],
+  html:not(.dark) [class*="text-rose-3"] {
+    color: rgb(127 29 29) !important; /* red-900 */
+  }
+
+  html:not(.dark) [class*="text-emerald-5"],
+  html:not(.dark) [class*="text-emerald-1"],
+  html:not(.dark) [class*="text-emerald-2"],
+  html:not(.dark) [class*="text-emerald-3"],
+  html:not(.dark) [class*="text-green-5"],
+  html:not(.dark) [class*="text-green-1"],
+  html:not(.dark) [class*="text-green-2"] {
+    color: rgb(6 78 59) !important; /* emerald-900 */
+  }
+
+  html:not(.dark) [class*="text-sky-5"],
+  html:not(.dark) [class*="text-sky-1"],
+  html:not(.dark) [class*="text-sky-2"],
+  html:not(.dark) [class*="text-sky-3"],
+  html:not(.dark) [class*="text-cyan-5"],
+  html:not(.dark) [class*="text-cyan-1"],
+  html:not(.dark) [class*="text-cyan-2"],
+  html:not(.dark) [class*="text-blue-1"],
+  html:not(.dark) [class*="text-blue-2"] {
+    color: rgb(12 74 110) !important; /* sky-900 */
+  }
+
+  html:not(.dark) [class*="text-violet-5"],
+  html:not(.dark) [class*="text-violet-1"],
+  html:not(.dark) [class*="text-violet-2"],
+  html:not(.dark) [class*="text-purple-1"],
+  html:not(.dark) [class*="text-purple-2"] {
+    color: rgb(76 29 149) !important; /* violet-900 */
+  }
+
+  /* Soft tinted wells: keep fill a bit stronger so dark remapped text stays crisp */
+  html:not(.dark) .bg-amber-500\/5,
+  html:not(.dark) .bg-amber-500\/10,
+  html:not(.dark) .bg-amber-500\/\[0\.07\],
+  html:not(.dark) .bg-amber-500\/\[0\.08\],
+  html:not(.dark) .bg-amber-500\/\[0\.12\] {
+    background-color: rgb(254 243 199); /* amber-100 */
+  }
+
+  html:not(.dark) .bg-red-500\/5,
+  html:not(.dark) .bg-red-500\/10,
+  html:not(.dark) .bg-rose-500\/5,
+  html:not(.dark) .bg-rose-500\/10,
+  html:not(.dark) .bg-rose-400\/10,
+  html:not(.dark) .bg-rose-400\/20 {
+    background-color: rgb(254 226 226); /* red-100 */
+  }
+
+  html:not(.dark) .bg-emerald-500\/5,
+  html:not(.dark) .bg-emerald-500\/10,
+  html:not(.dark) .bg-emerald-500\/15,
+  html:not(.dark) .bg-emerald-400\/10 {
+    background-color: rgb(209 250 229); /* emerald-100 */
+  }
+
+  html:not(.dark) .bg-sky-500\/5,
+  html:not(.dark) .bg-sky-500\/10,
+  html:not(.dark) .bg-sky-400\/10,
+  html:not(.dark) .bg-cyan-500\/10 {
+    background-color: rgb(224 242 254); /* sky-100 */
+  }
+
+  html:not(.dark) .bg-orange-500\/5,
+  html:not(.dark) .bg-orange-500\/10,
+  html:not(.dark) .bg-orange-500\/12 {
+    background-color: rgb(255 237 213); /* orange-100 */
   }
 
 

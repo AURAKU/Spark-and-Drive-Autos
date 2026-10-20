@@ -38,32 +38,32 @@ const TONE_STYLES: Record<
   sky: {
     bar: "from-sky-400 via-sky-400/70 to-transparent",
     glow: "group-hover:shadow-[0_0_40px_-12px_rgba(56,189,248,0.45)]",
-    icon: "text-sky-300 bg-sky-400/10 border-sky-400/25",
-    chip: "bg-sky-400/10 text-sky-200",
+    icon: "text-sky-800 bg-sky-100 border-sky-300 dark:text-sky-300 dark:bg-sky-400/10 dark:border-sky-400/25",
+    chip: "bg-sky-100 text-sky-950 dark:bg-sky-400/10 dark:text-sky-200",
   },
   amber: {
     bar: "from-amber-400 via-amber-400/70 to-transparent",
     glow: "group-hover:shadow-[0_0_40px_-12px_rgba(251,191,36,0.4)]",
-    icon: "text-amber-300 bg-amber-400/10 border-amber-400/25",
-    chip: "bg-amber-400/10 text-amber-100",
+    icon: "text-amber-800 bg-amber-100 border-amber-300 dark:text-amber-300 dark:bg-amber-400/10 dark:border-amber-400/25",
+    chip: "bg-amber-100 text-amber-950 dark:bg-amber-400/10 dark:text-amber-100",
   },
   emerald: {
     bar: "from-emerald-400 via-emerald-400/70 to-transparent",
     glow: "group-hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.4)]",
-    icon: "text-emerald-300 bg-emerald-400/10 border-emerald-400/25",
-    chip: "bg-emerald-400/10 text-emerald-100",
+    icon: "text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-400/10 dark:border-emerald-400/25",
+    chip: "bg-emerald-100 text-emerald-950 dark:bg-emerald-400/10 dark:text-emerald-100",
   },
   rose: {
     bar: "from-rose-400 via-rose-400/70 to-transparent",
     glow: "group-hover:shadow-[0_0_40px_-12px_rgba(251,113,133,0.4)]",
-    icon: "text-rose-300 bg-rose-400/10 border-rose-400/25",
-    chip: "bg-rose-400/10 text-rose-100",
+    icon: "text-rose-800 bg-rose-100 border-rose-300 dark:text-rose-300 dark:bg-rose-400/10 dark:border-rose-400/25",
+    chip: "bg-rose-100 text-rose-950 dark:bg-rose-400/10 dark:text-rose-100",
   },
   zinc: {
     bar: "from-zinc-300 via-zinc-400/50 to-transparent",
     glow: "group-hover:shadow-[0_0_32px_-14px_rgba(255,255,255,0.2)]",
-    icon: "text-zinc-300 bg-white/5 border-white/10",
-    chip: "bg-white/5 text-zinc-300",
+    icon: "text-zinc-700 bg-zinc-100 border-zinc-300 dark:text-zinc-300 dark:bg-white/5 dark:border-white/10",
+    chip: "bg-zinc-200 text-zinc-900 dark:bg-white/5 dark:text-zinc-300",
   },
 };
 

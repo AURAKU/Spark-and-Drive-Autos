@@ -136,7 +136,10 @@ export async function markThreadReadForViewer(threadId: string, viewer: "admin" 
         data: { unreadForCustomer: 0 },
       }),
       prisma.message.updateMany({
-        where: { chatId: threadId, senderType: MessageSenderType.ADMIN },
+        where: {
+          chatId: threadId,
+          senderType: { in: [MessageSenderType.ADMIN, MessageSenderType.SYSTEM] },
+        },
         data: { isRead: true, readAt: new Date() },
       }),
     ]);

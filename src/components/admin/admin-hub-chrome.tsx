@@ -22,8 +22,8 @@ export function AdminHubChrome({ pageKeys }: { pageKeys: string[] }) {
 
   return (
     <div className="mb-5 min-w-0 sm:mb-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{hub.label}</p>
-      <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500 sm:mt-1.5">{hub.description}</p>
+      <p className="sda-readable-subtle text-[11px] font-semibold uppercase tracking-[0.16em]">{hub.label}</p>
+      <p className="sda-readable-muted mt-1 max-w-2xl text-xs leading-relaxed sm:mt-1.5">{hub.description}</p>
       <div className="mt-3 sm:mt-4">
         <AdminHubTabs tabs={tabs} label={hub.label} />
       </div>

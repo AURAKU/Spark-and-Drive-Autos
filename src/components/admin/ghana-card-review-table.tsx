@@ -48,7 +48,7 @@ function PendingCard({
   const [rejectReason, setRejectReason] = useState("");
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+    <div className="rounded-2xl border border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.03] p-4 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="w-full max-w-xl shrink-0 lg:max-w-[420px]">
           {row.ghanaCardImageUrl ? (
@@ -60,13 +60,13 @@ function PendingCard({
               variant="admin"
             />
           ) : (
-            <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-white/10 bg-black/30 text-xs text-zinc-500">
+            <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-border dark:border-white/10 bg-black/30 text-xs text-zinc-500">
               No upload
             </div>
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-medium text-white">{row.email}</p>
+          <p className="font-medium text-foreground">{row.email}</p>
           {row.name ? <p className="text-sm text-zinc-400">{row.name}</p> : null}
           <p className="text-xs text-zinc-500">AI suggestion: {row.ghanaCardAiSuggestedNumber ?? "—"}</p>
 
@@ -85,7 +85,7 @@ function PendingCard({
             value={expiryDate}
             onChange={(e) => setExpiryDate(e.target.value)}
             disabled={busy}
-            className="h-10 w-full max-w-xs rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white"
+            className="h-10 w-full max-w-xs rounded-lg border border-border dark:border-white/10 bg-black/30 px-3 text-sm text-foreground"
           />
 
           <div className="flex flex-wrap gap-2 pt-2">
@@ -106,7 +106,7 @@ function PendingCard({
               onChange={(e) => setRejectReason(e.target.value)}
               disabled={busy}
               rows={2}
-              className="mt-1 w-full max-w-md rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full max-w-md rounded-lg border border-border dark:border-white/10 bg-black/40 px-3 py-2 text-sm text-foreground"
               placeholder="Explain what is wrong with the upload"
             />
             <button
@@ -218,30 +218,30 @@ export function GhanaCardReviewTable({
         <button
           type="button"
           onClick={() => setQuickFilter("all")}
-          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs ${quickFilter === "all" ? "bg-[var(--brand)] text-black font-semibold" : "border border-white/15 text-zinc-300 hover:bg-white/10"}`}
+          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium ${quickFilter === "all" ? "bg-[var(--brand)] font-semibold text-black" : "border border-border text-foreground hover:bg-muted dark:border-border dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"}`}
         >
           All ({pendingRows.length + expiredRows.length})
         </button>
         <button
           type="button"
           onClick={() => setQuickFilter("pending")}
-          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs ${quickFilter === "pending" ? "bg-amber-400 text-black font-semibold" : "border border-white/15 text-zinc-300 hover:bg-white/10"}`}
+          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium ${quickFilter === "pending" ? "bg-amber-400 font-semibold text-black" : "border border-border text-foreground hover:bg-muted dark:border-border dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"}`}
         >
           Pending ({pendingRows.length})
         </button>
         <button
           type="button"
           onClick={() => setQuickFilter("expired")}
-          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs ${quickFilter === "expired" ? "bg-red-400 text-black font-semibold" : "border border-white/15 text-zinc-300 hover:bg-white/10"}`}
+          className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium ${quickFilter === "expired" ? "bg-red-400 font-semibold text-black" : "border border-border text-foreground hover:bg-muted dark:border-border dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"}`}
         >
           Expired ({expiredRows.length})
         </button>
       </div>
       {quickFilter !== "expired" ? (
       <section>
-        <h3 className="text-base font-semibold text-white">Pending approvals</h3>
+        <h3 className="text-base font-semibold text-foreground">Pending approvals</h3>
         {pendingSorted.length === 0 ? (
-          <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-zinc-400">
+          <p className="mt-3 rounded-xl border border-border bg-zinc-100 px-4 py-8 text-center text-sm font-medium text-zinc-800 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200">
             No pending uploads.
           </p>
         ) : (
@@ -263,25 +263,25 @@ export function GhanaCardReviewTable({
       {quickFilter !== "pending" ? (
       <section>
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold text-white">Expired IDs</h3>
+          <h3 className="text-base font-semibold text-foreground">Expired IDs</h3>
           <button
             type="button"
             disabled={resetting}
             onClick={() => void resetExpired()}
-            className="inline-flex h-9 items-center rounded-lg border border-amber-400/40 bg-amber-500/15 px-4 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+            className="inline-flex h-9 items-center rounded-lg border border-amber-700/40 bg-amber-100 px-4 text-sm font-semibold text-amber-950 hover:bg-amber-200 disabled:opacity-50 dark:border-amber-400/40 dark:bg-amber-500/20 dark:text-amber-100 dark:hover:bg-amber-500/30"
           >
             {resetting ? "Resetting…" : "Reset selected approvals"}
           </button>
         </div>
 
         {expiredRows.length === 0 ? (
-          <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-zinc-400">
+          <p className="mt-3 rounded-xl border border-border bg-zinc-100 px-4 py-8 text-center text-sm font-medium text-zinc-800 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200">
             No expired approved IDs detected.
           </p>
         ) : (
-          <div className="mt-4 sda-table-scroll rounded-xl border border-white/10">
+          <div className="mt-4 sda-table-scroll rounded-xl border border-border dark:border-white/10">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-white/[0.04] text-zinc-300">
+              <thead className="bg-muted/50 text-foreground/70 dark:bg-white/[0.04] dark:text-zinc-300">
                 <tr>
                   <th className="px-3 py-2">Select</th>
                   <th className="px-3 py-2">User</th>
@@ -293,7 +293,7 @@ export function GhanaCardReviewTable({
                 {expiredRows.map((row) => {
                   const checked = selectedExpired.includes(row.id);
                   return (
-                    <tr key={row.id} className="border-t border-white/10 text-zinc-200">
+                    <tr key={row.id} className="border-t border-border text-foreground dark:border-white/10 dark:text-zinc-200">
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"

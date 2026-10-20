@@ -96,13 +96,9 @@ export default async function AdminIdentityHubPage(props: { searchParams: Search
         <p className="mt-2 text-sm text-muted-foreground">
           Pending uploads stay temporary until approval. Expired IDs are listed for admin reset.
         </p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full border border-amber-300/30 bg-amber-500/10 px-3 py-1 text-amber-100">
-            Pending: {pendingTotal}
-          </span>
-          <span className="rounded-full border border-red-300/30 bg-red-500/10 px-3 py-1 text-red-100">
-            Expired: {expiredTotal}
-          </span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="sda-chip-warn">Pending: {pendingTotal}</span>
+          <span className="sda-chip-danger">Expired: {expiredTotal}</span>
         </div>
         <div className="mt-8">
           <GhanaCardReviewTable
