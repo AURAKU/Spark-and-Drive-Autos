@@ -6,8 +6,9 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { sidebarLinkActive } from "@/lib/rbac/nav";
 
-export type AdminNavLink = { href: string; label: string };
+export type AdminNavLink = { href: string; label: string; hubId?: string };
 
 type Props = {
   links: AdminNavLink[];
@@ -26,7 +27,7 @@ export function AdminMobileNav({ links, sectionLabel }: Props) {
       </SheetTrigger>
       <SheetContent
         side="left"
-        className="flex h-full max-h-[100dvh] w-[min(100vw-2rem,20rem)] flex-col gap-0 overflow-hidden border-border bg-sidebar p-0 text-sidebar-foreground dark:border-white/10"
+        className="flex h-full max-h-[100dvh] w-[min(100vw-2rem,20rem)] flex-col gap-0 overflow-hidden border-border bg-sidebar p-0 pt-[env(safe-area-inset-top,0px)] text-sidebar-foreground dark:border-white/10"
       >
         <SheetHeader className="shrink-0 border-b border-sidebar-border px-4 pb-4 pt-4 text-left">
           <SheetTitle className="text-sidebar-foreground">{sectionLabel}</SheetTitle>
@@ -34,10 +35,10 @@ export function AdminMobileNav({ links, sectionLabel }: Props) {
         </SheetHeader>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-y-contain px-2 py-4 [-webkit-overflow-scrolling:touch]">
           {links.map((l) => {
-            const active = pathname === l.href || (l.href !== "/admin" && pathname.startsWith(l.href));
+            const active = sidebarLinkActive(pathname, l);
             return (
               <Link
-                key={l.href}
+                key={l.hubId ?? l.href}
                 href={l.href}
                 className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition ${
                   active

@@ -1,4 +1,3 @@
-import { AdminPartsFinderHubTabs } from "@/components/admin/admin-parts-finder-hub-tabs";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getPartsRequestFeeSettings } from "@/lib/parts-request-fee";
 
@@ -9,7 +8,6 @@ export default async function PartsRequestFeeSettingsPage() {
   const settings = await getPartsRequestFeeSettings();
   return (
     <div className="space-y-4">
-      <AdminPartsFinderHubTabs active="parts-request-fee" />
       <h1 className="text-xl font-semibold">Parts request fee</h1>
       <p className="text-sm text-muted-foreground">
         This amount is charged before a parts or accessories request is sent to the team. The starting fee is GHS 30.

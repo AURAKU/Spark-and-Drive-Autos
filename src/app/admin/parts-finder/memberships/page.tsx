@@ -212,7 +212,7 @@ export default async function AdminPartsFinderMembershipsPage(props: { searchPar
         <Link className="rounded-md border border-border px-2 py-1 hover:bg-muted/40" href="/admin/parts-finder/memberships?status=SUSPENDED">Suspended</Link>
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-xl border border-border">
+      <div className="mt-8 sda-table-scroll rounded-xl border border-border">
         <table className="w-full min-w-[700px] text-left text-sm">
           <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>

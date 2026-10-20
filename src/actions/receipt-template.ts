@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { RECEIPT_DEFAULTS } from "@/lib/receipt-template";
 import { prisma } from "@/lib/prisma";
+import { isUniqueConstraintViolation } from "@/lib/prisma-unique";
 import { writeAuditLog } from "@/lib/audit";
 
 const schema = z.object({
@@ -23,6 +24,69 @@ const schema = z.object({
   accentColor: z.string().regex(/^#?[0-9a-fA-F]{6}$/),
   showSignatureLine: z.preprocess((v) => v === "on" || v === "true", z.boolean()).default(false),
 });
+
+type TemplateContent = {
+  businessName: string;
+  title: string;
+  categoryLabel: string;
+  phone: string;
+  email: string;
+  address: string;
+  legalNote: string;
+  footerNote: string;
+  signatureLabel: string;
+  accentColor: string;
+  showSignatureLine: boolean;
+};
+
+async function createNextTemplateVersion(input: {
+  type: ReceiptType;
+  actorId: string;
+  content: TemplateContent;
+  nameForVersion: (version: number) => string;
+  auditAction: string;
+}): Promise<number> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const latest = await tx.receiptTemplate.findFirst({
+          where: { type: input.type },
+          orderBy: { version: "desc" },
+          select: { version: true },
+        });
+        const nextVersion = (latest?.version ?? 0) + 1;
+        await tx.receiptTemplate.updateMany({
+          where: { type: input.type, isActive: true },
+          data: { isActive: false },
+        });
+        const created = await tx.receiptTemplate.create({
+          data: {
+            type: input.type,
+            version: nextVersion,
+            name: input.nameForVersion(nextVersion),
+            ...input.content,
+            isActive: true,
+            createdById: input.actorId,
+          },
+        });
+        await tx.receiptAuditLog.create({
+          data: {
+            templateId: created.id,
+            actorId: input.actorId,
+            action: input.auditAction,
+            metadata: { type: input.type, version: nextVersion },
+          },
+        });
+        return nextVersion;
+      });
+    } catch (e) {
+      lastError = e;
+      if (!isUniqueConstraintViolation(e)) throw e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not create receipt template version");
+}
 
 export async function saveReceiptTemplate(formData: FormData) {
   const admin = await requireAdmin();
@@ -42,37 +106,28 @@ export async function saveReceiptTemplate(formData: FormData) {
   });
   if (!parsed.success) return;
   const d = parsed.data;
+  const accentColor = d.accentColor.startsWith("#") ? d.accentColor : `#${d.accentColor}`;
 
-  const latest = await prisma.receiptTemplate.findFirst({
-    where: { type: d.type },
-    orderBy: { version: "desc" },
-    select: { version: true },
+  const version = await createNextTemplateVersion({
+    type: d.type,
+    actorId: admin.user.id,
+    auditAction: "RECEIPT_TEMPLATE_CREATED",
+    nameForVersion: (v) => `${d.type} v${v}`,
+    content: {
+      businessName: d.businessName,
+      title: d.title,
+      categoryLabel: d.categoryLabel,
+      phone: d.phone,
+      email: d.email,
+      address: d.address,
+      legalNote: d.legalNote,
+      footerNote: d.footerNote,
+      signatureLabel: d.signatureLabel,
+      accentColor,
+      showSignatureLine: d.showSignatureLine,
+    },
   });
-  const version = (latest?.version ?? 0) + 1;
-  await prisma.$transaction(async (tx) => {
-    await tx.receiptTemplate.updateMany({
-      where: { type: d.type, isActive: true },
-      data: { isActive: false },
-    });
-    const created = await tx.receiptTemplate.create({
-      data: {
-        ...d,
-        version,
-        accentColor: d.accentColor.startsWith("#") ? d.accentColor : `#${d.accentColor}`,
-        name: `${d.type} v${version}`,
-        isActive: true,
-        createdById: admin.user.id,
-      },
-    });
-    await tx.receiptAuditLog.create({
-      data: {
-        templateId: created.id,
-        actorId: admin.user.id,
-        action: "RECEIPT_TEMPLATE_CREATED",
-        metadata: { type: d.type, version },
-      },
-    });
-  });
+
   await writeAuditLog({
     actorId: admin.user.id,
     action: "RECEIPT_TEMPLATE_UPDATED",
@@ -117,34 +172,26 @@ export async function resetReceiptTemplate(formData: FormData) {
   const parsed = z.nativeEnum(ReceiptType).safeParse(formData.get("type"));
   if (!parsed.success) return;
   const type = parsed.data;
-  const latest = await prisma.receiptTemplate.findFirst({
-    where: { type },
-    orderBy: { version: "desc" },
-    select: { version: true },
-  });
-  const version = (latest?.version ?? 0) + 1;
+  const defaults = RECEIPT_DEFAULTS[type];
 
-  await prisma.$transaction(async (tx) => {
-    await tx.receiptTemplate.updateMany({
-      where: { type, isActive: true },
-      data: { isActive: false },
-    });
-    const created = await tx.receiptTemplate.create({
-      data: {
-        type,
-        version,
-        ...RECEIPT_DEFAULTS[type],
-        createdById: admin.user.id,
-      },
-    });
-    await tx.receiptAuditLog.create({
-      data: {
-        templateId: created.id,
-        actorId: admin.user.id,
-        action: "RECEIPT_TEMPLATE_RESET_DEFAULT",
-        metadata: { type, version },
-      },
-    });
+  await createNextTemplateVersion({
+    type,
+    actorId: admin.user.id,
+    auditAction: "RECEIPT_TEMPLATE_RESET_DEFAULT",
+    nameForVersion: () => defaults.name,
+    content: {
+      businessName: defaults.businessName,
+      title: defaults.title,
+      categoryLabel: defaults.categoryLabel,
+      phone: defaults.phone,
+      email: defaults.email,
+      address: defaults.address,
+      legalNote: defaults.legalNote,
+      footerNote: defaults.footerNote,
+      signatureLabel: defaults.signatureLabel,
+      accentColor: defaults.accentColor,
+      showSignatureLine: defaults.showSignatureLine,
+    },
   });
   revalidatePath("/admin/settings/receipt-template");
 }

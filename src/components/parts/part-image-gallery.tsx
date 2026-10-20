@@ -206,7 +206,7 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
         ariaLabel="Full screen product photos"
         footer={
           count > 1 ? (
-            <div className="flex max-h-28 shrink-0 justify-center gap-2 overflow-x-auto border-t border-white/10 bg-black/80 px-2 py-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="sda-chip-scroll max-h-28 shrink-0 justify-center border-t border-white/10 bg-black/80 px-2 py-[max(0.75rem,env(safe-area-inset-bottom))]">
               {images.map((img, i) => (
                 <button
                   key={img.id}

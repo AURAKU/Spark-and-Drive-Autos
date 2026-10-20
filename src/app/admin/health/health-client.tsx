@@ -59,7 +59,7 @@ export function AdminHealthClient() {
           </span>
         ) : null}
       </div>
-      <div className="overflow-x-auto">
+      <div className="sda-table-scroll">
         <table className="w-full min-w-[320px] text-left text-sm">
           <thead className="border-b border-white/10 text-xs uppercase text-zinc-500">
             <tr>

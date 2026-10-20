@@ -94,18 +94,25 @@ export function AdminOperationsDateFilter() {
     router.push(`${pathname}${next.toString() ? `?${next.toString()}` : ""}`);
   }, [pathname, router, searchParams]);
 
+  const fieldClass =
+    "mt-1 flex h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground dark:border-white/15 dark:bg-black/40 dark:text-white";
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase">Date filter</p>
-          <p className="mt-1 text-sm text-zinc-400">
+        <div className="min-w-0">
+          <p className="sda-readable-subtle text-xs font-semibold tracking-wide uppercase">Date filter</p>
+          <p className="sda-readable-muted mt-1 text-sm leading-relaxed">
             Filter lists by calendar day, month, or year (UTC boundaries).{" "}
-            {activeLabel ? <span className="text-[var(--brand)]">Active: {activeLabel}</span> : <span>Showing all dates.</span>}
+            {activeLabel ? (
+              <span className="font-medium text-[var(--brand-readable)]">Active: {activeLabel}</span>
+            ) : (
+              <span>Showing all dates.</span>
+            )}
           </p>
         </div>
         {activeLabel ? (
-          <Button type="button" variant="outline" size="sm" className="border-white/15 text-xs" onClick={() => clear()}>
+          <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => clear()}>
             Clear date
           </Button>
         ) : null}
@@ -113,11 +120,11 @@ export function AdminOperationsDateFilter() {
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <div>
-          <label className="text-[11px] text-zinc-500">Scope</label>
+          <label className="sda-readable-subtle text-[11px] font-medium">Scope</label>
           <select
             value={mode}
             onChange={(e) => setMode(e.target.value as OpsDateMode)}
-            className="mt-1 flex h-10 min-w-[140px] rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white"
+            className={`${fieldClass} min-w-[140px]`}
           >
             <option value="off">All dates</option>
             <option value="day">Specific day</option>
@@ -128,38 +135,38 @@ export function AdminOperationsDateFilter() {
 
         {mode === "day" ? (
           <div>
-            <label className="text-[11px] text-zinc-500">Date</label>
+            <label className="sda-readable-subtle text-[11px] font-medium">Date</label>
             <input
               type="date"
               value={day}
               onChange={(e) => setDay(e.target.value)}
-              className="mt-1 flex h-10 rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white [color-scheme:dark]"
+              className={`${fieldClass} dark:[color-scheme:dark]`}
             />
           </div>
         ) : null}
 
         {mode === "month" ? (
           <div>
-            <label className="text-[11px] text-zinc-500">Month</label>
+            <label className="sda-readable-subtle text-[11px] font-medium">Month</label>
             <input
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="mt-1 flex h-10 rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white [color-scheme:dark]"
+              className={`${fieldClass} dark:[color-scheme:dark]`}
             />
           </div>
         ) : null}
 
         {mode === "year" ? (
           <div>
-            <label className="text-[11px] text-zinc-500">Year</label>
+            <label className="sda-readable-subtle text-[11px] font-medium">Year</label>
             <input
               type="number"
               min={2000}
               max={2100}
               value={year}
               onChange={(e) => setYear(e.target.value)}
-              className="mt-1 flex h-10 w-28 rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white"
+              className={`${fieldClass} w-28`}
             />
           </div>
         ) : null}

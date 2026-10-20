@@ -69,7 +69,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "minimal" 
   const isFull = variant === "full";
 
   return (
-    <footer className="border-t border-border bg-card text-card-foreground dark:border-white/10 dark:bg-slate-950 dark:text-zinc-100">
+    <footer className="sda-safe-area border-t border-border bg-card text-card-foreground dark:border-white/10 dark:bg-slate-950 dark:text-zinc-100">
       {isFull ? (
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Brand line: three pillars in one row on tablet+ */}

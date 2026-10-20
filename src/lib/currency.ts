@@ -78,16 +78,16 @@ export async function getGlobalCurrencySettings(): Promise<GlobalCurrencySetting
 
 const getGlobalCurrencySettingsCached = unstable_cache(
   async (): Promise<GlobalCurrencySettings> => {
-  const row = await prisma.globalCurrencySettings.findUnique({ where: { id: "default" } });
-  if (row) return row;
-  return prisma.globalCurrencySettings.create({
-    data: {
+  return prisma.globalCurrencySettings.upsert({
+    where: { id: "default" },
+    create: {
       id: "default",
       usdToRmb: DEFAULT_SETTINGS.usdToRmb,
       rmbToGhs: DEFAULT_SETTINGS.rmbToGhs,
       usdToGhs: DEFAULT_SETTINGS.usdToGhs,
       defaultReservationDepositPercent: DEFAULT_SETTINGS.defaultReservationDepositPercent,
     },
+    update: {},
   });
   },
   ["global-currency-settings:v2"],

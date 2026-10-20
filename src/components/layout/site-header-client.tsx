@@ -124,10 +124,10 @@ export function SiteHeaderClient({
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background dark:border-white/10 dark:bg-zinc-950 max-md:backdrop-blur-none md:bg-background/90 md:backdrop-blur-xl md:dark:bg-zinc-950/90">
+    <header className="sda-safe-top sticky top-0 z-50 border-b border-border bg-background dark:border-white/10 dark:bg-zinc-950 max-md:backdrop-blur-none md:bg-background/90 md:backdrop-blur-xl md:dark:bg-zinc-950/90">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/40 to-transparent" />
-      <div className="relative min-h-[4.25rem] w-full px-2 py-3 sm:px-4 lg:px-6">
-        <div className="flex min-h-[calc(4.25rem-1.5rem)] items-center justify-between">
+      <div className="relative min-h-[4.25rem] w-full py-3 pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] sm:pl-[max(1rem,env(safe-area-inset-left,0px))] sm:pr-[max(1rem,env(safe-area-inset-right,0px))] lg:pl-[max(1.5rem,env(safe-area-inset-left,0px))] lg:pr-[max(1.5rem,env(safe-area-inset-right,0px))]">
+        <div className="flex min-h-[calc(4.25rem-1.5rem)] min-w-0 items-center justify-between gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/80 p-1.5 text-foreground shadow-[0_0_30px_-12px_rgba(239,68,68,0.35)] transition hover:border-[var(--brand)]/50 hover:bg-muted dark:border-white/25 dark:bg-white/[0.08] dark:text-white dark:shadow-[0_0_30px_-12px_rgba(239,68,68,0.7)] dark:hover:bg-white/[0.12]"

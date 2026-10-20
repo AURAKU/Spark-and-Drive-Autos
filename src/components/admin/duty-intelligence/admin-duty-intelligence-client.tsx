@@ -183,7 +183,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
           </p>
           {formulaState.error && <p className="text-sm text-destructive">{formulaState.error}</p>}
           {formulaState.ok && <p className="text-sm text-emerald-600">Formula updated.</p>}
-          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+          <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground dark:border-white/10">
@@ -262,7 +262,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
       )}
 
       {tab === "HS Codes" && (
-        <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+        <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
@@ -297,7 +297,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
           </p>
           {shippingState.error && <p className="text-sm text-destructive">{shippingState.error}</p>}
           {shippingState.ok && <p className="text-sm text-emerald-600">Shipping cost updated.</p>}
-          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+          <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
@@ -346,7 +346,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
           </p>
           {insuranceState.error && <p className="text-sm text-destructive">{insuranceState.error}</p>}
           {insuranceState.ok && <p className="text-sm text-emerald-600">Insurance rule updated.</p>}
-          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+          <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
@@ -420,7 +420,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
               Add verified import
             </button>
           </form>
-          <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+          <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
@@ -446,7 +446,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
       )}
 
       {tab === "Calculations" && (
-        <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+        <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">

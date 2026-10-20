@@ -1,16 +1,30 @@
 import { AdminDuplicatesHub } from "@/components/admin/admin-duplicates-hub";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { scanCarDuplicateClusters, scanPartDuplicateClusters } from "@/lib/duplicate-clusters";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 const SCAN_CAP = 12_000;
+const PAGE_SIZE = 25;
 
-export default async function AdminDuplicatesPage() {
-  const [partsTotal, carsTotal, parts, cars, events] = await Promise.all([
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function AdminDuplicatesPage(props: { searchParams: SearchParams }) {
+  const sp = await props.searchParams;
+
+  const [partsTotal, carsTotal, eventTotal, pendingOpenCount] = await Promise.all([
     prisma.part.count(),
     prisma.car.count(),
+    prisma.duplicateCheckEvent.count(),
+    prisma.duplicateCheckEvent.count({ where: { decision: "PENDING" } }),
+  ]);
+  const meta = buildListPageMeta(eventTotal, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/duplicates", sp, meta);
+
+  const [parts, cars, events] = await Promise.all([
     prisma.part.findMany({
       select: {
         id: true,
@@ -43,7 +57,8 @@ export default async function AdminDuplicatesPage() {
     }),
     prisma.duplicateCheckEvent.findMany({
       orderBy: { createdAt: "desc" },
-      take: 120,
+      skip: meta.skip,
+      take: PAGE_SIZE,
     }),
   ]);
 
@@ -106,6 +121,7 @@ export default async function AdminDuplicatesPage() {
           partClusters={partClusters}
           carClusters={carClusters}
           events={logRows}
+          pendingOpenCount={pendingOpenCount}
           partsScanned={parts.length}
           partsTotal={partsTotal}
           carsScanned={cars.length}
@@ -113,6 +129,17 @@ export default async function AdminDuplicatesPage() {
           inventoryTruncated={inventoryTruncated}
         />
       </div>
+      {eventTotal > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={eventTotal}
+          pageSize={PAGE_SIZE}
+          itemLabel="Duplicate check events"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

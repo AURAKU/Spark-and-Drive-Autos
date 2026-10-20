@@ -174,7 +174,7 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
         </div>
       ) : null}
 
-      <nav className="mt-6 flex flex-wrap gap-2 border-b border-white/10 pb-3">
+      <nav className="sda-chip-scroll mt-6 border-b border-white/10 pb-3" aria-label="Parts management sections">
         <Link
           href={tabLink("catalog")}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${

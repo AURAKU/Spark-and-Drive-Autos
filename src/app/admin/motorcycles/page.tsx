@@ -174,7 +174,7 @@ export default async function AdminMotorcyclesPage(props: { searchParams: Search
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-border dark:border-white/10">
+      <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
         <table className="w-full min-w-[1100px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">

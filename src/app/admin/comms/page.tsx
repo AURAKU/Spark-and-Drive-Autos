@@ -1,13 +1,23 @@
 import { AdminCommsClient } from "@/components/admin/admin-comms-client";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+const PAGE_SIZE = 25;
+
 const VIEWS = ["chats", "inquiry", "sourcing", "leads", "quotes", "broadcast"] as const;
 type HubView = (typeof VIEWS)[number];
+
+const threadInclude = {
+  customer: { select: { id: true, name: true, email: true } },
+  car: { select: { id: true, title: true, slug: true } },
+  inquiry: { select: { id: true, type: true, status: true } },
+} as const;
 
 function parseView(raw: string | undefined): HubView {
   if (raw === "inquiries") return "inquiry";
@@ -23,15 +33,16 @@ export default async function LiveSupportChatPage(props: { searchParams: SearchP
   const initialThreadId = typeof raw === "string" ? raw : null;
   const initialView = parseView(typeof sp.view === "string" ? sp.view : undefined);
 
-  const [threads, inquiries, users, carRequests, leads, quotes] = await Promise.all([
+  const threadTotal = await prisma.chatThread.count();
+  const meta = buildListPageMeta(threadTotal, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/comms", sp, meta);
+
+  const [threadsPage, inquiries, users, carRequests, leads, quotes] = await Promise.all([
     prisma.chatThread.findMany({
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
-      take: 200,
-      include: {
-        customer: { select: { id: true, name: true, email: true } },
-        car: { select: { id: true, title: true, slug: true } },
-        inquiry: { select: { id: true, type: true, status: true } },
-      },
+      skip: meta.skip,
+      take: PAGE_SIZE,
+      include: threadInclude,
     }),
     prisma.inquiry.findMany({
       orderBy: { createdAt: "desc" },
@@ -72,6 +83,15 @@ export default async function LiveSupportChatPage(props: { searchParams: SearchP
       },
     }),
   ]);
+
+  let threads = threadsPage;
+  if (initialThreadId && !threads.some((t) => t.id === initialThreadId)) {
+    const focused = await prisma.chatThread.findUnique({
+      where: { id: initialThreadId },
+      include: threadInclude,
+    });
+    if (focused) threads = [focused, ...threads];
+  }
 
   const serializedThreads = threads.map((t) => ({
     id: t.id,
@@ -162,6 +182,17 @@ export default async function LiveSupportChatPage(props: { searchParams: SearchP
         quotes={quoteRows}
         recentAnnouncements={announcementRows}
       />
+      {threadTotal > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={threadTotal}
+          pageSize={PAGE_SIZE}
+          itemLabel="Chat threads"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

@@ -8,10 +8,10 @@ import { sanitizePlainText } from "@/lib/sanitize";
 export const PARTS_REQUEST_FEE_KIND = "PARTS_REQUEST_FEE";
 
 export async function getPartsRequestFeeSettings() {
-  const existing = await prisma.partsRequestFeeSettings.findUnique({ where: { id: "default" } });
-  if (existing) return existing;
-  return prisma.partsRequestFeeSettings.create({
-    data: { id: "default", enabled: true, feeAmount: new Prisma.Decimal(30), currency: "GHS" },
+  return prisma.partsRequestFeeSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default", enabled: true, feeAmount: new Prisma.Decimal(30), currency: "GHS" },
+    update: {},
   });
 }
 

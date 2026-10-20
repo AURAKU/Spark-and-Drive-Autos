@@ -272,16 +272,16 @@ export const ADMIN_PAGE_CATALOG: readonly AdminPageDef[] = [
   {
     key: "ghana_card",
     label: "Ghana Card",
-    href: "/admin/ghana-card",
+    href: "/admin/identity?tab=ghana-card",
     group: "support",
-    description: "Ghana Card verification queue.",
+    description: "Ghana Card review (Identity hub).",
   },
   {
     key: "verifications",
-    label: "Verifications",
-    href: "/admin/verifications",
+    label: "Document verification",
+    href: "/admin/identity?tab=documents",
     group: "support",
-    description: "Identity verification cases.",
+    description: "ID document checks (Identity hub).",
   },
   {
     key: "receipts",
@@ -379,6 +379,11 @@ export function resolveAdminPageKey(pathname: string): AdminPageKey | null {
 
 export function pathAllowedForPageKeys(pathname: string, keys: readonly string[]): boolean {
   if (keys.includes("*")) return true;
+  const path = pathname.replace(/\/$/, "") || "/admin";
+  // Merged Identity hub — open if the role has either Ghana Card or document verification.
+  if (path === "/admin/identity" || path.startsWith("/admin/identity/")) {
+    return keys.includes("ghana_card") || keys.includes("verifications");
+  }
   const key = resolveAdminPageKey(pathname);
   if (!key) return false;
   return keys.includes(key);

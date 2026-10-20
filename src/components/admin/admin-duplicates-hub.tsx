@@ -105,9 +105,12 @@ export function AdminDuplicatesHub(props: {
   carsScanned: number;
   carsTotal: number;
   inventoryTruncated: boolean;
+  /** When events are paginated, pass the full open-count so the log tab badge stays accurate. */
+  pendingOpenCount?: number;
 }) {
   const [tab, setTab] = useState<Tab>("parts");
-  const pendingEvents = props.events.filter((e) => e.decision === "PENDING").length;
+  const pendingEvents =
+    props.pendingOpenCount ?? props.events.filter((e) => e.decision === "PENDING").length;
 
   return (
     <div className="space-y-8">
@@ -282,7 +285,7 @@ export function AdminDuplicatesHub(props: {
             Warnings raised when staff saved a listing that looked like an existing one. Resolve each row so the team knows
             it was reviewed.
           </p>
-          <div className="overflow-x-auto rounded-2xl border border-white/10">
+          <div className="sda-table-scroll rounded-2xl border border-white/10">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
                 <tr>

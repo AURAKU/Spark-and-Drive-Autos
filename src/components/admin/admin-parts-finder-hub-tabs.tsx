@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-export type AdminPartsFinderHubView = "overview" | "verifications" | "verified-parts" | "parts-request-fee";
+export type AdminPartsFinderHubView = "overview" | "verified-parts" | "parts-request-fee";
 
 export function AdminPartsFinderHubTabs(props: { active: AdminPartsFinderHubView }) {
   const { active } = props;
@@ -24,9 +24,14 @@ export function AdminPartsFinderHubTabs(props: { active: AdminPartsFinderHubView
   return (
     <div className="mb-8 flex flex-wrap gap-2" role="tablist" aria-label="Parts finder admin sections">
       {tab("/admin/parts-finder", "Overview", "overview")}
-      {tab("/admin/parts-finder?view=verifications", "Identity verifications", "verifications")}
       {tab("/admin/parts-finder?view=verified-parts", "Verified part requests", "verified-parts")}
       {tab("/admin/parts-finder/parts-request-fee", "Parts request fee", "parts-request-fee")}
+      <Link
+        href="/admin/identity"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted/40"
+      >
+        Identity hub →
+      </Link>
     </div>
   );
 }

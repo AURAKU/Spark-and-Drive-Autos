@@ -3,12 +3,18 @@ import { Prisma } from "@prisma/client";
 
 import { DutyEstimatesIntro } from "@/components/duty/duty-estimate-customer-copy";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { requireSessionOrRedirect } from "@/lib/auth-helpers";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { formatEstimateMoney } from "@/lib/vehicle-import-estimate/data";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const PAGE_SIZE = 20;
 
 type EstimateRow = {
   id: string;
@@ -42,8 +48,21 @@ function statusChip(status: EstimateRow["status"]) {
   );
 }
 
-export default async function DashboardEstimatesPage() {
+export default async function DashboardEstimatesPage(props: { searchParams: SearchParams }) {
   const session = await requireSessionOrRedirect("/dashboard/estimates");
+  const sp = await props.searchParams;
+  const userId = session.user.id;
+
+  const countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+    SELECT COUNT(*)::bigint AS count
+    FROM "VehicleImportEstimate" e
+    LEFT JOIN "Order" o ON o."id" = e."orderId"
+    WHERE e."customerId" = ${userId} OR o."userId" = ${userId}
+  `);
+  const total = Number(countRows[0]?.count ?? 0);
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/dashboard/estimates", sp, meta);
+
   const rows = await prisma.$queryRaw<EstimateRow[]>(Prisma.sql`
     SELECT
       e."id",
@@ -58,8 +77,9 @@ export default async function DashboardEstimatesPage() {
       o."reference" AS "orderReference"
     FROM "VehicleImportEstimate" e
     LEFT JOIN "Order" o ON o."id" = e."orderId"
-    WHERE e."customerId" = ${session.user.id} OR o."userId" = ${session.user.id}
+    WHERE e."customerId" = ${userId} OR o."userId" = ${userId}
     ORDER BY e."updatedAt" DESC
+    LIMIT ${PAGE_SIZE} OFFSET ${meta.skip}
   `);
 
   return (
@@ -128,6 +148,17 @@ export default async function DashboardEstimatesPage() {
           ))
         )}
       </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Estimates"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

@@ -271,7 +271,7 @@ export default async function PartsStorefrontPage(props: { searchParams: SearchP
         </div>
 
         {extraCategories.length > 0 ? (
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="More categories">
+          <div className="sda-chip-scroll mt-4 pb-1" aria-label="More categories">
             {extraCategories.map((name) => (
               <Link
                 key={name}

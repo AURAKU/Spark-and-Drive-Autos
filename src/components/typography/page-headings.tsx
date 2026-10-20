@@ -9,24 +9,24 @@ const brandGlowStrong = "drop-shadow-[0_0_24px_color-mix(in_srgb,var(--brand)_42
 const pageVariants = {
   /** Full-width underline — FAQ, Contact, legal index, marketing copy pages */
   document: cn(
-    "border-b border-[var(--brand)]/50 pb-3 text-3xl font-bold tracking-tight text-[var(--brand)] sm:text-4xl",
+    "border-b border-[var(--brand)]/50 pb-3 text-3xl font-bold tracking-tight text-[var(--brand-readable)] sm:text-4xl",
     brandGlowStrong,
   ),
   /** Left accent — dashboard, admin, compact flows */
   dashboard: cn(
-    "border-l-[3px] border-[var(--brand)] pl-4 text-2xl font-bold tracking-tight text-[var(--brand)]",
+    "border-l-[3px] border-[var(--brand)] pl-4 text-2xl font-bold tracking-tight text-[var(--brand-readable)]",
     brandGlow,
   ),
   /** Large display — inventory hero, landing emphasis */
   hero: cn(
-    "text-4xl font-bold leading-tight tracking-tight text-[var(--brand)] sm:text-5xl",
+    "text-4xl font-bold leading-tight tracking-tight text-[var(--brand-readable)] sm:text-5xl",
     brandGlowStrong,
   ),
   /** Auth cards and narrow forms */
-  auth: cn("text-2xl font-bold tracking-tight text-[var(--brand)] sm:text-[1.65rem]", brandGlow),
+  auth: cn("text-2xl font-bold tracking-tight text-[var(--brand-readable)] sm:text-[1.65rem]", brandGlow),
   /** Vehicle / part detail titles */
   product: cn(
-    "text-3xl font-bold tracking-tight text-[var(--brand)] sm:text-4xl lg:text-5xl",
+    "text-3xl font-bold tracking-tight text-[var(--brand-readable)] sm:text-4xl lg:text-5xl",
     brandGlowStrong,
   ),
 } as const;
@@ -45,7 +45,16 @@ export function PageHeading({
   align?: "left" | "center";
 }) {
   return (
-    <h1 className={cn(pageVariants[variant], align === "center" && "text-center", className)}>{children}</h1>
+    <h1
+      className={cn(
+        "min-w-0 max-w-full break-words",
+        pageVariants[variant],
+        align === "center" && "text-center",
+        className,
+      )}
+    >
+      {children}
+    </h1>
   );
 }
 
@@ -71,7 +80,7 @@ export function SectionHeading({
   return (
     <h2
       className={cn(
-        "border-l-[3px] border-[var(--brand)] pl-4 text-[var(--brand)]",
+        "border-l-[3px] border-[var(--brand)] pl-4 text-[var(--brand-readable)]",
         sectionSizes[size],
         className,
       )}

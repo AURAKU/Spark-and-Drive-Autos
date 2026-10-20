@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { ProtectionCenterHub } from "@/components/admin/protection-center-hub";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { isAdminRole } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
@@ -16,22 +18,30 @@ export const metadata: Metadata = {
     "Detection and response hub for auth abuse, payments, webhooks, and admin actions — correlate IPs and accounts.",
 };
 
-const FEED_LIMIT = 200;
+const PAGE_SIZE = 25;
 const WINDOW_MS = 7 * 864e5;
 
-export default async function AdminProtectionCenterPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function AdminProtectionCenterPage(props: { searchParams: SearchParams }) {
   const session = await safeAuth();
   if (!session?.user?.role || !isAdminRole(session.user.role)) {
     redirect("/admin");
   }
 
+  const sp = await props.searchParams;
   const since = new Date(Date.now() - WINDOW_MS);
   const since24h = new Date(Date.now() - 864e5);
+
+  const total = await prisma.securityObservation.count();
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/security", sp, meta);
 
   const [feed, topIps, byChannel, bySeverity, recentBlocks] = await Promise.all([
     prisma.securityObservation.findMany({
       orderBy: { createdAt: "desc" },
-      take: FEED_LIMIT,
+      skip: meta.skip,
+      take: PAGE_SIZE,
       include: {
         user: { select: { id: true, email: true, phone: true, role: true, accountBlocked: true } },
       },
@@ -133,6 +143,17 @@ export default async function AdminProtectionCenterPage() {
             .map((b) => ({ userId: b.userId as string, at: b.createdAt.toISOString(), title: b.title }))}
         />
       </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Observations"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

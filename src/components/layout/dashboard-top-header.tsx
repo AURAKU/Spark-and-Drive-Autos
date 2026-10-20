@@ -47,7 +47,7 @@ export function DashboardTopHeader({ showPartnerStrip = true }: { showPartnerStr
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end lg:flex-row lg:items-center">
+          <div className="sda-action-row shrink-0 sm:flex-col sm:items-end lg:flex-row lg:items-center">
             <ThemeToggle />
             <BuyPartsCtaLink size="compact" className="!px-3.5 text-xs" href="/parts" />
             <PartsFinderCtaLink href="/parts-finder/entry" size="compact" className="!px-4 text-xs">

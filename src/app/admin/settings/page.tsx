@@ -584,7 +584,7 @@ export default async function AdminApiProvidersPage() {
           Use this as your operational checklist when connecting or auditing backend integrations from the admin panel.
           Registry-backed fields can be edited above; env-only fields are deployment-managed.
         </p>
-        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+        <div className="mt-4 sda-table-scroll rounded-xl border border-white/10">
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="border-b border-white/10 bg-black/20 text-xs uppercase tracking-wide text-zinc-500">
               <tr>

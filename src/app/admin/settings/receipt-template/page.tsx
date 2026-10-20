@@ -84,6 +84,8 @@ export default async function ReceiptTemplateSettingsPage() {
           <Link href="/admin/receipts" className="text-[var(--brand)] hover:underline">
             Open receipts archive →
           </Link>
+          {" · "}
+          <span className="text-zinc-500">Also under Money → Receipt templates</span>
         </p>
       </div>
       {Object.values(ReceiptType).map((type) => (

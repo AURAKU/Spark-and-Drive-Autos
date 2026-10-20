@@ -132,12 +132,12 @@ export function PartsShopNav({ lanes, departments, stock }: { lanes: ShopLink[];
           <Tile key={item.id} item={item} />
         ))}
       </div>
-      <div className="grid grid-cols-4 gap-2 md:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {departments.map((item) => (
           <Tile key={item.id} item={item} />
         ))}
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Stock">
+      <div className="sda-chip-scroll pb-1" role="group" aria-label="Stock">
         {stock.map((item) => (
           <Link
             key={item.id}

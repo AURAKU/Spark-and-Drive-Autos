@@ -113,8 +113,8 @@ export default async function AdminCarsPage(props: { searchParams: SearchParams 
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <div className="sda-page-header">
+        <div className="min-w-0">
           <PageHeading variant="dashboard">Cars Inventory</PageHeading>
           <p className="mt-1 text-sm text-zinc-500">
             Search, filter, and edit listings.{" "}

@@ -3,27 +3,26 @@ import { DisputeCaseStatus, DisputeCaseType, DisputePriority, Prisma } from "@pr
 
 import { openDisputeCaseAction } from "@/actions/disputes-admin";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { buildListPageMeta, listPageNav, readListPage, readSearchParam } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function readParam(sp: Record<string, string | string[] | undefined>, key: string): string | undefined {
-  const raw = sp[key];
-  return typeof raw === "string" ? raw.trim() || undefined : Array.isArray(raw) ? raw[0]?.trim() || undefined : undefined;
-}
+const PAGE_SIZE = 20;
 
 export default async function AdminDisputesPage(props: { searchParams: SearchParams }) {
   await requireAdmin();
   const sp = await props.searchParams;
-  const q = readParam(sp, "q");
-  const status = readParam(sp, "status");
-  const type = readParam(sp, "type");
-  const priority = readParam(sp, "priority");
-  const from = readParam(sp, "from");
-  const to = readParam(sp, "to");
+  const q = readSearchParam(sp, "q") || undefined;
+  const status = readSearchParam(sp, "status") || undefined;
+  const type = readSearchParam(sp, "type") || undefined;
+  const priority = readSearchParam(sp, "priority") || undefined;
+  const from = readSearchParam(sp, "from") || undefined;
+  const to = readSearchParam(sp, "to") || undefined;
 
   const where: Prisma.DisputeCaseWhereInput = {
     ...(status && Object.values(DisputeCaseStatus).includes(status as DisputeCaseStatus)
@@ -54,11 +53,16 @@ export default async function AdminDisputesPage(props: { searchParams: SearchPar
       : {}),
   };
 
+  const total = await prisma.disputeCase.count({ where });
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/disputes", sp, meta);
+
   const [rows, metrics] = await Promise.all([
     prisma.disputeCase.findMany({
       where,
       orderBy: [{ priority: "desc" }, { openedAt: "desc" }],
-      take: 120,
+      skip: meta.skip,
+      take: PAGE_SIZE,
       include: {
         user: { select: { email: true, name: true } },
         payment: { select: { id: true, providerReference: true, status: true } },
@@ -91,14 +95,17 @@ export default async function AdminDisputesPage(props: { searchParams: SearchPar
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="sda-page-header">
+        <div className="min-w-0">
           <PageHeading variant="dashboard">Dispute & chargeback defense</PageHeading>
           <p className="mt-2 text-sm text-zinc-400">
             Manage disputes, collect legal-grade evidence, and protect payment/order operations with full audit trail controls.
           </p>
         </div>
-        <Link href="/admin/payments/intelligence" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white hover:bg-white/10">
+        <Link
+          href="/admin/payments/intelligence"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/10 px-3 py-2 text-xs text-white hover:bg-white/10"
+        >
           Open payment intelligence
         </Link>
       </div>
@@ -242,6 +249,17 @@ export default async function AdminDisputesPage(props: { searchParams: SearchPar
           </tbody>
         </table>
       </section>
+      {total > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Disputes"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

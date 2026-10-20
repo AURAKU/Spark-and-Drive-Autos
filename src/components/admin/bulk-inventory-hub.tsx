@@ -212,7 +212,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, page, totalPages
           </Button>
         </div>
 
-        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+        <div className="mt-4 sda-table-scroll rounded-xl border border-white/10">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-white/10 bg-black/30 text-xs uppercase tracking-wide text-zinc-500">
               <tr>

@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CommandCenterStatGrid } from "@/components/admin/command-center-stat-grid";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
 
 export type CommandCenterActivity = {
@@ -56,17 +57,7 @@ export function CommandCenterDashboard({
 }: CommandCenterProps) {
   return (
     <div className="space-y-10">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((c) => (
-          <div
-            key={c.label}
-            className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent p-5 shadow-lg shadow-black/20"
-          >
-            <p className="text-[11px] font-medium tracking-wider text-zinc-500 uppercase">{c.label}</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{c.value}</p>
-          </div>
-        ))}
-      </div>
+      <CommandCenterStatGrid cards={summaryCards} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">

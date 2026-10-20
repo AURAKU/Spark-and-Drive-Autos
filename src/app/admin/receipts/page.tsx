@@ -1,20 +1,27 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { voidReceiptAction } from "@/actions/receipt-template";
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { buildListPageMeta, listPageNav, readListPage, readSearchParam } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 30;
+
 export default async function AdminReceiptsPage({ searchParams }: Props) {
   await requireAdmin();
   const sp = await searchParams;
-  const q = String(sp.q ?? "").trim();
-  const page = Math.max(1, Number(sp.page ?? 1) || 1);
-  const pageSize = 30;
+  const tab = readSearchParam(sp, "tab");
+  if (tab === "templates") {
+    redirect("/admin/settings/receipt-template");
+  }
+  const q = readSearchParam(sp, "q");
   const where = q
     ? {
         OR: [
@@ -27,21 +34,22 @@ export default async function AdminReceiptsPage({ searchParams }: Props) {
       }
     : {};
 
-  const [rows, total] = await Promise.all([
-    prisma.generatedReceipt.findMany({
-      where,
-      orderBy: { issuedAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        user: { select: { email: true, name: true } },
-        order: { select: { reference: true } },
-        payment: { select: { providerReference: true } },
-      },
-    }),
-    prisma.generatedReceipt.count({ where }),
-  ]);
-  const hasNext = page * pageSize < total;
+  const total = await prisma.generatedReceipt.count({ where });
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/receipts", sp, meta);
+
+  const rows = await prisma.generatedReceipt.findMany({
+    where,
+    orderBy: { issuedAt: "desc" },
+    skip: meta.skip,
+    take: PAGE_SIZE,
+    include: {
+      user: { select: { email: true, name: true } },
+      order: { select: { reference: true } },
+      payment: { select: { providerReference: true } },
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -49,8 +57,8 @@ export default async function AdminReceiptsPage({ searchParams }: Props) {
           <PageHeading variant="dashboard">Receipts archive</PageHeading>
           <p className="mt-2 text-sm text-zinc-400">Search, download, and void generated receipts.</p>
         </div>
-        <Link href="/admin/settings/receipt-template" className="text-sm text-[var(--brand)] hover:underline">
-          Manage templates →
+        <Link href="/admin/receipts?tab=templates" className="text-sm text-[var(--brand)] hover:underline">
+          Receipt templates →
         </Link>
       </div>
 
@@ -66,7 +74,7 @@ export default async function AdminReceiptsPage({ searchParams }: Props) {
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
+      <div className="sda-table-scroll rounded-2xl border border-white/10">
         <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-black/25 text-left text-zinc-400">
             <tr>
@@ -117,10 +125,17 @@ export default async function AdminReceiptsPage({ searchParams }: Props) {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-4 text-sm">
-        {page > 1 ? <Link href={`/admin/receipts?q=${encodeURIComponent(q)}&page=${page - 1}`} className="text-[var(--brand)] hover:underline">Previous</Link> : <span className="text-zinc-500">Previous</span>}
-        {hasNext ? <Link href={`/admin/receipts?q=${encodeURIComponent(q)}&page=${page + 1}`} className="text-[var(--brand)] hover:underline">Next</Link> : <span className="text-zinc-500">Next</span>}
-      </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Receipts"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

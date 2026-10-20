@@ -23,7 +23,7 @@ export default async function DashboardReceiptsPage() {
         <PageHeading variant="dashboard">My receipts</PageHeading>
         <p className="mt-2 text-sm text-zinc-400">Download your payment receipts and track their status.</p>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
+      <div className="sda-table-scroll rounded-2xl border border-white/10">
         <table className="w-full min-w-[840px] text-sm">
           <thead className="bg-black/25 text-left text-zinc-400">
             <tr>

@@ -51,9 +51,9 @@ export function AdminDutyHubClient({ rows }: Props) {
   return (
     <div className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
       <div className="space-y-4">
-        <div className="overflow-x-auto rounded-2xl border border-white/10">
+        <div className="sda-table-scroll rounded-2xl border border-border dark:border-white/10">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-zinc-500 dark:border-white/10 dark:bg-white/[0.03]">
               <tr>
                 <th className="px-4 py-3">Order</th>
                 <th className="px-4 py-3">Vehicle</th>
@@ -74,10 +74,10 @@ export function AdminDutyHubClient({ rows }: Props) {
                 rows.map((r) => (
                   <tr
                     key={r.id}
-                    className={`cursor-pointer border-b border-white/5 hover:bg-white/[0.02] ${openId === r.id ? "bg-white/[0.04]" : ""}`}
+                    className={`cursor-pointer border-b border-border/60 hover:bg-muted/40 dark:border-white/5 dark:hover:bg-white/[0.02] ${openId === r.id ? "bg-muted/50 dark:bg-white/[0.04]" : ""}`}
                     onClick={() => setOpenId(r.id)}
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-300">{r.reference}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-foreground/90">{r.reference}</td>
                     <td className="px-4 py-3 text-zinc-400">{r.carTitle ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{r.userEmail ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{r.seaShipment?.currentStage.replaceAll("_", " ") ?? "—"}</td>
@@ -100,10 +100,10 @@ export function AdminDutyHubClient({ rows }: Props) {
         </div>
 
         {selected ? (
-          <div className="space-y-6 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+          <div className="space-y-6 rounded-2xl border border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-white">Duty operations</h2>
+                <h2 className="text-lg font-semibold text-foreground">Duty operations</h2>
                 <p className="mt-1 font-mono text-xs text-zinc-500">{selected.reference}</p>
                 <p className="mt-2 text-sm text-zinc-400">{selected.carTitle ?? "Vehicle"}</p>
               </div>
@@ -131,7 +131,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                 </div>
 
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Workflow stage</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Workflow stage</h3>
                   <form
                     className="flex flex-col gap-3 sm:flex-row sm:items-end"
                     onSubmit={(e) => {
@@ -146,7 +146,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                       <select
                         name="workflowStage"
                         defaultValue={selected.duty.workflowStage}
-                        className="h-10 w-full rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white"
+                        className="h-10 w-full rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/40 px-3 text-sm text-foreground"
                       >
                         {DUTY_WORKFLOW_ORDER.map((s) => (
                           <option key={s} value={s}>
@@ -162,7 +162,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                         rows={2}
                         defaultValue={selected.duty.customerVisibleNote ?? ""}
                         placeholder="Shown to the buyer on their order page when you save workflow."
-                        className="resize-none border-white/15 bg-black/40 text-sm"
+                        className="resize-none border-border bg-background dark:border-white/15 dark:bg-black/40 text-sm"
                       />
                     </div>
                     <Button type="submit" disabled={pending}>
@@ -172,7 +172,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                 </section>
 
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Notes</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Notes</h3>
                   <form
                     className="space-y-3"
                     onSubmit={(e) => {
@@ -188,7 +188,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                         name="customerVisibleNote"
                         rows={3}
                         defaultValue={selected.duty.customerVisibleNote ?? ""}
-                        className="border-white/15 bg-black/40 text-sm"
+                        className="border-border bg-background dark:border-white/15 dark:bg-black/40 text-sm"
                       />
                     </div>
                     <div className="space-y-1">
@@ -197,7 +197,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                         name="internalNote"
                         rows={2}
                         defaultValue={selected.duty.internalNote ?? ""}
-                        className="border-white/15 bg-black/40 text-sm"
+                        className="border-border bg-background dark:border-white/15 dark:bg-black/40 text-sm"
                       />
                     </div>
                     <Button type="submit" variant="secondary" disabled={pending}>
@@ -207,7 +207,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                 </section>
 
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Recorded payable duty (GHS)</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Recorded payable duty (GHS)</h3>
                   <p className="text-xs text-zinc-500">
                     Operations-only figure for settlement (e.g. from your clearance paperwork or finance handoff). Final
                     customs assessment is determined at the port by Ghana Customs.
@@ -229,7 +229,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                         step="0.01"
                         min={0}
                         defaultValue={selected.duty.assessedDutyGhs ?? ""}
-                        className="w-48 border-white/15 bg-black/40"
+                        className="w-48 border-border bg-background dark:border-white/15 dark:bg-black/40"
                       />
                     </div>
                     <Button type="submit" disabled={pending}>
@@ -239,7 +239,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                 </section>
 
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Persist calculator estimate to this order</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Persist calculator estimate to this order</h3>
                   <p className="text-xs text-zinc-500">
                     Use the same inputs as the calculator panel (right). Saving stores the breakdown JSON and sets the workflow to estimate-generated when appropriate.
                   </p>
@@ -254,7 +254,7 @@ export function AdminDutyHubClient({ rows }: Props) {
                 </section>
 
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Duty payment request</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Duty payment request</h3>
                   <p className="text-xs text-zinc-500">
                     Creates a manual payment row (customer uploads proof). When finance marks it successful, the duty workflow moves to{" "}
                     <span className="text-zinc-400">Duty paid</span> automatically.
@@ -289,12 +289,12 @@ export function AdminDutyHubClient({ rows }: Props) {
                         min={0}
                         required
                         defaultValue={selected.duty.assessedDutyGhs ?? selected.duty.estimateTotalGhs ?? ""}
-                        className="w-44 border-white/15 bg-black/40"
+                        className="w-44 border-border bg-background dark:border-white/15 dark:bg-black/40"
                       />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-zinc-500">Settlement</Label>
-                      <select name="settlementMethod" className="h-10 rounded-lg border border-white/15 bg-black/40 px-3 text-sm text-white">
+                      <select name="settlementMethod" className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/40 px-3 text-sm text-foreground">
                         <option value="BANK_GHS_COMPANY">Bank (GHS)</option>
                         <option value="MOBILE_MONEY">Mobile money</option>
                         <option value="CASH_OFFICE_GHS">Cash office (GHS)</option>
@@ -380,11 +380,11 @@ function SaveEstimateInline({
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
           <Label className="text-xs text-zinc-500">CIF (GHS)</Label>
-          <Input value={cif} onChange={(e) => setCif(e.target.value)} className="w-40 border-white/15 bg-black/40" required />
+          <Input value={cif} onChange={(e) => setCif(e.target.value)} className="w-40 border-border bg-background dark:border-white/15 dark:bg-black/40" required />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-zinc-500">Year</Label>
-          <Input value={year} onChange={(e) => setYear(e.target.value)} className="w-28 border-white/15 bg-black/40" />
+          <Input value={year} onChange={(e) => setYear(e.target.value)} className="w-28 border-border bg-background dark:border-white/15 dark:bg-black/40" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-zinc-500">Powertrain</Label>
@@ -395,7 +395,7 @@ function SaveEstimateInline({
               setPowertrain(v);
               if (v !== EngineType.ELECTRIC) setEvWaiver(false);
             }}
-            className="h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-sm text-white"
+            className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/40 px-2 text-sm text-foreground"
           >
             {ENGINE_TYPE_ORDER.map((v) => (
               <option key={v} value={v}>
@@ -407,7 +407,7 @@ function SaveEstimateInline({
         {powertrain !== EngineType.ELECTRIC ? (
           <div className="space-y-1">
             <Label className="text-xs text-zinc-500">Cc</Label>
-            <Input value={cc} onChange={(e) => setCc(e.target.value)} className="w-24 border-white/15 bg-black/40" />
+            <Input value={cc} onChange={(e) => setCc(e.target.value)} className="w-24 border-border bg-background dark:border-white/15 dark:bg-black/40" />
           </div>
         ) : null}
         {powertrain === EngineType.ELECTRIC ? (

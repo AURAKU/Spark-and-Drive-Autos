@@ -1,59 +1,40 @@
 import type { AdminNavLink } from "@/components/layout/admin-mobile-nav";
-import { ADMIN_PAGE_CATALOG, type AdminPageKey } from "@/lib/rbac/catalog";
+import {
+  ADMIN_NAV_HUBS,
+  filterHubTabs,
+  hubVisibleForKeys,
+  resolveAdminHubId,
+  type AdminHubDef,
+} from "@/lib/admin-nav-hubs";
+import { ADMIN_PAGE_CATALOG } from "@/lib/rbac/catalog";
 
-/** Canonical sidebar order — only entries the role is granted appear. */
-const NAV_ORDER: { key: AdminPageKey; label?: string }[] = [
-  { key: "command_center", label: "Command Center" },
-  { key: "roles", label: "Role access" },
-  { key: "users", label: "All Users" },
-  { key: "cars" },
-  { key: "motorcycles" },
-  { key: "parts" },
-  { key: "parts_finder" },
-  { key: "parts_request_fee" },
-  { key: "verified_parts", label: "Verified parts" },
-  { key: "requests", label: "Requests" },
-  { key: "orders" },
-  { key: "order_inquiries", label: "Order inquiries" },
-  { key: "deposit_balances" },
-  { key: "payments", label: "Payments" },
-  { key: "payment_intelligence" },
-  { key: "shipping", label: "Shipping & Delivery Tracking" },
-  { key: "duty" },
-  { key: "duty_estimator", label: "Duty estimator" },
-  { key: "duty_intelligence" },
-  { key: "estimates", label: "Import estimates" },
-  { key: "leads", label: "Leads" },
-  { key: "quotes", label: "Quotes" },
-  { key: "inquiries", label: "Inquiries" },
-  { key: "comms" },
-  { key: "chats", label: "Chats" },
-  { key: "reviews" },
-  { key: "duplicates" },
-  { key: "ghana_card", label: "Ghana Card" },
-  { key: "verifications", label: "Verifications" },
-  { key: "receipts", label: "Receipts" },
-  { key: "receipt_templates" },
-  { key: "disputes" },
-  { key: "currency" },
-  { key: "legal" },
-  { key: "security" },
-  { key: "import_export" },
-  { key: "audit" },
-  { key: "health" },
-  { key: "settings" },
-];
+function allowedSet(pageKeys: readonly string[]) {
+  return new Set(pageKeys.includes("*") ? ADMIN_PAGE_CATALOG.map((p) => p.key) : pageKeys);
+}
 
-const byKey = new Map(ADMIN_PAGE_CATALOG.map((p) => [p.key, p]));
-
+/** Sidebar: one link per hub the role can open (related tools live in hub tabs). */
 export function buildAdminNavLinks(pageKeys: readonly string[]): AdminNavLink[] {
-  const allowed = new Set(pageKeys.includes("*") ? ADMIN_PAGE_CATALOG.map((p) => p.key) : pageKeys);
+  const allowed = allowedSet(pageKeys);
   const links: AdminNavLink[] = [];
-  for (const item of NAV_ORDER) {
-    if (!allowed.has(item.key)) continue;
-    const def = byKey.get(item.key);
-    if (!def) continue;
-    links.push({ href: def.href, label: item.label ?? def.label });
+  for (const hub of ADMIN_NAV_HUBS) {
+    if (!hubVisibleForKeys(hub, allowed)) continue;
+    const tabs = filterHubTabs(hub, allowed);
+    const href = tabs[0]?.href ?? hub.href;
+    links.push({ href, label: hub.label, hubId: hub.id });
   }
   return links;
+}
+
+export function getVisibleHubTabs(hub: AdminHubDef, pageKeys: readonly string[]) {
+  return filterHubTabs(hub, allowedSet(pageKeys)).map((t) => ({
+    id: t.id,
+    label: t.label,
+    href: t.href,
+  }));
+}
+
+export function sidebarLinkActive(pathname: string, link: AdminNavLink): boolean {
+  const current = resolveAdminHubId(pathname);
+  if (link.hubId) return current === link.hubId;
+  return pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
 }

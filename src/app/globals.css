@@ -14,7 +14,8 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* Darker than default zinc-500 so supporting copy stays readable on white/card */
+  --muted-foreground: oklch(0.42 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -78,11 +79,22 @@
     box-sizing: border-box;
   }
   :root {
-    --brand: #14d8e6;
-    --brand-deep: #0a9fb0;
+    /*
+     * Light mode brand is a deeper teal so headings/links on white pass contrast.
+     * Dark mode uses the bright cyan signature; fills still pair with text-black.
+     */
+    --brand: #0a8794;
+    --brand-deep: #076f7a;
+    --brand-readable: #0a8794;
     --ui-highlight-bg: color-mix(in srgb, var(--brand) 16%, white 84%);
     --ui-highlight-border: color-mix(in srgb, var(--brand) 35%, transparent);
     --ui-highlight-text: color-mix(in srgb, var(--brand) 65%, #0f172a 35%);
+  }
+
+  .dark {
+    --brand: #14d8e6;
+    --brand-deep: #0a9fb0;
+    --brand-readable: #5ee7f0;
   }
   html {
     @apply font-sans;
@@ -392,6 +404,25 @@
   html {
     font-size: 15px;
   }
+
+  /*
+   * Prefer wrapping long CTA labels over horizontal page overflow.
+   * Do not force height:auto on every control — that breaks square icon buttons.
+   */
+  button:not([class*="size-"]):not([class*="h-10"]):not([class*="h-9"]):not([class*="h-8"]),
+  [role="button"]:not([class*="size-"]):not([class*="h-10"]):not([class*="h-9"]):not([class*="h-8"]),
+  a.inline-flex:not([class*="size-"]):not([class*="h-10"]):not([class*="h-9"]):not([class*="h-8"]) {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
+  /* Form controls fill the viewport width inside grids. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]),
+  select,
+  textarea {
+    max-width: 100%;
+  }
 }
 
 @layer components {
@@ -403,7 +434,14 @@
     max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     scrollbar-color: color-mix(in srgb, var(--brand) 35%, transparent) transparent;
+    /* Soft edge cue so wide tables read as scrollable on mobile/tablet. */
+    background:
+      linear-gradient(to right, var(--background) 30%, transparent) left center / 1.25rem 100% no-repeat,
+      linear-gradient(to left, var(--background) 30%, transparent) right center / 1.25rem 100% no-repeat,
+      local;
+    background-attachment: local, local, local;
   }
 
   .sda-table-scroll table {
@@ -411,38 +449,196 @@
     min-width: 100%;
   }
 
+  /**
+   * Main content gutter + iOS/Android safe areas.
+   * Prefer this class alone for horizontal padding (avoid stacking with px-*).
+   */
   .sda-main-safe {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-top: 0;
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
     padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
   }
 
+  @media (min-width: 640px) {
+    .sda-main-safe {
+      padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    }
+  }
+
+  /** Horizontally scrollable hub / filter chips — never clip labels off-screen. */
+  .sda-chip-scroll {
+    display: flex;
+    max-width: 100%;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.125rem;
+  }
+
+  .sda-chip-scroll > * {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  /** Action rows: wrap cleanly; keep every control tappable. */
+  .sda-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+  }
+
+  .sda-action-row > * {
+    min-width: 0;
+  }
+
+  /**
+   * Safe-area only (no content gutter). Use on shells whose children already set px-*.
+   */
+  .sda-safe-area {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /** Sticky/top chrome: clear the notch / status bar without double gutters. */
+  .sda-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /** Page titles + primary actions: stack on phone, row on tablet+. */
+  .sda-page-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .sda-page-header {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+  }
+
   .sda-readable-muted {
-    @apply text-zinc-600 dark:text-zinc-400;
+    @apply text-zinc-800 dark:text-zinc-300;
   }
 
   .sda-readable-subtle {
-    @apply text-zinc-500 dark:text-zinc-400;
+    @apply text-zinc-700 dark:text-zinc-400;
+  }
+
+  /** Brand-colored text that stays readable on light and dark surfaces */
+  .sda-brand-text {
+    color: var(--brand-readable);
+  }
+
+  /**
+   * Theme-aware admin/marketing hero panel.
+   * Light: solid card. Dark: premium ink gradient. Text uses foreground tokens.
+   */
+  .sda-hero-panel {
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--card-foreground);
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+
+  .dark .sda-hero-panel {
+    border-color: rgb(255 255 255 / 0.12);
+    background: linear-gradient(to bottom right, #0c1420, rgb(0 0 0 / 0.65));
+    box-shadow: 0 0 60px -30px rgba(49, 182, 199, 0.22);
+  }
+
+  /**
+   * Always-dark premium ink panel (use sparingly).
+   * Forces child zinc/muted utilities to stay bright so light-mode remaps cannot wash them out.
+   */
+  .sda-ink-panel {
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: linear-gradient(to bottom right, #0c1420, rgb(0 0 0 / 0.65));
+    color: rgb(244 244 245);
+  }
+
+  .sda-ink-panel .text-zinc-300 {
+    color: rgb(228 228 231) !important;
+  }
+
+  .sda-ink-panel .text-zinc-400 {
+    color: rgb(212 212 216) !important;
+  }
+
+  .sda-ink-panel .text-zinc-500,
+  .sda-ink-panel .text-zinc-600,
+  .sda-ink-panel .text-muted-foreground {
+    color: rgb(161 161 170) !important;
   }
 }
 
 @layer utilities {
   /*
-   * Dark UI: many screens hard-code text-zinc-500/600 on black/near-black panels (~3:1 contrast).
-   * Normalize to zinc-400-equivalent for body/supporting text without touching business markup.
+   * Platform contrast lift — hard-coded zinc utilities are used as body/supporting copy
+   * across admin + storefront. Remap so phrases stay readable in both themes without
+   * rewriting every screen. Ink panels (`.sda-ink-panel`) override these for always-dark cards.
    */
-  .dark .text-zinc-500 {
-    color: rgb(161 161 170);
+  html:not(.dark) .text-zinc-300 {
+    color: rgb(82 82 91); /* zinc-600 — zinc-300 on white is too soft for copy */
   }
 
+  html:not(.dark) .text-zinc-400 {
+    color: rgb(63 63 70); /* zinc-700 */
+  }
+
+  html:not(.dark) .text-zinc-500 {
+    color: rgb(63 63 70); /* zinc-700 */
+  }
+
+  html:not(.dark) .text-zinc-600 {
+    color: rgb(39 39 42); /* zinc-800 */
+  }
+
+  /* Dark UI: lift faint zinc on near-black surfaces toward WCAG-friendly secondary text */
+  .dark .text-zinc-400 {
+    color: rgb(212 212 216); /* zinc-300 */
+  }
+
+  .dark .text-zinc-500,
   .dark .text-zinc-600 {
-    color: rgb(161 161 170);
+    color: rgb(161 161 170); /* zinc-400 */
   }
 
-  /* Form placeholders on dark inputs often use zinc-500 — keep legible */
+  .dark .text-zinc-300 {
+    color: rgb(228 228 231); /* zinc-200 */
+  }
+
+  /* Form placeholders — keep legible on both themes */
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: rgb(113 113 122); /* zinc-500 */
+  }
+
   .dark input::placeholder,
   .dark textarea::placeholder,
   .dark select::placeholder {
-    color: rgb(161 161 170);
+    color: rgb(161 161 170); /* zinc-400 */
   }
+
 
   .text-\[10px\] {
     font-size: 0.78rem;

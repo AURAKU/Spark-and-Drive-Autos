@@ -279,7 +279,7 @@ export function GhanaCardReviewTable({
             No expired approved IDs detected.
           </p>
         ) : (
-          <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+          <div className="mt-4 sda-table-scroll rounded-xl border border-white/10">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-white/[0.04] text-zinc-300">
                 <tr>

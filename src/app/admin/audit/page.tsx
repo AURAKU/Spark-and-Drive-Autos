@@ -1,34 +1,24 @@
 import { PageHeading } from "@/components/typography/page-headings";
 import { ListPaginationFooter } from "@/components/ui/list-pagination";
-import { normalizeIntelListPage } from "@/lib/ops";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function readPage(sp: Record<string, string | string[] | undefined>, key: string): number {
-  const v = sp[key];
-  const s = typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
-  if (s == null || s === "") return 1;
-  const n = parseInt(s, 10);
-  return normalizeIntelListPage(Number.isFinite(n) ? n : undefined);
-}
-
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 25;
 
 export default async function AuditPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
-  const pageReq = readPage(sp, "page");
   const total = await prisma.auditLog.count();
-  const totalPages = Math.max(1, Math.ceil(Math.max(0, total) / PAGE_SIZE));
-  const page = Math.min(Math.max(1, pageReq), totalPages);
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/audit", sp, meta);
   const rows = await prisma.auditLog.findMany({
     orderBy: { createdAt: "desc" },
-    skip: (page - 1) * PAGE_SIZE,
+    skip: meta.skip,
     take: PAGE_SIZE,
   });
-  const pageHref = (nextPage: number) => (nextPage > 1 ? `/admin/audit?page=${nextPage}` : "/admin/audit");
 
   return (
     <div>
@@ -42,13 +32,12 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
       </div>
       {total > 0 ? (
         <ListPaginationFooter
-          page={page}
-          totalPages={totalPages}
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
           totalItems={total}
           pageSize={PAGE_SIZE}
           itemLabel="Audit rows"
-          prevHref={page > 1 ? pageHref(page - 1) : null}
-          nextHref={page < totalPages ? pageHref(page + 1) : null}
         />
       ) : null}
     </div>

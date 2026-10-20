@@ -95,7 +95,7 @@ export function DutyReportDocument({ report }: { report: DutyReportData }) {
 
       <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
         <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Cost & valuation</h2>
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 sda-table-scroll">
           <table className="w-full min-w-[420px] border-collapse text-sm">
             <tbody>
               {[
@@ -134,7 +134,7 @@ export function DutyReportDocument({ report }: { report: DutyReportData }) {
           {report.dutyGroups.map((group) => (
             <div key={group.heading}>
               <h3 className="text-sm font-semibold text-neutral-800">{group.heading}</h3>
-              <div className="mt-2 overflow-x-auto">
+              <div className="mt-2 sda-table-scroll">
                 <table className="w-full min-w-[520px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-neutral-200 text-left text-xs tracking-wide text-neutral-500 uppercase">

@@ -109,12 +109,13 @@ export function ListPaginationFooter({
       )}
     >
       {showSummary ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="min-w-0 max-w-full text-xs leading-relaxed text-muted-foreground break-words">
           <span className="text-foreground/80">{itemLabel}</span>
           {totalItems > 0 ? (
             <>
               {" "}
-              · Showing <span className="font-mono text-foreground/90">{from}</span>–<span className="font-mono text-foreground/90">{to}</span> of{" "}
+              · Showing <span className="font-mono text-foreground/90">{from}</span>–
+              <span className="font-mono text-foreground/90">{to}</span> of{" "}
               <span className="font-mono text-foreground/90">{totalItems}</span>
               {totalPages > 1 ? (
                 <>
@@ -136,7 +137,7 @@ export function ListPaginationFooter({
         </p>
       ) : null}
       {totalItems > 0 ? (
-        <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
+        <div className="sda-action-row w-full justify-center sm:w-auto sm:justify-end">
           {prevHref ? (
             <Link href={prevHref} className={linkClass} aria-label="Previous page">
               Previous

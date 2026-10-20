@@ -183,11 +183,11 @@ export async function AdminEstimatesHub({
   const metrics = kpi[0];
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0c1420] to-black/60 p-6">
+      <div className="sda-hero-panel">
         <PageHeading variant="dashboard">Duty estimates</PageHeading>
-        <p className="mt-2 max-w-3xl text-sm text-zinc-400">
+        <p className="sda-readable-muted mt-2 max-w-3xl text-sm leading-relaxed">
           Create and send per-vehicle Ghana duty planning documents for customers. Pair with{" "}
-          <Link href={operationsDutyHref} className="text-[var(--brand)] hover:underline">
+          <Link href={operationsDutyHref} className="font-medium text-[var(--brand)] hover:underline">
             Duty tracking
           </Link>{" "}
           for live clearance stages and duty payments on each vehicle order.
@@ -201,19 +201,19 @@ export async function AdminEstimatesHub({
             name="clientName"
             defaultValue={prefillClientName}
             placeholder="Client name"
-            className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+            className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground dark:border-white/15 dark:bg-black/30 dark:text-foreground"
           />
           <input
             name="clientContact"
             defaultValue={prefillClientContact}
             placeholder="Client contact"
-            className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+            className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground dark:border-white/15 dark:bg-black/30 dark:text-foreground"
           />
           <input
             name="vehicleName"
             defaultValue={prefillVehicleName}
             placeholder="Vehicle name"
-            className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+            className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground dark:border-white/15 dark:bg-black/30 dark:text-foreground"
           />
           <button
             type="submit"
@@ -223,7 +223,7 @@ export async function AdminEstimatesHub({
           </button>
           <Link
             href="/admin/estimates/new"
-            className="h-10 inline-flex items-center rounded-lg border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10 sm:col-span-3 sm:w-fit"
+            className="h-10 inline-flex items-center rounded-lg border border-border px-4 text-sm text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10 sm:col-span-3 sm:w-fit"
           >
             Full create form
           </Link>
@@ -231,29 +231,29 @@ export async function AdminEstimatesHub({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-3">
           <p className="text-xs text-zinc-500">Total</p>
-          <p className="text-lg font-semibold text-white">{metrics?.totalEstimates ?? 0}</p>
+          <p className="text-lg font-semibold text-foreground">{metrics?.totalEstimates ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-3">
           <p className="text-xs text-zinc-500">Draft</p>
           <p className="text-lg font-semibold text-amber-300">{metrics?.draftEstimates ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-3">
           <p className="text-xs text-zinc-500">Sent</p>
           <p className="text-lg font-semibold text-cyan-300">{metrics?.sentEstimates ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-3">
           <p className="text-xs text-zinc-500">Accepted</p>
           <p className="text-lg font-semibold text-emerald-300">{metrics?.acceptedEstimates ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-3">
           <p className="text-xs text-zinc-500">Expired</p>
-          <p className="text-lg font-semibold text-zinc-300">{metrics?.expiredEstimates ?? 0}</p>
+          <p className="text-lg font-semibold text-foreground/90">{metrics?.expiredEstimates ?? 0}</p>
         </div>
       </div>
 
-      <form method="get" action={pathname} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-6">
+      <form method="get" action={pathname} className="grid gap-3 rounded-2xl border border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] p-4 lg:grid-cols-6">
         {Object.entries(pinnedQuery).map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={v} />
         ))}
@@ -261,21 +261,21 @@ export async function AdminEstimatesHub({
           name="customer"
           defaultValue={qCustomer}
           placeholder="Customer/email"
-          className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+          className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground"
         />
         <input
           name="vehicle"
           defaultValue={qVehicle}
           placeholder="Vehicle"
-          className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+          className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground"
         />
         <input
           name="vin"
           defaultValue={qVin}
           placeholder="VIN"
-          className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white"
+          className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground"
         />
-        <select name="status" defaultValue={qStatus} className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white">
+        <select name="status" defaultValue={qStatus} className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground">
           <option value="">All status</option>
           <option value="DRAFT">Draft</option>
           <option value="SENT">Sent</option>
@@ -283,24 +283,24 @@ export async function AdminEstimatesHub({
           <option value="EXPIRED">Expired</option>
           <option value="SUPERSEDED">Superseded</option>
         </select>
-        <input name="from" type="date" defaultValue={qFrom} className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white" />
-        <input name="to" type="date" defaultValue={qTo} className="h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm text-white" />
+        <input name="from" type="date" defaultValue={qFrom} className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground" />
+        <input name="to" type="date" defaultValue={qTo} className="h-10 rounded-lg border border-border bg-background dark:border-white/15 dark:bg-black/30 px-3 text-sm text-foreground" />
         <div className="flex flex-wrap items-center gap-2 lg:col-span-6">
           <button type="submit" className="h-10 rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-black hover:opacity-90">
             Apply filters
           </button>
           <Link
             href={buildListUrl(pathname, pinnedQuery, {})}
-            className="h-10 inline-flex items-center rounded-lg border border-white/15 px-4 text-sm text-zinc-200 hover:bg-white/10"
+            className="h-10 inline-flex items-center rounded-lg border border-border px-4 text-sm text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10"
           >
             Reset
           </Link>
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
+      <div className="sda-table-scroll rounded-2xl border border-border dark:border-white/10">
         <table className="w-full min-w-[1000px] text-left text-sm">
-          <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
+          <thead className="border-b border-border dark:border-white/10 bg-muted/40 dark:bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-4 py-3">Estimate</th>
               <th className="px-4 py-3">Client</th>
@@ -320,35 +320,35 @@ export async function AdminEstimatesHub({
               </tr>
             ) : (
               estimates.map((e) => (
-                <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                <tr key={e.id} className="border-b border-border/60 dark:border-white/5 hover:bg-muted/40 dark:hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{e.estimateNumber}</p>
+                    <p className="font-medium text-foreground">{e.estimateNumber}</p>
                     <p className="text-xs text-zinc-500">{e.status}</p>
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">
+                  <td className="px-4 py-3 text-foreground/90">
                     <p>{e.clientName}</p>
                     <p className="text-xs text-zinc-500">{e.clientContact}</p>
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">{e.vehicleName}</td>
-                  <td className="px-4 py-3 text-zinc-300">
+                  <td className="px-4 py-3 text-foreground/90">{e.vehicleName}</td>
+                  <td className="px-4 py-3 text-foreground/90">
                     {money(e.estimatedDutyRangeMin)} - {money(e.estimatedDutyRangeMax)}
                   </td>
                   <td className="px-4 py-3 text-[var(--brand)]">{money(e.estimatedLandedCost)}</td>
                   <td className="px-4 py-3 text-xs text-zinc-500">{e.updatedAt.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Link href={`/admin/estimates/${e.id}`} className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-zinc-100 hover:bg-white/10">
+                      <Link href={`/admin/estimates/${e.id}`} className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-100 dark:hover:bg-white/10">
                         Open
                       </Link>
-                      <Link href={`/admin/estimates/${e.id}/edit`} className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-zinc-100 hover:bg-white/10">
+                      <Link href={`/admin/estimates/${e.id}/edit`} className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-100 dark:hover:bg-white/10">
                         Edit
                       </Link>
-                      <a href={`/admin/estimates/${e.id}/export`} className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-zinc-100 hover:bg-white/10">
+                      <a href={`/admin/estimates/${e.id}/export`} className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-100 dark:hover:bg-white/10">
                         Export
                       </a>
                       <form action={cloneVehicleImportEstimateAction}>
                         <input type="hidden" name="id" value={e.id} />
-                        <button type="submit" className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-zinc-100 hover:bg-white/10">
+                        <button type="submit" className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-100 dark:hover:bg-white/10">
                           Duplicate
                         </button>
                       </form>
@@ -370,7 +370,7 @@ export async function AdminEstimatesHub({
       {totalPages > 1 ? (
         <div className="flex flex-wrap items-center justify-center gap-2">
           {page > 1 ? (
-            <Link href={pageHref(page - 1)} className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-zinc-200 hover:bg-white/10">
+            <Link href={pageHref(page - 1)} className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10">
               Previous
             </Link>
           ) : null}
@@ -378,7 +378,7 @@ export async function AdminEstimatesHub({
             Page {page} / {totalPages} · {totalItems} total
           </span>
           {page < totalPages ? (
-            <Link href={pageHref(page + 1)} className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-zinc-200 hover:bg-white/10">
+            <Link href={pageHref(page + 1)} className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10">
               Next
             </Link>
           ) : null}

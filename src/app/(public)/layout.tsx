@@ -13,7 +13,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         <Suspense fallback={<SiteHeaderFallback />}>
           <SiteHeader />
         </Suspense>
-        <main className="sda-main-safe min-w-0 flex-1 overflow-x-clip">
+        <main className="sda-safe-area min-w-0 flex-1 overflow-x-clip">
           <CarCompareMainPad>{children}</CarCompareMainPad>
         </main>
         <PublicSiteFooter />

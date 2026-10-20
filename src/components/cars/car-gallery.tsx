@@ -199,7 +199,7 @@ function CarGalleryInner({ images, children }: Props) {
         footer={
           count > 1 ? (
             <div className="border-t border-white/10 bg-black/80 px-2 py-[max(0.5rem,env(safe-area-inset-bottom))]">
-              <div className="mx-auto flex max-w-4xl gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-thin">
+              <div className="sda-chip-scroll mx-auto max-w-4xl gap-1.5 pb-1 pt-1 scrollbar-thin">
                 {images.map((im, i) => (
                   <button
                     key={im.id}

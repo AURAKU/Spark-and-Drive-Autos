@@ -176,20 +176,20 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
 
   return (
     <div className="premium-inventory-page mx-auto max-w-7xl px-4 py-12 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-2xl">
-        <PageHeading variant="hero" className="mt-1">
-          Find Your Next Car
-        </PageHeading>
-        <p className="mt-4 text-base leading-relaxed text-zinc-300 sm:text-lg">
-          Browse through our inventory listings across cars already in Ghana or available in China ready to be shipped.
-        </p>
+      <div className="sda-page-header items-start sm:items-end">
+        <div className="min-w-0 max-w-2xl">
+          <PageHeading variant="hero" className="mt-1">
+            Find Your Next Car
+          </PageHeading>
+          <p className="mt-4 text-base leading-relaxed text-zinc-300 sm:text-lg">
+            Browse through our inventory listings across cars already in Ghana or available in China ready to be shipped.
+          </p>
         </div>
         <SharePageButton
           url={shareUrl}
           title="Browse Cars - Spark and Drive Autos"
           text="Check out these cars on Spark and Drive Autos."
-          className="h-10 rounded-lg border border-white/20 bg-white/[0.03] px-3 text-zinc-200 transition hover:bg-white/8 dark:border-white/20 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/8"
+          className="h-10 shrink-0 rounded-lg border border-white/20 bg-white/[0.03] px-3 text-zinc-200 transition hover:bg-white/8 dark:border-white/20 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/8"
         />
       </div>
 

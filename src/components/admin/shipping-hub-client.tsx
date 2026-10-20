@@ -279,7 +279,7 @@ export function ShippingHubClient({
                     {row.kind === "PARTS_GHANA" ? (
                       <p className="mt-1 text-[11px] text-zinc-500">Ghana stock — 6 customer-facing milestones (see reference button above).</p>
                     ) : null}
-                    <div className="mt-3 overflow-x-auto pb-1">
+                    <div className="sda-chip-scroll mt-3 pb-1">
                       <ShipmentFlowByKind kind={row.kind} currentStage={row.currentStage} />
                     </div>
                   </div>

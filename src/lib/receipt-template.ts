@@ -1,6 +1,7 @@
 import { ReceiptType, type ReceiptTemplate } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isUniqueConstraintViolation } from "@/lib/prisma-unique";
 
 export type ReceiptScope = ReceiptType;
 type ReceiptTemplateDefaultFields = {
@@ -134,19 +135,60 @@ export const RECEIPT_DEFAULTS: Record<ReceiptScope, ReceiptTemplateDefaultFields
   },
 };
 
+/**
+ * Returns the active receipt template for a scope.
+ * Idempotent under concurrency: never crashes on `(type, version)` unique collisions.
+ * If only inactive rows exist (e.g. failed activate mid-flight), reactivates the latest.
+ */
 export async function getActiveReceiptTemplate(type: ReceiptScope): Promise<ReceiptTemplate> {
   const active = await prisma.receiptTemplate.findFirst({
     where: { type, isActive: true },
     orderBy: [{ version: "desc" }, { createdAt: "desc" }],
   });
   if (active) return active;
-  return prisma.receiptTemplate.create({
-    data: {
-      type,
-      version: 1,
-      ...RECEIPT_DEFAULTS[type],
-    },
+
+  const latest = await prisma.receiptTemplate.findFirst({
+    where: { type },
+    orderBy: [{ version: "desc" }, { createdAt: "desc" }],
   });
+
+  if (latest) {
+    await prisma.$transaction([
+      prisma.receiptTemplate.updateMany({
+        where: { type, isActive: true, NOT: { id: latest.id } },
+        data: { isActive: false },
+      }),
+      prisma.receiptTemplate.update({
+        where: { id: latest.id },
+        data: { isActive: true },
+      }),
+    ]);
+    return { ...latest, isActive: true };
+  }
+
+  try {
+    return await prisma.receiptTemplate.create({
+      data: {
+        type,
+        version: 1,
+        ...RECEIPT_DEFAULTS[type],
+      },
+    });
+  } catch (e) {
+    // Concurrent bootstraps can race on version 1 — recover by re-reading / reactivating.
+    if (!isUniqueConstraintViolation(e)) throw e;
+    const raced = await prisma.receiptTemplate.findFirst({
+      where: { type },
+      orderBy: [{ version: "desc" }, { createdAt: "desc" }],
+    });
+    if (!raced) throw e;
+    if (raced.isActive) return raced;
+    await prisma.receiptTemplate.update({
+      where: { id: raced.id },
+      data: { isActive: true },
+    });
+    return { ...raced, isActive: true };
+  }
 }
 
 export async function getReceiptTemplatesByType(type: ReceiptScope) {

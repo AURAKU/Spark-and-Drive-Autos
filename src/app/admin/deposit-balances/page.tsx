@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { PageHeading } from "@/components/typography/page-headings";
+import { ListPaginationFooter } from "@/components/ui/list-pagination";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   buildDepositBalancesWhere,
@@ -8,11 +9,16 @@ import {
 } from "@/lib/deposit-balance-query";
 import { isDepositBalanceReminderEmailConfigured } from "@/lib/deposit-balance-reminder-email";
 import { formatMoney } from "@/lib/format";
+import { buildListPageMeta, listPageNav, readListPage } from "@/lib/list-page";
 import { prisma } from "@/lib/prisma";
 
 import { DepositBalanceRowActions } from "./deposit-balance-row-actions";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 20;
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function parseFilter(raw: string | undefined): DepositBalanceAdminFilter {
   const v = raw?.trim();
@@ -28,17 +34,23 @@ function parseFilter(raw: string | undefined): DepositBalanceAdminFilter {
 }
 
 export default async function AdminDepositBalancesPage(props: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: SearchParams;
 }) {
   await requireAdmin();
   const sp = await props.searchParams;
-  const filter = parseFilter(sp.filter);
+  const filterRaw = typeof sp.filter === "string" ? sp.filter : Array.isArray(sp.filter) ? sp.filter[0] : undefined;
+  const filter = parseFilter(filterRaw);
   const where = buildDepositBalancesWhere(filter);
+
+  const total = await prisma.order.count({ where });
+  const meta = buildListPageMeta(total, PAGE_SIZE, readListPage(sp));
+  const nav = listPageNav("/admin/deposit-balances", sp, meta);
 
   const rows = await prisma.order.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: 200,
+    skip: meta.skip,
+    take: PAGE_SIZE,
     select: {
       id: true,
       reference: true,
@@ -107,7 +119,13 @@ export default async function AdminDepositBalancesPage(props: {
         ))}
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-white/10">
+      {total > 0 ? (
+        <p className="mt-4 text-xs text-zinc-500">
+          {total.toLocaleString()} order{total === 1 ? "" : "s"} match this filter
+        </p>
+      ) : null}
+
+      <div className="mt-8 sda-table-scroll rounded-2xl border border-white/10">
         <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
           <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-zinc-500">
             <tr>
@@ -195,6 +213,17 @@ export default async function AdminDepositBalancesPage(props: {
           </tbody>
         </table>
       </div>
+      {total > 0 ? (
+        <ListPaginationFooter
+          {...nav}
+          page={meta.page}
+          totalPages={meta.totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="Deposit balances"
+          showPerPageNote
+        />
+      ) : null}
     </div>
   );
 }

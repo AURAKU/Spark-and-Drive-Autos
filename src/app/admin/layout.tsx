@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { isSuperAdminRole } from "@/auth";
+import { AdminHubChrome } from "@/components/admin/admin-hub-chrome";
 import { AdminMobileNav } from "@/components/layout/admin-mobile-nav";
+import { AdminSidebarNav } from "@/components/layout/admin-sidebar-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ViewModeButton } from "@/components/layout/view-mode-controls";
 import { DashboardTopHeader } from "@/components/layout/dashboard-top-header";
@@ -32,7 +35,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/dashboard");
   }
 
-  const links = buildAdminNavLinks(isSuperAdmin ? ["*"] : pageKeys);
+  const navKeys = isSuperAdmin ? (["*"] as string[]) : pageKeys;
+  const links = buildAdminNavLinks(navKeys);
   const sectionLabel =
     role === "SERVICE_ASSISTANT" ? "Support inbox" : isSuperAdmin ? "Operations" : "Your ops desk";
 
@@ -53,36 +57,34 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Returns to the customer dashboard — same session, same account.
             </p>
           </div>
-          <nav className="mt-6 space-y-1">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="inline-flex h-8 w-full items-center justify-start rounded-lg px-2.5 text-sm text-sidebar-foreground/90 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
+          <AdminSidebarNav links={links} />
         </aside>
         <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
-          <div className="relative border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
-            <div className="flex min-h-10 items-center justify-between gap-3">
+          <div className="relative border-b border-border px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:px-4 lg:hidden dark:border-white/10">
+            <div className="flex min-h-11 flex-wrap items-center gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <AdminMobileNav links={links} sectionLabel={sectionLabel} />
-                <Link href={links[0]?.href ?? "/dashboard"} className="truncate text-sm font-medium text-[var(--brand)]">
+                <Link
+                  href={links[0]?.href ?? "/dashboard"}
+                  className="min-w-0 truncate text-sm font-medium text-[var(--brand)]"
+                >
                   {links[0]?.label ?? "Dashboard"}
                 </Link>
               </div>
-              <ViewModeButton targetMode="user" redirectTo="/dashboard" className="shrink-0 text-[11px]">
-                Back to user view
-              </ViewModeButton>
-            </div>
-            <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
-              <ThemeToggle className="pointer-events-auto" />
+              <div className="sda-action-row ml-auto">
+                <ThemeToggle />
+                <ViewModeButton targetMode="user" redirectTo="/dashboard" className="text-[11px]">
+                  User view
+                </ViewModeButton>
+              </div>
             </div>
           </div>
-          <div className="sda-main-safe mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">{children}</div>
+          <div className="sda-main-safe mx-auto w-full max-w-6xl py-6 sm:py-10">
+            <Suspense fallback={null}>
+              <AdminHubChrome pageKeys={navKeys} />
+            </Suspense>
+            {children}
+          </div>
         </div>
       </div>
     </div>

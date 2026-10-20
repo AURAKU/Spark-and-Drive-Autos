@@ -12,10 +12,10 @@ import { SiteHeaderClient } from "./site-header-client";
 /** Same root element + layout shell as `SiteHeaderClient` to avoid Suspense/streaming markup mismatches. */
 export function SiteHeaderFallback() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 max-md:backdrop-blur-none md:bg-zinc-950/90 md:backdrop-blur-xl">
+    <header className="sda-safe-top sticky top-0 z-50 border-b border-white/10 bg-zinc-950 max-md:backdrop-blur-none md:bg-zinc-950/90 md:backdrop-blur-xl">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)]/40 to-transparent" />
-      <div className="relative min-h-[4.25rem] w-full px-2 py-3 sm:px-4 lg:px-6">
-        <div className="flex min-h-[calc(4.25rem-1.5rem)] items-center justify-between">
+      <div className="relative min-h-[4.25rem] w-full py-3 pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] sm:pl-[max(1rem,env(safe-area-inset-left,0px))] sm:pr-[max(1rem,env(safe-area-inset-right,0px))] lg:pl-[max(1.5rem,env(safe-area-inset-left,0px))] lg:pr-[max(1.5rem,env(safe-area-inset-right,0px))]">
+        <div className="flex min-h-[calc(4.25rem-1.5rem)] min-w-0 items-center justify-between gap-2">
           <div className="h-12 w-14 animate-pulse rounded-full bg-white/10 sm:h-14 sm:w-16" aria-hidden />
           <div className="h-10 w-10 animate-pulse rounded-xl bg-white/10" aria-hidden />
         </div>

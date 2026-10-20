@@ -21,7 +21,7 @@ export function CarCompareBar() {
   return (
     <>
       <div
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-4 py-3 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#12151a]/95"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#12151a]/95"
         role="region"
         aria-label="Vehicle compare tray"
       >

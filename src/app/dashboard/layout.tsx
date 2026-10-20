@@ -129,22 +129,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
               )}
             </div>
           ) : null}
-          <div className="relative border-b border-border px-4 py-3 lg:hidden dark:border-white/10">
-            <div className="flex min-h-10 items-center justify-between gap-3">
+          <div className="relative border-b border-border px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:px-4 lg:hidden dark:border-white/10">
+            <div className="flex min-h-11 flex-wrap items-center gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <DashboardMobileNav
                   links={links}
                   sectionLabel="Your dashboard"
                   unreadByHref={{ "/dashboard/notifications": unread }}
                 />
-                <Link href="/dashboard" className="truncate text-sm font-medium text-[var(--brand)]">
+                <Link href="/dashboard" className="min-w-0 truncate text-sm font-medium text-[var(--brand)]">
                   Overview
                 </Link>
               </div>
-              <CurrencySwitcher initial={displayCurrency} compact />
+              <div className="sda-action-row ml-auto">
+                <CurrencySwitcher initial={displayCurrency} compact />
+              </div>
             </div>
           </div>
-          <div className="sda-main-safe mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+          <div className="sda-main-safe mx-auto w-full max-w-5xl py-6 sm:py-10">
             {!isStaff ? <DashboardLegalPendingBanner pending={pendingLegal} /> : null}
             {children}
           </div>

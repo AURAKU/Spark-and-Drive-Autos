@@ -9,7 +9,11 @@ export function AdminDutyHubTabs(props: {
 }) {
   const { active, trackingHref, estimatesHref } = props;
   return (
-    <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1.5" role="tablist" aria-label="Duty hub sections">
+    <div
+      className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/40 p-1.5 dark:border-white/10 dark:bg-white/[0.03]"
+      role="tablist"
+      aria-label="Duty hub sections"
+    >
       <Link
         href={trackingHref}
         role="tab"
@@ -18,7 +22,7 @@ export function AdminDutyHubTabs(props: {
           "rounded-lg px-3 py-1.5 text-sm font-medium transition",
           active === "tracking"
             ? "bg-[var(--brand)] text-black"
-            : "text-zinc-300 hover:bg-white/10 hover:text-white",
+            : "text-foreground/80 hover:bg-muted hover:text-foreground dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white",
         )}
       >
         Duty tracking
@@ -31,7 +35,7 @@ export function AdminDutyHubTabs(props: {
           "rounded-lg px-3 py-1.5 text-sm font-medium transition",
           active === "estimates"
             ? "bg-[var(--brand)] text-black"
-            : "text-zinc-300 hover:bg-white/10 hover:text-white",
+            : "text-foreground/80 hover:bg-muted hover:text-foreground dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white",
         )}
       >
         Duty estimates
