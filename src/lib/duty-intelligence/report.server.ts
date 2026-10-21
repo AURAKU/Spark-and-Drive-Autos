@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getPreferredDutyFx } from "@/lib/duty-intelligence/bog-fx.server";
+import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { isAdminRole } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { safeAuth } from "@/lib/safe-auth";
@@ -82,6 +84,10 @@ export async function loadAuthorizedDutyReport(
   }
 
   try {
+    const config = await loadCountryConfigSafe("GH");
+    const dutyFx = config
+      ? await getPreferredDutyFx({ countryConfigId: config.countryConfigId, fromCurrency: "USD" })
+      : null;
     const report = buildDutyReportData({
       calculationId: row.id,
       reportReference: row.referenceNumber,
@@ -97,6 +103,7 @@ export async function loadAuthorizedDutyReport(
       inputJson: row.inputJson,
       resultJson: row.resultJson,
       website: process.env.AUTH_URL?.replace(/\/$/, "") || process.env.NEXTAUTH_URL?.replace(/\/$/, "") || "https://www.sparkanddriveautos.com",
+      platformUsdToGhs: dutyFx?.rate,
     });
     return { ok: true, report };
   } catch (e) {

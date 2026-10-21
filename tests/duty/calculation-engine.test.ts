@@ -127,6 +127,46 @@ describe("duty calculation engine v4", () => {
     const duty = outcome.engineResult.lines.find((l) => l.chargeKey === "IMPORT_DUTY");
     assert.ok(duty);
     assert.equal(duty!.amountGhs, 20220);
+    const keys = new Set(outcome.engineResult.lines.map((l) => l.chargeKey));
+    for (const required of [
+      "IMPORT_VAT",
+      "VEHICLE_CERTIFICATION",
+      "VEHICLE_EXAMINATION_FEE",
+      "GSA_SNF_FEE",
+      "DISINFECTION_FEE",
+      "MOTI_EIDF_FEE",
+      "COVID_HEALTH_RECOVERY_LEVY",
+      "NETWORK_CHARGE_COVID",
+      "OVERAGE_PENALTY",
+      "IRS_TAX_DEPOSIT",
+    ]) {
+      assert.ok(keys.has(required), `missing ${required}`);
+    }
+  });
+
+  it("admin calculator rate overrides change Import VAT without breaking duty %", () => {
+    const outcome = runVersionedCalculation({
+      assessmentDate: new Date("2024-06-15"),
+      values: {
+        fobGhs: 100000,
+        freightGhs: 1000,
+        insuranceGhs: 100,
+        customsValueGhs: 101100,
+        cifGhs: 101100,
+      },
+      classification: {
+        hsCode: "870322",
+        fuelType: "GASOLINE",
+        manufactureYear: 2023,
+        engineCc: 1498,
+      },
+      calculatorRates: { IMPORT_VAT: { rateType: "PERCENTAGE", rateValue: 0.155 } },
+    });
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    const vat = outcome.engineResult.lines.find((l) => l.chargeKey === "IMPORT_VAT");
+    assert.ok(vat);
+    assert.equal(vat!.amountGhs, 18804.6);
   });
 
   it("Jetour Dashing — reproduces total and every verified line", () => {

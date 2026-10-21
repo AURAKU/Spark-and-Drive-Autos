@@ -41,6 +41,9 @@ export const engineCalculationRequestSchema = z.object({
   documentedTotalGhs: z.number().nonnegative().optional(),
   adminOverrides: z.record(z.string(), z.number()).optional(),
   adminOverrideRecords: z.array(adminOverrideRecordSchema).optional(),
+  calculatorRates: z
+    .record(z.string(), z.object({ rateType: z.enum(["PERCENTAGE", "FIXED"]), rateValue: z.number().nonnegative() }))
+    .optional(),
 });
 
 export type EngineCalculationRequest = z.infer<typeof engineCalculationRequestSchema>;

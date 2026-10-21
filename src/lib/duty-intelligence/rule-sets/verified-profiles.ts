@@ -1,4 +1,13 @@
+import { GRA_PLANNING_CHARGES, planningChargeToRule } from "@/lib/duty-intelligence/gra-planning-charges";
+
 import type { RoundingMode } from "../rounding";
+
+function officialZeroLines(sourceReference: string, existing: EngineRuleDefinition[]): EngineRuleDefinition[] {
+  const have = new Set(existing.map((r) => r.chargeKey));
+  return GRA_PLANNING_CHARGES.filter((c) => !have.has(c.chargeKey)).map((c) =>
+    planningChargeToRule(c, sourceReference, { rateType: c.rateType, rateValue: 0 }),
+  ) as EngineRuleDefinition[];
+}
 
 export type EngineRuleDefinition = {
   chargeKey: string;
@@ -33,7 +42,7 @@ export type VersionedRuleSet = {
 };
 
 function jetourRules(): EngineRuleDefinition[] {
-  return [
+  const core: EngineRuleDefinition[] = [
     { chargeKey: "IMPORT_DUTY", chargeName: "Import Duty", rateType: "PERCENTAGE", rateValue: "0.10", taxableBaseExpression: "CUSTOMS_VALUE_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 10, sourceReference: "CAL-JETOUR-DASHING-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "ECOWAS_LEVY", chargeName: "ECOWAS Levy", rateType: "PERCENTAGE", rateValue: "0.005", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 20, sourceReference: "CAL-JETOUR-DASHING-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "VEHICLE_EXAMINATION_FEE", chargeName: "Vehicle Examination Fee", rateType: "PERCENTAGE", rateValue: "0.01", taxableBaseExpression: "CUSTOMS_VALUE_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 30, sourceReference: "CAL-JETOUR-DASHING-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
@@ -51,19 +60,20 @@ function jetourRules(): EngineRuleDefinition[] {
     { chargeKey: "DISINFECTION_FEE", chargeName: "GHS Disinfection Fee", rateType: "FIXED", flatAmount: "569.76", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 81, sourceReference: "CAL-JETOUR-DASHING-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "MOTI_EIDF_FEE", chargeName: "MoTI e-IDF Fee", rateType: "FIXED", flatAmount: "5.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 82, sourceReference: "CAL-JETOUR-DASHING-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
   ];
+  return [...core, ...officialZeroLines("CAL-JETOUR-DASHING-BOE", core)];
 }
 
 /** Ghana GRA passenger planning rates (Auto-Taxes / CET style 20% duty family). */
 function ghanaPassengerRules(): EngineRuleDefinition[] {
-  return [
+  const core: EngineRuleDefinition[] = [
     { chargeKey: "IMPORT_DUTY", chargeName: "Import Duty", rateType: "PERCENTAGE", rateValue: "0.20", taxableBaseExpression: "CUSTOMS_VALUE_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 10, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
-    { chargeKey: "PROCESSING_FEE", chargeName: "Processing Fee", rateType: "FIXED", flatAmount: "0.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 11, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01", skipWhenZero: true },
+    { chargeKey: "PROCESSING_FEE", chargeName: "Processing Fee", rateType: "FIXED", flatAmount: "0.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 11, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "ECOWAS_LEVY", chargeName: "ECOWAS Levy", rateType: "PERCENTAGE", rateValue: "0.005", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 20, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "VEHICLE_CERTIFICATION", chargeName: "Vehicle Certification", rateType: "FIXED", flatAmount: "0.50", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 21, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "VEHICLE_EXAMINATION_FEE", chargeName: "Vehicle Examination Fee", rateType: "PERCENTAGE", rateValue: "0.01", taxableBaseExpression: "CUSTOMS_VALUE_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 30, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "NETWORK_CHARGE", chargeName: "Network Charge", rateType: "PERCENTAGE", rateValue: "0.004", taxableBaseExpression: "FOB_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 40, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "NHIL", chargeName: "Import NHIL", rateType: "PERCENTAGE", rateValue: "0.025", taxableBaseExpression: "CIF_PLUS_IMPORT_DUTY", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 50, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
-    { chargeKey: "GETFUND_LEVY", chargeName: "GETFund Levy", rateType: "PERCENTAGE", rateValue: "0.025", taxableBaseExpression: "CIF_PLUS_IMPORT_DUTY", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 51, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
+    { chargeKey: "GETFUND_LEVY", chargeName: "GETFund Import Levy", rateType: "PERCENTAGE", rateValue: "0.025", taxableBaseExpression: "CIF_PLUS_IMPORT_DUTY", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 51, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "SPECIAL_IMPORT_LEVY", chargeName: "Special Import Levy", rateType: "PERCENTAGE", rateValue: "0.02", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 52, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "EXIM_LEVY", chargeName: "EXIM Levy", rateType: "PERCENTAGE", rateValue: "0.0075", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 53, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "AU_LEVY", chargeName: "African Union Import Levy", rateType: "PERCENTAGE", rateValue: "0.002", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 54, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
@@ -75,10 +85,11 @@ function ghanaPassengerRules(): EngineRuleDefinition[] {
     { chargeKey: "DISINFECTION_FEE", chargeName: "GHS Disinfection Fee", rateType: "FIXED", flatAmount: "143.38", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 81, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
     { chargeKey: "MOTI_EIDF_FEE", chargeName: "MoTI e-IDF Fee", rateType: "FIXED", flatAmount: "5.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 82, sourceReference: "GRA-CET-8703-PLANNING", verificationStatus: "VERIFIED", effectiveFrom: "2024-01-01" },
   ];
+  return [...core, ...officialZeroLines("GRA-CET-8703-PLANNING", core)];
 }
 
 function bydRules(): EngineRuleDefinition[] {
-  return [
+  const core: EngineRuleDefinition[] = [
     { chargeKey: "IMPORT_DUTY", chargeName: "Import Duty", rateType: "PERCENTAGE", rateValue: "0.20", taxableBaseExpression: "CUSTOMS_VALUE_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 10, sourceReference: "CAL-BYD-SEALION6-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2025-01-01" },
     { chargeKey: "PROCESSING_FEE", chargeName: "Processing Fee", rateType: "FIXED", flatAmount: "0.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 11, sourceReference: "CAL-BYD-SEALION6-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2025-01-01", skipWhenZero: true },
     { chargeKey: "ECOWAS_LEVY", chargeName: "ECOWAS Levy", rateType: "PERCENTAGE", rateValue: "0.005", taxableBaseExpression: "CIF_GHS", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 20, sourceReference: "CAL-BYD-SEALION6-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2025-01-01" },
@@ -98,6 +109,7 @@ function bydRules(): EngineRuleDefinition[] {
     { chargeKey: "DISINFECTION_FEE", chargeName: "GHS Disinfection Fee", rateType: "FIXED", flatAmount: "386.94", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 81, sourceReference: "CAL-BYD-SEALION6-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2025-01-01" },
     { chargeKey: "MOTI_EIDF_FEE", chargeName: "MoTI e-IDF Fee", rateType: "FIXED", flatAmount: "5.00", taxableBaseExpression: "FLAT", roundingMode: "HALF_UP", decimalPlaces: 2, dependencyOrder: 82, sourceReference: "CAL-BYD-SEALION6-BOE", verificationStatus: "VERIFIED", effectiveFrom: "2025-01-01" },
   ];
+  return [...core, ...officialZeroLines("CAL-BYD-SEALION6-BOE", core)];
 }
 
 export const VERIFIED_RULE_SETS: VersionedRuleSet[] = [

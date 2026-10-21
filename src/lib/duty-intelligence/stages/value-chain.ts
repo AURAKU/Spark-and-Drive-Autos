@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { fallbackGlobalCurrencySettings } from "@/lib/currency";
 
-import { getLatestExchangeRate, isSupportedFobCurrency } from "../config-loader";
+import { getPreferredDutyFx } from "@/lib/duty-intelligence/bog-fx.server";
+import { isSupportedFobCurrency } from "../config-loader";
 import type { CalculationLineItem, DutyCalculationInput } from "../types";
 
 /** Approximate GHS rates for currencies not in duty exchange table — updated via admin FX. */
@@ -59,27 +60,27 @@ export async function resolveExchangeRate(params: {
     throw new Error(`Unsupported currency: ${fromCurrency}`);
   }
 
-  const customs = await getLatestExchangeRate({ countryConfigId, fromCurrency, toCurrency: "GHS" });
-  if (customs) {
+  const dutyFx = await getPreferredDutyFx({ countryConfigId, fromCurrency, toCurrency: "GHS" });
+  if (dutyFx && dutyFx.rate > 0) {
     notes.push(
-      `Exchange rate: 1 ${fromCurrency} = ${customs.rate} GHS (${customs.source}, ${customs.effectiveDate.toISOString().slice(0, 10)})`,
+      `Duty FX (Bank of Ghana / admin): 1 ${fromCurrency} = ${dutyFx.rate} GHS (${dutyFx.source}, ${dutyFx.effectiveDate.slice(0, 10)})`,
     );
     lineItems.push({
       code: "EXCHANGE_RATE",
       label: `Exchange rate (${fromCurrency} → GHS)`,
       category: "FOB",
-      amountGhs: customs.rate,
+      amountGhs: dutyFx.rate,
       basis: `${fromCurrency} to GHS`,
-      formula: `1 ${fromCurrency} × ${customs.rate} = GHS`,
-      rate: customs.rate,
+      formula: `1 ${fromCurrency} × ${dutyFx.rate} = GHS`,
+      rate: dutyFx.rate,
       rateType: "EXCHANGE",
       source: "CONFIG",
     });
     return {
-      rate: customs.rate,
-      source: customs.source,
+      rate: dutyFx.rate,
+      source: dutyFx.source,
       fromCurrency,
-      effectiveDate: customs.effectiveDate.toISOString(),
+      effectiveDate: dutyFx.effectiveDate,
       lineItems,
       notes,
     };

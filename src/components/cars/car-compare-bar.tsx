@@ -2,16 +2,38 @@
 
 import { GitCompare, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { CarComparePickerSheet } from "@/components/cars/car-compare-picker-sheet";
 import { useCarCompare } from "@/components/cars/car-compare-context";
 import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { cn } from "@/lib/utils";
 
+const TRAY_HEIGHT_VAR = "--sda-compare-tray-h";
+
 export function CarCompareBar() {
   const { entries, remove, clear, compareHref, ready, max } = useCarCompare();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const trayRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!ready || entries.length === 0) {
+      document.documentElement.style.removeProperty(TRAY_HEIGHT_VAR);
+      return;
+    }
+    const el = trayRef.current;
+    if (!el) return;
+    const apply = () => {
+      document.documentElement.style.setProperty(TRAY_HEIGHT_VAR, `${el.offsetHeight}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty(TRAY_HEIGHT_VAR);
+    };
+  }, [entries.length, ready]);
 
   if (!ready || entries.length === 0) return null;
 
@@ -21,6 +43,7 @@ export function CarCompareBar() {
   return (
     <>
       <div
+        ref={trayRef}
         className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#12151a]/95"
         role="region"
         aria-label="Vehicle compare tray"

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { AppProviders } from "@/components/providers/app-providers";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { APPLE_STARTUP_IMAGES, HOMESCREEN_APP_NAME } from "@/lib/homescreen";
 
 import "./globals.css";
 
@@ -22,14 +23,14 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7fafc" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+    { media: "(prefers-color-scheme: light)", color: "#000000" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(getPublicAppUrl()),
-  applicationName: "Spark & Drive Autos",
+  applicationName: HOMESCREEN_APP_NAME,
   title: {
     default: "Spark & Drive Autos",
     template: "%s | Spark & Drive Autos",
@@ -39,16 +40,24 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "Spark & Drive Autos",
+    title: HOMESCREEN_APP_NAME,
     statusBarStyle: "black-translucent",
+    startupImage: APPLE_STARTUP_IMAGES.map((image) => ({
+      url: image.url,
+      media: image.media,
+    })),
   },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon-1024.png", sizes: "1024x1024", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon-167.png", sizes: "167x167", type: "image/png" },
+    ],
   },
   openGraph: {
     title: "Spark & Drive Autos",

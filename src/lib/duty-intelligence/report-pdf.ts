@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from "pdf-lib";
 
-import { formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
+import { formatPlatformUsdRate, formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
 import { LEGAL_COMPANY } from "@/lib/legal";
 
 const PAGE_WIDTH = 595.28;
@@ -205,6 +205,10 @@ export async function buildDutyIntelligenceReportPdf(report: DutyReportData): Pr
     const usd = `USD ${formatSheetNumber(report.totals.estimatedDutyPayableUsd)}`;
     const usdWidth = normal.widthOfTextAtSize(usd, 10);
     drawText(page, usd, PAGE_WIDTH - MARGIN - usdWidth, y, 10, normal, MUTED);
+    y -= 13;
+    const rateLabel = `1 USD = GHS ${formatPlatformUsdRate(report.totals.platformUsdToGhs)} (Bank of Ghana)`;
+    const rateWidth = normal.widthOfTextAtSize(rateLabel, 8);
+    drawText(page, rateLabel, PAGE_WIDTH - MARGIN - rateWidth, y, 8, normal, MUTED);
     y -= 16;
   }
 

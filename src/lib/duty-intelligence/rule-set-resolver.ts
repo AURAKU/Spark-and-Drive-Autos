@@ -1,3 +1,5 @@
+import { applyCalculatorRateOverrides, type CalculatorRateOverride } from "@/lib/duty-intelligence/gra-planning-charges";
+
 import { engineError } from "./errors";
 import { getRuleSetByProfileId } from "./rule-sets/verified-profiles";
 import type { VersionedRuleSet } from "./rule-sets/verified-profiles";
@@ -5,6 +7,7 @@ import type { VersionedRuleSet } from "./rule-sets/verified-profiles";
 export function resolveRuleSet(params: {
   profileId: string;
   assessmentDate: Date;
+  calculatorRates?: Record<string, CalculatorRateOverride> | null;
 }): VersionedRuleSet {
   const ruleSet = getRuleSetByProfileId(params.profileId);
   if (!ruleSet) {
@@ -30,5 +33,9 @@ export function resolveRuleSet(params: {
     });
   }
 
-  return ruleSet;
+  if (!params.calculatorRates) return ruleSet;
+  return {
+    ...ruleSet,
+    rules: applyCalculatorRateOverrides(ruleSet.rules, params.calculatorRates),
+  };
 }

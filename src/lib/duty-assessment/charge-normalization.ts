@@ -136,6 +136,36 @@ export const DEFAULT_CHARGE_NORMALIZATION_DICTIONARY: ChargeNormalizationEntry[]
     category: "LEVY",
     aliases: ["1% Withholding Tax on Import", "Withholding Tax on Import", "WHT Import"],
   },
+  {
+    normalizedChargeKey: "VEHICLE_CERTIFICATION",
+    displayName: "Vehicle Certification",
+    category: "FEE",
+    aliases: ["Vehicle Certification", "Vehicle Certification Fee"],
+  },
+  {
+    normalizedChargeKey: "COVID_HEALTH_RECOVERY_LEVY",
+    displayName: "COVID-19 Health Recovery Levy",
+    category: "LEVY",
+    aliases: ["COVID-19 Health Recovery Levy", "COVID Health Recovery Levy", "COVID Levy"],
+  },
+  {
+    normalizedChargeKey: "NETWORK_CHARGE_COVID",
+    displayName: "Network Charge COVID-19 Health",
+    category: "FEE",
+    aliases: ["Network Charge COVID-19 Health", "Network Charge COVID"],
+  },
+  {
+    normalizedChargeKey: "OVERAGE_PENALTY",
+    displayName: "Overage Penalty",
+    category: "LEVY",
+    aliases: ["Overage Penalty", "Age Penalty"],
+  },
+  {
+    normalizedChargeKey: "IRS_TAX_DEPOSIT",
+    displayName: "IRS Tax Deposit",
+    category: "LEVY",
+    aliases: ["IRS Tax Deposit", "IRS Deposit"],
+  },
 ];
 
 function normalizeLabel(label: string): string {

@@ -267,6 +267,7 @@ export default async function CarDetailPage(props: Props) {
               <div className="mt-4">
                 <DutyIntelligenceCalculator
                   compact
+                  usdToGhs={Number(fx.usdToGhs)}
                   prefill={{
                     carId: car.id,
                     manufacturer: car.brand,

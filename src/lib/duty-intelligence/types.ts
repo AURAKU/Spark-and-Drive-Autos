@@ -8,6 +8,8 @@ import type {
 } from "@prisma/client";
 import { EngineType as EngineTypeEnum } from "@prisma/client";
 
+import type { CalculatorRateOverride } from "@/lib/duty-intelligence/gra-planning-charges";
+
 export const EXPORT_COUNTRIES = [
   "CHINA",
   "JAPAN",
@@ -216,6 +218,8 @@ export type DutyIntelligenceResult = {
   hsCode: string;
   hsCodeResolution: { code: string; description: string; method: string };
   exchangeRate: { rate: number; source: string; fromCurrency: string; effectiveDate: string };
+  /** Bank of Ghana (or admin override) USD→GHS used for the duty sheet, not storefront pricing. */
+  dutyFx?: DutyFxQuote;
   vehicleClassification: { category: DutyVehicleCategory | null; ageYears: number; commercial: boolean; profile: string };
   confidence: ConfidenceResult;
   historicalComparison: HistoricalComparison | null;
@@ -301,10 +305,17 @@ export type LoadedHsCode = {
   dutyRateHint: number | null;
 };
 
+export type DutyFxQuote = {
+  usdToGhs: number;
+  source: string;
+  effectiveDate: string;
+};
+
 export type CountryConfigBundle = {
   countryConfigId: string;
   countryCode: DutyCountryCode;
   currency: string;
+  calculatorRates: Record<string, CalculatorRateOverride>;
   formulaRules: LoadedFormulaRule[];
   hsCodes: LoadedHsCode[];
   chargeTemplates: LoadedChargeTemplate[];

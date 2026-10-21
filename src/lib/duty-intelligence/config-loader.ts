@@ -5,6 +5,8 @@ import type { DutyCountryCode } from "@prisma/client";
 import { initializeGhanaDutyConfig } from "@/lib/duty-intelligence/config-bootstrap.server";
 import { prisma } from "@/lib/prisma";
 
+import { mergeCalculatorRates, type CalculatorRateOverride } from "@/lib/duty-intelligence/gra-planning-charges";
+
 import { dutyCacheGet, dutyCacheInvalidate, dutyCacheKey, dutyCacheSet } from "./cache.server";
 import type { CountryConfigBundle, LoadedChargeTemplate, LoadedFormulaRule, LoadedHsCode } from "./types";
 
@@ -96,10 +98,16 @@ async function fetchCountryBundle(countryCode: DutyCountryCode): Promise<Country
     calibrationFactors[cal.category] = toNum(cal.factor);
   }
 
+  const storedRates =
+    country.configJson && typeof country.configJson === "object" && !Array.isArray(country.configJson)
+      ? (country.configJson as { calculatorRates?: Record<string, CalculatorRateOverride> }).calculatorRates
+      : undefined;
+
   return {
     countryConfigId: country.id,
     countryCode: country.countryCode,
     currency: country.currency,
+    calculatorRates: mergeCalculatorRates(storedRates),
     formulaRules,
     hsCodes,
     chargeTemplates,

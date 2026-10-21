@@ -8,17 +8,21 @@ import {
   addExchangeRateAction,
   createVerifiedImportAction,
   initializeGhanaDutyConfigAction,
+  refreshBogFxAction,
+  updateCalculatorRatesAction,
   updateFormulaRuleAction,
   updateInsuranceRuleAction,
   updateShippingCostAction,
   type DutyIntelligenceActionState,
 } from "@/actions/duty-intelligence-admin";
+import { GRA_PLANNING_CHARGES } from "@/lib/duty-intelligence/gra-planning-charges";
 import { formatMoney } from "@/lib/format";
 
 type DashboardData = Awaited<ReturnType<typeof import("@/actions/duty-intelligence-admin").getDutyIntelligenceDashboardData>>;
 
 const TABS = [
   "Dashboard",
+  "Calculator Rates",
   "Formulas",
   "Shipping Costs",
   "Insurance Rules",
@@ -46,7 +50,10 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
   const [initPending, startInit] = useTransition();
   const [initMsg, setInitMsg] = useState<string | null>(null);
   const [formulaState, formulaAction] = useFormState(updateFormulaRuleAction, {} as DutyIntelligenceActionState);
+  const [calcRateState, calcRateAction] = useFormState(updateCalculatorRatesAction, {} as DutyIntelligenceActionState);
   const [rateState, rateAction] = useFormState(addExchangeRateAction, {} as DutyIntelligenceActionState);
+  const [bogMsg, setBogMsg] = useState<string | null>(null);
+  const [bogPending, startBog] = useTransition();
   const [importState, importAction] = useFormState(createVerifiedImportAction, {} as DutyIntelligenceActionState);
   const [shippingState, shippingAction] = useFormState(updateShippingCostAction, {} as DutyIntelligenceActionState);
   const [insuranceState, insuranceAction] = useFormState(updateInsuranceRuleAction, {} as DutyIntelligenceActionState);
@@ -176,10 +183,60 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
         </div>
       )}
 
+      {tab === "Calculator Rates" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            These GRA descriptors and rates drive the public duty calculator. Change a rate here when Ghana Customs
+            publishes a new circular. Percentage values are decimals (0.15 = 15%). Fixed fees are Ghana cedis.
+          </p>
+          {calcRateState.error && <p className="text-sm text-destructive">{calcRateState.error}</p>}
+          {calcRateState.ok && <p className="text-sm text-emerald-600">Calculator rates saved. New estimates use them immediately.</p>}
+          <form action={calcRateAction} className="space-y-3">
+            <div className="sda-table-scroll rounded-xl border border-border dark:border-white/10">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground dark:border-white/10">
+                    <th className="p-3">Descriptor</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Rate</th>
+                    <th className="p-3">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {GRA_PLANNING_CHARGES.map((charge) => {
+                    const current = initialData.calculatorRates?.[charge.chargeKey]?.rateValue ?? charge.defaultRate;
+                    return (
+                      <tr key={charge.chargeKey} className="border-b border-border/50 dark:border-white/5">
+                        <td className="p-3">
+                          <p className="font-medium">{charge.chargeName}</p>
+                          <p className="font-mono text-[11px] text-muted-foreground">{charge.chargeKey}</p>
+                        </td>
+                        <td className="p-3">{charge.rateType === "PERCENTAGE" ? "%" : "GHS"}</td>
+                        <td className="p-3">
+                          <input
+                            name={`rate.${charge.chargeKey}`}
+                            defaultValue={String(current)}
+                            className="w-28 rounded border border-border px-2 py-1 text-xs dark:border-white/15 dark:bg-black/40"
+                          />
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">{charge.officialNote}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
+              Save calculator rates
+            </button>
+          </form>
+        </div>
+      )}
+
       {tab === "Formulas" && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Every levy and tax rate is configurable. Updates create a new version and preserve history.
+            Historical formula library. The public duty calculator uses <span className="font-medium text-foreground">Calculator Rates</span>.
           </p>
           {formulaState.error && <p className="text-sm text-destructive">{formulaState.error}</p>}
           {formulaState.ok && <p className="text-sm text-emerald-600">Formula updated.</p>}
@@ -226,14 +283,36 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
 
       {tab === "Exchange Rates" && (
         <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Duty calculator FX is separate from storefront pricing. It uses the Bank of Ghana mid-rate and can be
+            overridden here. The platform refreshes BoG automatically on business days.
+          </p>
           {rateState.error && <p className="text-sm text-destructive">{rateState.error}</p>}
           {rateState.ok && <p className="text-sm text-emerald-600">Rate added.</p>}
+          {bogMsg && <p className="text-sm text-muted-foreground">{bogMsg}</p>}
+          <button
+            type="button"
+            disabled={bogPending}
+            onClick={() => {
+              setBogMsg(null);
+              startBog(async () => {
+                const result = await refreshBogFxAction();
+                setBogMsg(result.error ?? result.detail ?? (result.ok ? "Bank of Ghana rates updated." : "Refresh failed."));
+                if (result.ok) window.location.reload();
+              });
+            }}
+            className="rounded-lg border border-border px-4 py-2 text-sm dark:border-white/15"
+          >
+            {bogPending ? "Refreshing Bank of Ghana…" : "Refresh Bank of Ghana rates now"}
+          </button>
           <form action={rateAction} className="flex flex-wrap items-end gap-3 rounded-xl border border-border p-4 dark:border-white/10">
             <label className="text-xs">
               From
               <select name="fromCurrency" className="mt-1 block rounded border border-border px-2 py-1.5 text-sm dark:border-white/15 dark:bg-black/40">
                 <option value="USD">USD</option>
                 <option value="CNY">CNY</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
               </select>
             </label>
             <label className="text-xs">

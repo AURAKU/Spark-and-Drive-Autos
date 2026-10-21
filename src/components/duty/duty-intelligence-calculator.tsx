@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { EngineType } from "@prisma/client";
 import { Check, ChevronDown, ChevronUp, Download, Loader2, Printer, Save, Shield } from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { saveDutyCalculationAction } from "@/actions/duty-intelligence-admin";
 import { prepareDutyReportAction } from "@/actions/duty-intelligence-report";
@@ -18,7 +25,12 @@ import {
 import { formatMoney } from "@/lib/format";
 
 import { inferEngineCcFromText } from "@/lib/duty-intelligence/engine-cc";
-import { buildDutyReportPreview } from "@/lib/duty-intelligence/report-model";
+import {
+  buildDutyReportPreview,
+  formatPlatformUsdRate,
+  positiveFxRate,
+  resolvePlatformUsdToGhs,
+} from "@/lib/duty-intelligence/report-model";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
 import { DutyIntelligenceSourceNote } from "./duty-intelligence-source-note";
@@ -47,6 +59,8 @@ type Props = {
   compact?: boolean;
   showSave?: boolean;
   isAdmin?: boolean;
+  /** Platform admin rate (`GlobalCurrencySettings.usdToGhs`). */
+  usdToGhs?: number;
 };
 
 const CONFIDENCE_LABELS: Record<DutyConfidenceLevel, string> = {
@@ -72,7 +86,7 @@ type ResolvedVehicleSpec = {
 
 const defaultYear = new Date().getFullYear() - 3;
 
-export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin }: Props) {
+export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin, usdToGhs }: Props) {
   const [manufacturer, setManufacturer] = useState(prefill?.manufacturer ?? "");
   const [model, setModel] = useState(prefill?.model ?? "");
   const [year, setYear] = useState(String(prefill?.year ?? defaultYear));
@@ -103,6 +117,24 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   const [resolvedSpec, setResolvedSpec] = useState<ResolvedVehicleSpec | null>(null);
   const [confirmedFields, setConfirmedFields] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState(0);
+  const [platformUsdToGhs, setPlatformUsdToGhs] = useState(() => resolvePlatformUsdToGhs(usdToGhs));
+  const calculationRequestId = useRef(0);
+
+  useEffect(() => {
+    const fromProp = positiveFxRate(usdToGhs);
+    if (fromProp) setPlatformUsdToGhs(fromProp);
+    const controller = new AbortController();
+    fetch("/api/duty-intelligence/exchange-rates?from=USD", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const stored = positiveFxRate(data?.current?.rate);
+        if (stored) setPlatformUsdToGhs(stored);
+      })
+      .catch(() => {
+        /* keep prop / fallback */
+      });
+    return () => controller.abort();
+  }, [usdToGhs]);
 
   useEffect(() => {
     if (prefill?.fuelType) setFuelType(prefill.fuelType);
@@ -234,10 +266,13 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
     setError(null);
     setAdminHint(null);
     setSaveMsg(null);
+    setReportError(null);
     if (!inputPayload) {
       setError("Complete all required fields: manufacturer, model, year, engine CC, and FOB amount.");
+      setResult(null);
       return;
     }
+    const requestId = ++calculationRequestId.current;
     setProgress(15);
     startTransition(async () => {
       try {
@@ -247,6 +282,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(inputPayload),
         });
+        if (requestId !== calculationRequestId.current) return;
         setProgress(80);
         const data = await res.json();
         if (!res.ok) {
@@ -259,8 +295,11 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         setResult(data.result);
         setPreparedExport(null);
         setProgress(100);
-        setTimeout(() => setProgress(0), 600);
+        setTimeout(() => {
+          if (requestId === calculationRequestId.current) setProgress(0);
+        }, 600);
       } catch {
+        if (requestId !== calculationRequestId.current) return;
         setError("Unable to reach the duty engine. Please try again.");
         setResult(null);
         setProgress(0);
@@ -269,11 +308,15 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   }, [inputPayload, isAdmin]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (inputPayload) runCalculation();
-    }, compact ? 800 : 1200);
-    return () => clearTimeout(t);
-  }, [inputPayload, compact, runCalculation]);
+    calculationRequestId.current += 1;
+    setResult(null);
+    setPreparedExport(null);
+    setError(null);
+    setAdminHint(null);
+    setSaveMsg(null);
+    setReportError(null);
+    setProgress(0);
+  }, [inputPayload]);
 
   function handleSave() {
     if (!result || !inputPayload) return;
@@ -284,14 +327,16 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
     });
   }
 
+  const dutyUsdToGhs = positiveFxRate(result?.dutyFx?.usdToGhs) ?? platformUsdToGhs;
+
   const previewReport = useMemo(() => {
     if (!result || !inputPayload) return null;
     try {
-      return buildDutyReportPreview({ input: inputPayload, result });
+      return buildDutyReportPreview({ input: inputPayload, result, platformUsdToGhs: dutyUsdToGhs });
     } catch {
       return null;
     }
-  }, [result, inputPayload]);
+  }, [result, inputPayload, dutyUsdToGhs]);
 
   async function ensurePreparedReport() {
     if (!result || !inputPayload) return null;
@@ -360,7 +405,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <h3 className="text-sm font-semibold text-foreground dark:text-white">Ghana Duty Estimate</h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Enter make, model, year, fuel type, and purchase price. Freight and insurance are estimated automatically unless you provide them.
+            Enter make, model, year, fuel type, and purchase price, then press Calculate landed cost to generate the duty sheet. Freight and insurance are estimated unless you provide them.
           </p>
         </div>
         {result && (
@@ -548,26 +593,34 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           </button>
         )}
         {result && (
-          <>
-            <button
-              type="button"
-              onClick={handlePrintSheet}
-              disabled={!previewReport}
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
-            >
-              <Printer className="h-4 w-4" />
-              Print estimate
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDownloadPdf()}
-              disabled={reportPending || !inputPayload}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Export duty estimate"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium"
             >
               {reportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Download PDF
-            </button>
-          </>
+              Export
+              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+              <DropdownMenuItem
+                disabled={!previewReport}
+                onClick={() => handlePrintSheet()}
+                className="cursor-pointer gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                Print estimate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={reportPending || !inputPayload}
+                onClick={() => void handleDownloadPdf()}
+                className="cursor-pointer gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -594,7 +647,10 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
 
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             <div className="flex justify-between"><span className="text-muted-foreground">HS Code</span><span className="font-mono">{result.hsCode}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Exchange rate</span><span>1 {result.exchangeRate.fromCurrency} = {result.exchangeRate.rate} GHS</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">USD / GHS (Bank of Ghana)</span><span>1 USD = {formatPlatformUsdRate(dutyUsdToGhs)} GHS</span></div>
+            {result.exchangeRate.fromCurrency !== "USD" && result.exchangeRate.fromCurrency !== "GHS" ? (
+              <div className="flex justify-between"><span className="text-muted-foreground">FOB exchange rate</span><span>1 {result.exchangeRate.fromCurrency} = {result.exchangeRate.rate} GHS</span></div>
+            ) : null}
             <div className="flex justify-between"><span className="text-muted-foreground">Calculation date</span><span>{new Date(result.calculatedAt).toLocaleDateString()}</span></div>
             {result.summary.estimatedTransitDays != null ? (
               <div className="flex justify-between"><span className="text-muted-foreground">Est. delivery</span><span>~{result.summary.estimatedTransitDays} days</span></div>

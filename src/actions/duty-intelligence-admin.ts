@@ -16,6 +16,8 @@ import { isPipelineError, runDutyIntelligencePipeline, saveDutyCalculation } fro
 import { recalibrateFromVerifiedImport } from "@/lib/duty-intelligence/self-learning";
 import type { DutyIntelligenceResult } from "@/lib/duty-intelligence/types";
 import { dutyCalculationInputSchema } from "@/lib/duty-intelligence/types";
+import { refreshBankOfGhanaDutyRates } from "@/lib/duty-intelligence/bog-fx.server";
+import { GRA_PLANNING_CHARGES, mergeCalculatorRates } from "@/lib/duty-intelligence/gra-planning-charges";
 import { prisma } from "@/lib/prisma";
 
 export type DutyIntelligenceActionState = { ok?: boolean; error?: string; id?: string; referenceNumber?: string };
@@ -185,6 +187,60 @@ export async function addExchangeRateAction(
   await dutyCacheInvalidate("duty:config");
   revalidatePath("/admin/duty-intelligence");
   return { ok: true };
+}
+
+export async function updateCalculatorRatesAction(
+  _prev: DutyIntelligenceActionState | null,
+  formData: FormData,
+): Promise<DutyIntelligenceActionState> {
+  await requireAdmin();
+  const config = await ensureCountryConfig("GH");
+  if (!config) return { error: "Ghana duty configuration not initialized." };
+
+  const next = mergeCalculatorRates(config.calculatorRates);
+  for (const charge of GRA_PLANNING_CHARGES) {
+    const raw = formData.get(`rate.${charge.chargeKey}`);
+    if (raw == null || String(raw).trim() === "") continue;
+    const rateValue = Number(raw);
+    if (!Number.isFinite(rateValue) || rateValue < 0) return { error: `Invalid rate for ${charge.chargeName}.` };
+    next[charge.chargeKey] = { rateType: charge.rateType, rateValue };
+  }
+
+  const country = await prisma.dutyCountryConfig.findUnique({
+    where: { id: config.countryConfigId },
+    select: { configJson: true },
+  });
+  const existing =
+    country?.configJson && typeof country.configJson === "object" && !Array.isArray(country.configJson)
+      ? (country.configJson as Record<string, unknown>)
+      : {};
+
+  await prisma.dutyCountryConfig.update({
+    where: { id: config.countryConfigId },
+    data: { configJson: { ...existing, calculatorRates: next } },
+  });
+  await dutyCacheInvalidate("duty:");
+  revalidatePath("/admin/duty-intelligence");
+  return { ok: true };
+}
+
+export async function refreshBogFxAction(): Promise<DutyIntelligenceActionState & { detail?: string }> {
+  await requireAdmin();
+  try {
+    const result = await refreshBankOfGhanaDutyRates();
+    if (!result.ok) return { error: result.reason ?? "Bank of Ghana refresh failed." };
+    revalidatePath("/admin/duty-intelligence");
+    if (result.skipped) return { ok: true, detail: "Admin override is holding today’s duty FX. BoG was not overwritten." };
+    const usd = result.snapshot?.pairs.find((p) => p.fromCurrency === "USD");
+    return {
+      ok: true,
+      detail: usd
+        ? `Bank of Ghana mid rate 1 USD = ${usd.mid} GHS (${result.snapshot?.rateDate}).`
+        : "Bank of Ghana rates refreshed.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Bank of Ghana refresh failed." };
+  }
 }
 
 export async function createVerifiedImportAction(
@@ -359,6 +415,7 @@ export async function getDutyIntelligenceDashboardData() {
         exchangeRateTrend: [],
       },
       formulaRules: [],
+      calculatorRates: mergeCalculatorRates(null),
       hsCodes: [],
       exchangeRates: [],
       shippingLines: [],
@@ -423,6 +480,7 @@ export async function getDutyIntelligenceDashboardData() {
     health,
     analytics,
     formulaRules,
+    calculatorRates: config.calculatorRates,
     hsCodes,
     exchangeRates,
     shippingLines,

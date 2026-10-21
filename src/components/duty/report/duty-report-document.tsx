@@ -1,5 +1,5 @@
 import { LEGAL_COMPANY } from "@/lib/legal";
-import { formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
+import { formatPlatformUsdRate, formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value == null || value === "") return null;
@@ -123,9 +123,14 @@ export function DutyReportDocument({ report }: { report: DutyReportData }) {
             {formatSheetNumber(report.totals.estimatedDutyPayableGhs)}
           </p>
           {report.totals.estimatedDutyPayableUsd != null ? (
-            <p className="mt-1 text-sm tabular-nums text-neutral-500">
-              USD {formatSheetNumber(report.totals.estimatedDutyPayableUsd)}
-            </p>
+            <>
+              <p className="mt-1 text-sm tabular-nums text-neutral-500">
+                USD {formatSheetNumber(report.totals.estimatedDutyPayableUsd)}
+              </p>
+              <p className="mt-0.5 text-[11px] tabular-nums text-neutral-400">
+                1 USD = GHS {formatPlatformUsdRate(report.totals.platformUsdToGhs)} (Bank of Ghana)
+              </p>
+            </>
           ) : null}
         </div>
       </section>

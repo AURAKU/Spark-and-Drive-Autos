@@ -15,6 +15,7 @@
     "doctor": "node scripts/doctor.mjs",
     "audit:routes": "node scripts/audit-routes.mjs",
     "audit:links": "node scripts/audit-links.mjs",
+    "icons:homescreen": "node scripts/generate-homescreen-icons.mjs",
     "smoke:production": "node scripts/smoke-production.mjs",
     "env:bootstrap": "node scripts/ensure-local-env.mjs",
     "build": "next build",

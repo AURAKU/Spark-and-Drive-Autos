@@ -59,7 +59,14 @@ export type CalculationEngineResult = {
 function categorizeCharge(chargeKey: string): CalculatedChargeLine["category"] {
   if (chargeKey === "IMPORT_DUTY") return "DUTY";
   if (chargeKey.includes("VAT")) return "VAT";
-  if (chargeKey.includes("FEE") || chargeKey === "NETWORK_CHARGE") return "FEE";
+  if (
+    chargeKey.includes("FEE") ||
+    chargeKey === "VEHICLE_CERTIFICATION" ||
+    chargeKey === "NETWORK_CHARGE" ||
+    chargeKey.startsWith("NETWORK_CHARGE_")
+  ) {
+    return "FEE";
+  }
   return "LEVY";
 }
 

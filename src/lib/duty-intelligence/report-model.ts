@@ -85,6 +85,8 @@ export type DutyReportData = {
     portAndAdminChargesGhs: number | null;
     estimatedDutyPayableGhs: number;
     estimatedDutyPayableUsd: number | null;
+    /** Platform admin rate: GHS = USD × usdToGhs; USD = GHS / usdToGhs. */
+    platformUsdToGhs: number;
     estimatedLandedCostGhs: number;
     lowEstimateGhs: number | null;
     expectedEstimateGhs: number | null;
@@ -134,6 +136,35 @@ export function moneyNumber(value: unknown): number {
   return 0;
 }
 
+/** Matches `DEFAULT_SETTINGS.usdToGhs` in currency.ts — last resort if platform settings are missing. */
+export const FALLBACK_PLATFORM_USD_TO_GHS = 11.65;
+
+export function positiveFxRate(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** GHS → USD using the platform direct rate (`USD = GHS / usdToGhs`). Never use a FOB pair. */
+export function convertGhsToUsd(amountGhs: number, usdToGhs: number): number {
+  const rate = positiveFxRate(usdToGhs) ?? FALLBACK_PLATFORM_USD_TO_GHS;
+  return moneyNumber(amountGhs / rate);
+}
+
+/** USD → GHS using the platform direct rate (`GHS = USD × usdToGhs`). */
+export function convertUsdToGhs(amountUsd: number, usdToGhs: number): number {
+  const rate = positiveFxRate(usdToGhs) ?? FALLBACK_PLATFORM_USD_TO_GHS;
+  return moneyNumber(amountUsd * rate);
+}
+
+export function resolvePlatformUsdToGhs(value: unknown): number {
+  return positiveFxRate(value) ?? FALLBACK_PLATFORM_USD_TO_GHS;
+}
+
+export function formatPlatformUsdRate(usdToGhs: number): string {
+  return usdToGhs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+}
+
 export function formatSheetNumber(amount: number | null | undefined): string {
   if (amount == null || !Number.isFinite(amount)) return "0.00";
   return moneyNumber(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -171,6 +202,7 @@ export function buildDutyReportPreview(params: {
   input: unknown;
   result: DutyIntelligenceResult;
   reference?: string;
+  platformUsdToGhs?: number;
 }): DutyReportData {
   const stamp = new Date();
   const ymd = stamp.toISOString().slice(0, 10).replace(/-/g, "");
@@ -181,6 +213,7 @@ export function buildDutyReportPreview(params: {
     preparedBy: "Spark & Drive Autos",
     inputJson: params.input,
     resultJson: params.result,
+    platformUsdToGhs: params.platformUsdToGhs,
   });
 }
 
@@ -301,6 +334,8 @@ export function buildDutyReportData(params: {
   inputJson: unknown;
   resultJson: unknown;
   website?: string;
+  /** Duty calculator USD→GHS (Bank of Ghana / admin). Not storefront pricing. */
+  platformUsdToGhs?: number;
 }): DutyReportData {
   const inputParsed = dutyCalculationInputSchema.safeParse(params.inputJson);
   const result = params.resultJson as DutyIntelligenceResult;
@@ -371,9 +406,12 @@ export function buildDutyReportData(params: {
   const ageYears = result.vehicleClassification?.ageYears;
   const depreciationPercent = depreciationFromAssumptions(assumptions);
   const web = websiteParts(params.website);
-  const fxRate = moneyNumber(result.exchangeRate?.rate);
+  const fobFxRate = moneyNumber(result.exchangeRate?.rate);
+  const resultDutyUsd = positiveFxRate(result.dutyFx?.usdToGhs);
+  const platformUsdToGhs = resolvePlatformUsdToGhs(resultDutyUsd ?? params.platformUsdToGhs);
   const payableGhs = reconciliation.totalEstimatedDutyPayableGhs;
-  const payableUsd = fxRate > 0 ? moneyNumber(payableGhs / fxRate) : null;
+  const payableUsd = convertGhsToUsd(payableGhs, platformUsdToGhs);
+  const fobCurrency = (purchase?.fobCurrency ?? result.exchangeRate?.fromCurrency ?? "").toUpperCase();
   const fuelLabel = vehicle?.fuelType ? engineTypeLabel(vehicle.fuelType) : null;
   const fuelAndCc =
     fuelLabel && vehicle?.engineCc
@@ -384,8 +422,12 @@ export function buildDutyReportData(params: {
     ...(fuelAndCc ? [{ label: "Fuel & CC", value: fuelAndCc }] : []),
     ...(ageYears != null ? [{ label: "On arrival", value: `${Number(ageYears).toFixed(1)} yrs` }] : []),
     ...(depreciationPercent != null ? [{ label: "Depreciation", value: `${depreciationPercent.toFixed(1)}%` }] : []),
-    ...(fxRate > 0
-      ? [{ label: "FX rate", value: `${fxRate.toLocaleString("en-US", { maximumFractionDigits: 5 })}` }]
+    {
+      label: "BoG FX",
+      value: `1 USD = ${formatPlatformUsdRate(platformUsdToGhs)}${result.dutyFx?.source ? ` (${result.dutyFx.source.replaceAll("_", " ")})` : ""}`,
+    },
+    ...(fobCurrency && fobCurrency !== "USD" && fobCurrency !== "GHS" && fobFxRate > 0
+      ? [{ label: `FOB FX`, value: `1 ${fobCurrency} = ${fobFxRate.toLocaleString("en-US", { maximumFractionDigits: 5 })}` }]
       : []),
   ];
 
@@ -439,7 +481,7 @@ export function buildDutyReportData(params: {
       fobForeign: purchase?.fobAmount ?? 0,
       freightForeignOrGhs: result.summary.freightGhs,
       insuranceForeignOrGhs: result.summary.insuranceGhs,
-      fxRate,
+      fxRate: fobFxRate,
       fxSource: result.exchangeRate?.source ?? null,
       fxEffectiveDate: result.exchangeRate?.effectiveDate ?? null,
       fobGhs: moneyNumber(result.summary.fobGhs),
@@ -457,6 +499,7 @@ export function buildDutyReportData(params: {
       portAndAdminChargesGhs: portAdmin > 0 ? portAdmin : null,
       estimatedDutyPayableGhs: payableGhs,
       estimatedDutyPayableUsd: payableUsd,
+      platformUsdToGhs,
       estimatedLandedCostGhs: moneyNumber(result.summary.totalLandedCostGhs),
       lowEstimateGhs:
         result.estimateRange?.landedCostLowGhs != null

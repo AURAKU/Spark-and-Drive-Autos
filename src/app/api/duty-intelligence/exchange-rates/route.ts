@@ -5,7 +5,8 @@ import {
   USER_CONFIG_UNAVAILABLE_MESSAGE,
   checkDutyConfigHealth,
 } from "@/lib/duty-intelligence/config-bootstrap.server";
-import { loadCountryConfigSafe, getLatestExchangeRate } from "@/lib/duty-intelligence/config-loader";
+import { getPreferredDutyFx } from "@/lib/duty-intelligence/bog-fx.server";
+import { loadCountryConfigSafe } from "@/lib/duty-intelligence/config-loader";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const rate = await getLatestExchangeRate({
+  const rate = await getPreferredDutyFx({
     countryConfigId: config.countryConfigId,
     fromCurrency: from,
   });

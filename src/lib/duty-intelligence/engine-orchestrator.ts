@@ -103,6 +103,7 @@ export function runVersionedCalculation(rawInput: unknown): VersionedCalculation
     const ruleSet = resolveRuleSet({
       profileId: hsProfile.profileId,
       assessmentDate: input.assessmentDate,
+      calculatorRates: input.calculatorRates,
     });
 
     const values = resolveCustomsValue({

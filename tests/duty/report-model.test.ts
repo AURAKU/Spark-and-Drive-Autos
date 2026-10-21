@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildDutyReportData,
+  convertGhsToUsd,
   formatReportMoney,
   maskVinOrChassis,
   moneyNumber,
@@ -202,6 +203,8 @@ test("buildDutyReportData for gasoline Jetour-style estimate", () => {
   assert.equal(report.dutyLines[0]?.rateLabel, "0.20");
   assert.ok(report.specChips.some((c) => c.label === "Type" && c.value === "Passenger"));
   assert.ok(report.totals.estimatedDutyPayableUsd != null);
+  assert.equal(report.totals.platformUsdToGhs, 11.65);
+  assert.equal(report.totals.estimatedDutyPayableUsd, moneyNumber(75350 / 11.65));
   assert.match(report.disclaimer, /Spark & Drive Autos/);
   assert.equal(report.disclaimer.toLowerCase().includes("auto-taxes"), false);
 });
@@ -252,6 +255,30 @@ test("buildDutyReportData for EV BYD-style estimate", () => {
   assert.equal(report.vehicle.powerKw, 150);
   assert.equal(report.vehicle.engineCc, null);
   assert.equal(report.confidence.label, "Limited-data estimate");
+});
+
+test("USD payable uses platform usdToGhs, never FOB identity rate", () => {
+  const result = sampleResult({
+    exchangeRate: {
+      rate: 1,
+      source: "IDENTITY",
+      fromCurrency: "GHS",
+      effectiveDate: "2026-07-01",
+    },
+  });
+  const report = buildDutyReportData({
+    calculationId: "calc_ghs_fob",
+    reportReference: "DI-GHSFOB",
+    generatedAt: "2026-07-14T00:00:00.000Z",
+    inputJson: result.inputs,
+    resultJson: result,
+    platformUsdToGhs: 12.45,
+  });
+  assert.equal(report.totals.estimatedDutyPayableGhs, 75350);
+  assert.equal(report.totals.platformUsdToGhs, 12.45);
+  assert.equal(report.totals.estimatedDutyPayableUsd, convertGhsToUsd(75350, 12.45));
+  assert.notEqual(report.totals.estimatedDutyPayableUsd, 75350);
+  assert.ok(report.specChips.some((c) => c.label === "BoG FX" && c.value.includes("12.45")));
 });
 
 test("maskVinOrChassis and moneyNumber are Decimal-safe", () => {

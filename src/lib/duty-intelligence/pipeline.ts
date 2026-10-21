@@ -21,6 +21,7 @@ import {
   classifyVehicle,
   resolveHsCode,
 } from "@/lib/duty-intelligence/stages/vehicle-classification";
+import { getPreferredDutyFx, scheduleBankOfGhanaFxRefresh } from "@/lib/duty-intelligence/bog-fx.server";
 import {
   computeFobGhs,
   resolveExchangeRate,
@@ -96,7 +97,13 @@ export async function runDutyIntelligencePipeline(
     notes: [`Method: ${hsResolutionPreview.method}`, hsResolutionPreview.description],
   });
 
+  scheduleBankOfGhanaFxRefresh();
   const exchange = await resolveExchangeRate({ countryConfigId: config.countryConfigId, input });
+  const dutyUsd = await getPreferredDutyFx({
+    countryConfigId: config.countryConfigId,
+    fromCurrency: "USD",
+    toCurrency: "GHS",
+  });
   allLineItems.push(...exchange.lineItems);
   stages.push({
     stage: "EXCHANGE_RATE",
@@ -252,6 +259,7 @@ export async function runDutyIntelligencePipeline(
       make: input.vehicle.manufacturer,
       model: input.vehicle.model,
     },
+    calculatorRates: config.calculatorRates,
   });
 
   if (!versioned.ok) {
@@ -419,6 +427,9 @@ export async function runDutyIntelligencePipeline(
       fromCurrency: exchange.fromCurrency,
       effectiveDate: exchange.effectiveDate,
     },
+    dutyFx: dutyUsd
+      ? { usdToGhs: dutyUsd.rate, source: dutyUsd.source, effectiveDate: dutyUsd.effectiveDate }
+      : undefined,
     vehicleClassification: {
       category: versioned.classification.category,
       ageYears: versioned.classification.ageYears,

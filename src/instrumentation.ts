@@ -32,6 +32,9 @@ function scheduleDutyConfigBootstrap(): void {
           if (result.bootstrapped) {
             console.info("[instrumentation] Ghana duty configuration bootstrapped on startup");
           }
+          void import(/* webpackIgnore: true */ "@/lib/duty-intelligence/bog-fx.server")
+            .then((m) => m.scheduleBankOfGhanaFxRefresh())
+            .catch(() => {});
           return;
         }
         console.warn("[instrumentation] duty-config-startup skipped or failed:", result.reason);
