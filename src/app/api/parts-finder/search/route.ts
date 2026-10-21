@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 
 import { assertProfileLegalCompleteOrResponse } from "@/lib/legal-compliance-central";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
@@ -52,6 +53,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: error.message, code: error.code, redirectTo: error.redirectTo },
         { status: error.status },
+      );
+    }
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { ok: false, error: error.issues[0]?.message ?? "Check the search details and try again.", code: "INVALID_INPUT" },
+        { status: 400 },
       );
     }
     console.error("[parts-finder] search submit failed", error);

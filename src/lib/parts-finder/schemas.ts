@@ -1,5 +1,36 @@
 import { z } from "zod";
 
+export const PARTS_FINDER_INPUT_HINT =
+  "Enter an OEM/part number, a VIN or chassis, or brand + model + year with the part you need.";
+
+/** Toyota-style 45503-60050, Hyundai 58101-2S000, Bosch-like F026T03123. */
+export function looksLikeOemPartNumber(raw: string | undefined): boolean {
+  const text = (raw ?? "").trim().toUpperCase();
+  if (!text) return false;
+  return text.split(/[\s,;/]+/).some((token) => {
+    if (!/^[A-Z0-9][A-Z0-9-]{4,22}[A-Z0-9]$/.test(token)) return false;
+    const compact = token.replace(/-/g, "");
+    return compact.length >= 6 && compact.length <= 24 && /\d/.test(compact);
+  });
+}
+
+export function describePartsFinderInputGap(val: {
+  vin?: string;
+  chassis?: string;
+  brand?: string;
+  model?: string;
+  year?: string | number;
+  partDescription?: string;
+}): string | null {
+  const hasIdentifier = Boolean(val.vin?.trim() || val.chassis?.trim());
+  const yearText = val.year == null ? "" : String(val.year).trim();
+  const hasVehicleTriplet = Boolean(val.brand?.trim() && val.model?.trim() && yearText);
+  const hasPart = Boolean(val.partDescription?.trim());
+  const hasOem = looksLikeOemPartNumber(val.partDescription);
+  if (hasIdentifier || hasOem || (hasVehicleTriplet && hasPart)) return null;
+  return PARTS_FINDER_INPUT_HINT;
+}
+
 export const partsFinderInputSchema = z
   .object({
     vin: z
@@ -24,16 +55,13 @@ export const partsFinderInputSchema = z
       .optional(),
   })
   .superRefine((val, ctx) => {
-    const hasIdentifier = Boolean(val.vin?.trim() || val.chassis?.trim());
-    const hasVehicleTriplet = Boolean(val.brand?.trim() && val.model?.trim() && val.year != null);
-    const hasPart = Boolean(val.partDescription?.trim());
-    if (!hasIdentifier && !(hasVehicleTriplet && hasPart)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["partDescription"],
-        message: "Provide VIN/chassis or brand+model+year with part description.",
-      });
-    }
+    const message = describePartsFinderInputGap(val);
+    if (!message) return;
+    ctx.addIssue({
+      code: "custom",
+      path: ["partDescription"],
+      message,
+    });
   });
 
 export const partsFinderReviewOverrideSchema = z.object({

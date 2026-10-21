@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LegalAcceptanceModal } from "@/components/legal/legal-acceptance-modal";
 import { PartsFinderDisclaimerNotice } from "@/components/legal/parts-finder-disclaimer-notice";
 import { POLICY_KEYS } from "@/lib/legal-enforcement";
+import { describePartsFinderInputGap } from "@/lib/parts-finder/schemas";
 
 type SearchResponse = {
   ok: boolean;
@@ -312,24 +313,46 @@ export function PublicPartsFinderSearch() {
             }
           : undefined,
     };
+    const inputGap = describePartsFinderInputGap(payload);
+    if (inputGap) {
+      setError(inputGap);
+      setStatus(null);
+      return;
+    }
     await runSearch(payload);
   }
 
   return (
     <>
       <form onSubmit={onSubmit} className="mt-6 grid gap-3 rounded-2xl border border-border bg-card p-4 text-sm">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          An OEM or part number is enough to search. VIN, chassis, or brand + model + year improves fitment ranking.
+        </p>
+        <div className="grid gap-2">
+          <label htmlFor="partDescription" className="text-xs font-medium text-muted-foreground">
+            OEM / part number or what you need
+          </label>
+          <textarea
+            id="partDescription"
+            name="partDescription"
+            value={formVehicle.partDescription}
+            onChange={(e) => setFormVehicle((prev) => ({ ...prev, partDescription: e.target.value }))}
+            placeholder="45503-60050 or front left control arm noise"
+            className="min-h-24 rounded-lg border border-border bg-background p-3"
+          />
+        </div>
         <div className="grid gap-2">
           <label htmlFor="vin" className="text-xs font-medium text-muted-foreground">
-            Enter VIN for exact match (recommended)
+            VIN for exact match (optional)
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               id="vin"
               name="vin"
               value={formVehicle.vin}
               onChange={(e) => setFormVehicle((prev) => ({ ...prev, vin: e.target.value.toUpperCase() }))}
               placeholder="17-character VIN"
-              className="h-10 flex-1 rounded-lg border border-border bg-background px-3"
+              className="h-10 min-w-[12rem] flex-1 rounded-lg border border-border bg-background px-3"
             />
             <button
               type="button"
@@ -431,30 +454,28 @@ export function PublicPartsFinderSearch() {
             className="h-10 rounded-lg border border-border bg-background px-3"
           />
         </div>
-        <textarea
-          name="partDescription"
-          value={formVehicle.partDescription}
-          onChange={(e) => setFormVehicle((prev) => ({ ...prev, partDescription: e.target.value }))}
-          placeholder="Describe part needed and symptoms (e.g. front left control arm noise)"
-          className="min-h-24 rounded-lg border border-border bg-background p-3"
-          required
-        />
-        <input
-          name="partImage"
-          type="file"
-          accept="image/*"
-          className="h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs"
-        />
-        <p className="text-[11px] text-muted-foreground">
-          Optional part image helps context ranking; filename metadata is used, and final fitment still requires VIN/chassis verification.
-        </p>
+        <div className="grid gap-1.5">
+          <label htmlFor="partImage" className="text-xs font-medium text-muted-foreground">
+            Part photo (optional)
+          </label>
+          <input
+            id="partImage"
+            name="partImage"
+            type="file"
+            accept="image/*"
+            className="h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs"
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            A photo can help ranking. Filename metadata is used. Final fitment still needs VIN or chassis confirmation.
+          </p>
+        </div>
         <PartsFinderDisclaimerNotice version="active" />
         <button
           disabled={loading}
           type="submit"
           className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--brand)] px-4 font-semibold text-black disabled:opacity-60"
         >
-          {loading ? `Searching... ${progress}%` : "Run parts intelligence search"}
+          {loading ? `Searching… ${progress}%` : "Search parts"}
         </button>
         {loading ? (
           <div className="space-y-1">

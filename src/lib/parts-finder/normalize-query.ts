@@ -1,4 +1,5 @@
 import type { VehicleQueryPayload } from "@/lib/parts-finder/identifier-crypto";
+import { looksLikeOemPartNumber } from "@/lib/parts-finder/schemas";
 import type { PartSymptom, PositionQualifier, RetrievalReadyQuery } from "@/lib/parts-finder/search-types";
 
 export type NormalizedPartsQuery = {
@@ -194,6 +195,14 @@ export function buildExternalSearchQueries(n: NormalizedPartsQuery): string[] {
   const qualifierText = n.qualifiers.join(" ").toLowerCase();
   const symptomText = n.symptoms.join(" ").toLowerCase();
   const expandedTerms = n.expandedIntentTerms.join(" ");
+  const oemOnly = looksLikeOemPartNumber(n.partIntent);
+
+  if (oemOnly) {
+    const oem = n.partIntent.trim();
+    queries.push(`${oem} OEM part number`);
+    queries.push(`${oem} genuine OEM replacement`);
+    if (coreVehicle) queries.push(`${coreVehicle} ${oem} OEM`);
+  }
 
   if (coreVehicle) {
     queries.push(`${coreVehicle} OEM part${part} ${qualifierText}`.trim());
