@@ -49,6 +49,17 @@ function serverActionAllowedOrigins(): string[] {
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: appRootDir(),
+  webpack: (config, { nextRuntime }) => {
+    if (nextRuntime === "edge") {
+      const nodeInstrumentation = path.resolve(appRootDir(), "src/instrumentation.node.ts");
+      config.resolve.alias = {
+        ...(config.resolve.alias ?? {}),
+        [nodeInstrumentation]: false,
+        "./instrumentation.node": false,
+      };
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com", pathname: "/**" },

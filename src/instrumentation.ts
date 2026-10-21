@@ -1,66 +1,20 @@
 /**
  * Next.js instrumentation hook — keep DB work off the critical path.
  * Deposit-balance sync is deferred and must never reject or block `register()`.
+ *
+ * Node-only jobs live in `./instrumentation.node` and are imported only after
+ * the `NEXT_RUNTIME === "nodejs"` check. Do not use `webpackIgnore` + `@/…`:
+ * that leaves a raw `@/lib` specifier that Node cannot resolve in production.
  */
 
-function scheduleDepositBalanceMaintenance(): void {
-  const run = () => {
-    void import(/* webpackIgnore: true */ "@/lib/deposit-balance-startup")
-      .then((m) => m.runDepositBalanceMaintenance())
-      .then((result) => {
-        if (result.ok) return;
-        console.warn("[instrumentation] deposit-balance-maintenance skipped or failed:", result.reason, result.code ?? "");
-      })
-      .catch((e: unknown) => {
-        console.error("[instrumentation] deposit-balance-maintenance unexpected rejection (bug)", e);
-      });
-  };
-
-  if (typeof queueMicrotask === "function") {
-    queueMicrotask(run);
-  } else {
-    setTimeout(run, 0);
-  }
-}
-
-function scheduleDutyConfigBootstrap(): void {
-  const run = () => {
-    void import(/* webpackIgnore: true */ "@/lib/duty-intelligence/duty-config-startup.server")
-      .then((m) => m.initializeDutyConfiguration())
-      .then((result) => {
-        if (result.ok) {
-          if (result.bootstrapped) {
-            console.info("[instrumentation] Ghana duty configuration bootstrapped on startup");
-          }
-          void import(/* webpackIgnore: true */ "@/lib/duty-intelligence/bog-fx.server")
-            .then((m) => m.scheduleBankOfGhanaFxRefresh())
-            .catch(() => {});
-          return;
-        }
-        console.warn("[instrumentation] duty-config-startup skipped or failed:", result.reason);
-      })
-      .catch((e: unknown) => {
-        console.error("[instrumentation] duty-config-startup unexpected rejection (bug)", e);
-      });
-  };
-
-  if (typeof queueMicrotask === "function") {
-    queueMicrotask(run);
-  } else {
-    setTimeout(run, 0);
-  }
-}
-
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") {
-    return;
-  }
-
-  try {
-    scheduleDepositBalanceMaintenance();
-    scheduleDutyConfigBootstrap();
-  } catch (e) {
-    console.error("[instrumentation] startup maintenance schedule failed (non-fatal)", e);
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    try {
+      const { startNodeInstrumentation } = await import("./instrumentation.node");
+      startNodeInstrumentation();
+    } catch (e) {
+      console.error("[instrumentation] startup maintenance schedule failed (non-fatal)", e);
+    }
   }
 
   if (process.env.NODE_ENV !== "production") return;
