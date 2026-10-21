@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { ArrowLeft, Download, Loader2, Printer } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   calculationId: string;
   accessToken?: string | null;
   backHref?: string;
+  autoPrint?: boolean;
 };
 
-export function DutyReportActions({ calculationId, accessToken, backHref = "/inventory" }: Props) {
+export function DutyReportActions({
+  calculationId,
+  accessToken,
+  backHref = "/inventory",
+  autoPrint = false,
+}: Props) {
   const [printing, setPrinting] = useState(false);
   const exportQs = accessToken ? `?access=${encodeURIComponent(accessToken)}` : "";
   const pdfHref = `/duty-report/${calculationId}/export${exportQs}`;
@@ -23,6 +29,12 @@ export function DutyReportActions({ calculationId, accessToken, backHref = "/inv
       window.setTimeout(() => setPrinting(false), 500);
     }
   }
+
+  useEffect(() => {
+    if (!autoPrint) return;
+    const t = window.setTimeout(() => handlePrint(), 400);
+    return () => window.clearTimeout(t);
+  }, [autoPrint]);
 
   return (
     <div className="duty-report-actions no-print mx-auto flex w-full max-w-[210mm] flex-wrap items-center justify-between gap-3 px-1 py-4">

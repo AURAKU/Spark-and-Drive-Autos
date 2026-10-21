@@ -158,7 +158,7 @@ export const CarCard = memo(function CarCard({
 
         {isSold ? (
           <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-            Not available — sold
+            Not available. Sold
           </p>
         ) : reservationDepositHint ? (
           <p className="text-xs text-muted-foreground dark:text-[#B7C0CC]">Reserve: {reservationDepositHint}</p>

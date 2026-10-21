@@ -223,7 +223,7 @@ export function RegisterClient({
           {runtimeGoogleEnabled ? <GoogleSignInButton callbackUrl="/dashboard" disabled={loading} /> : null}
           {runtimeAppleEnabled ? <AppleSignInButton callbackUrl={afterAuth} disabled={loading} /> : null}
           <p className="text-center text-xs text-muted-foreground dark:text-zinc-500">
-            OAuth uses your provider email—we match an existing account or create one for you.
+            OAuth uses your provider email. We match an existing account or create one for you.
           </p>
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

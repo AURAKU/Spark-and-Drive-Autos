@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { EngineType } from "@prisma/client";
-import { Check, ChevronDown, ChevronUp, Loader2, Printer, Save, Shield } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Download, Loader2, Printer, Save, Shield } from "lucide-react";
 
 import { saveDutyCalculationAction } from "@/actions/duty-intelligence-admin";
 import { prepareDutyReportAction } from "@/actions/duty-intelligence-report";
@@ -17,8 +17,11 @@ import {
 } from "@/lib/duty-intelligence/types";
 import { formatMoney } from "@/lib/format";
 
+import { buildDutyReportPreview } from "@/lib/duty-intelligence/report-model";
+
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
 import { DutyIntelligenceSourceNote } from "./duty-intelligence-source-note";
+import { DutyReportDocument } from "./report/duty-report-document";
 
 const VEHICLE_CATEGORIES = ["SUV", "SEDAN", "PICKUP", "TRUCK", "BUS", "VAN"] as const;
 const SHIPPING_METHODS = ["SEA_FREIGHT", "CONTAINER", "RORO", "AIR_FREIGHT"] as const;
@@ -89,6 +92,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportPending, setReportPending] = useState(false);
+  const [preparedExport, setPreparedExport] = useState<{ reportUrl: string; exportUrl: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [powerKw, setPowerKw] = useState("");
   const [freightOverride, setFreightOverride] = useState("");
@@ -250,6 +254,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           return;
         }
         setResult(data.result);
+        setPreparedExport(null);
         setProgress(100);
         setTimeout(() => setProgress(0), 600);
       } catch {
@@ -276,19 +281,63 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
     });
   }
 
-  async function handlePrintReport() {
+  const previewReport = useMemo(() => {
+    if (!result || !inputPayload) return null;
+    try {
+      return buildDutyReportPreview({ input: inputPayload, result });
+    } catch {
+      return null;
+    }
+  }, [result, inputPayload]);
+
+  async function ensurePreparedReport() {
+    if (!result || !inputPayload) return null;
+    if (preparedExport) return preparedExport;
+    const prepared = await prepareDutyReportAction(inputPayload, result);
+    if (!prepared.ok) {
+      setReportError(prepared.error);
+      return null;
+    }
+    const next = { reportUrl: prepared.reportUrl, exportUrl: prepared.exportUrl };
+    setPreparedExport(next);
+    return next;
+  }
+
+  function handlePrintSheet() {
+    window.print();
+  }
+
+  async function handleOpenOfficialSheet() {
     if (!result || !inputPayload || reportPending) return;
     setReportError(null);
     setReportPending(true);
     try {
-      const prepared = await prepareDutyReportAction(inputPayload, result);
-      if (!prepared.ok) {
-        setReportError(prepared.error);
-        return;
-      }
-      window.open(prepared.reportUrl, "_blank", "noopener,noreferrer");
+      const prepared = await ensurePreparedReport();
+      if (!prepared) return;
+      window.open(`${prepared.reportUrl}&print=1`, "_blank", "noopener,noreferrer");
     } catch {
       setReportError("Could not open the report. Please try again.");
+    } finally {
+      setReportPending(false);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!result || !inputPayload || reportPending) return;
+    setReportError(null);
+    setReportPending(true);
+    try {
+      const prepared = await ensurePreparedReport();
+      if (!prepared) return;
+      const link = document.createElement("a");
+      link.href = prepared.exportUrl;
+      link.rel = "noopener";
+      link.download = "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      setReportError("Could not download the PDF. Please try again.");
     } finally {
       setReportPending(false);
     }
@@ -410,13 +459,13 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         )}
         {showQuestion("freight") && (
           <label className="block text-xs text-muted-foreground">
-            Freight (GHS) — optional override
+            Freight (GHS). Optional override
             <input value={freightOverride} onChange={(e) => setFreightOverride(e.target.value)} inputMode="decimal" className={inputCls} placeholder="Leave blank to estimate" />
           </label>
         )}
         {showQuestion("insurance") && (
           <label className="block text-xs text-muted-foreground">
-            Insurance (GHS) — optional override
+            Insurance (GHS). Optional override
             <input value={insuranceOverride} onChange={(e) => setInsuranceOverride(e.target.value)} inputMode="decimal" className={inputCls} placeholder="Leave blank to estimate" />
           </label>
         )}
@@ -431,7 +480,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <label className="block text-xs text-muted-foreground">
               Transmission
               <select value={transmission} onChange={(e) => setTransmission(e.target.value)} className={inputCls}>
-                <option value="">— Optional —</option>
+                <option value="">.  Optional . </option>
                 {TRANSMISSIONS.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -440,7 +489,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <label className="block text-xs text-muted-foreground">
               Drive type
               <select value={driveType} onChange={(e) => setDriveType(e.target.value)} className={inputCls}>
-                <option value="">— Optional —</option>
+                <option value="">.  Optional . </option>
                 {DRIVE_TYPES.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
@@ -450,7 +499,7 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
         )}
         {showQuestion("vin") && (
           <label className="block text-xs text-muted-foreground sm:col-span-2">
-            VIN (optional — helps verify specifications)
+            VIN (optional. Helps verify specifications)
             <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} className={inputCls} placeholder="17-character VIN" maxLength={17} />
           </label>
         )}
@@ -496,15 +545,26 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
           </button>
         )}
         {result && (
-          <button
-            type="button"
-            onClick={() => void handlePrintReport()}
-            disabled={reportPending || !inputPayload}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
-          >
-            {reportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            Print report
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handlePrintSheet}
+              disabled={!previewReport}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
+            >
+              <Printer className="h-4 w-4" />
+              Print estimate
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDownloadPdf()}
+              disabled={reportPending || !inputPayload}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            >
+              {reportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Download PDF
+            </button>
+          </>
         )}
       </div>
 
@@ -545,45 +605,21 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
             <div className="flex justify-between"><span className="text-muted-foreground">CIF / customs value</span><span>{formatMoney(result.summary.cifGhs)}</span></div>
           </div>
 
-          {(result.payableDutyLines?.length ? result.payableDutyLines : result.lineItems.filter((l) => ["DUTY", "LEVY", "VAT", "FEE"].includes(l.category))).length > 0 && (
-            <div className="overflow-hidden rounded-xl border border-border dark:border-white/10">
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase dark:border-white/10">
-                Duty & charge breakdown
-              </div>
-              <ul className="divide-y divide-border dark:divide-white/10">
-                {(result.payableDutyLines?.length
-                  ? result.payableDutyLines
-                  : result.lineItems.filter((l) => ["DUTY", "LEVY", "VAT", "FEE"].includes(l.category))
-                ).map((line) => (
-                  <li key={`${line.code}-${line.label}`} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground">{line.label}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {line.basis}
-                        {line.rate != null ? ` · ${line.rate}${line.rateType === "PERCENTAGE" || line.rateType === "PERCENT" ? "%" : ""}` : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-mono font-semibold text-foreground">{formatMoney(line.amountGhs)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t border-border bg-amber-500/10 px-4 py-3 dark:border-white/10">
-                <p className="text-[11px] font-semibold tracking-[0.16em] text-amber-800 uppercase dark:text-amber-300">
-                  Total Estimated Duty Payable
-                </p>
-                <p className="mt-1 text-2xl font-bold text-foreground dark:text-white">
-                  {formatMoney(result.summary.totalGraTaxesGhs)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Equals the sum of every unique charge line above
-                  {result.summary.lineItemSumGhs != null
-                    ? ` (${formatMoney(result.summary.lineItemSumGhs)})`
-                    : ""}
-                  .
-                </p>
+          {previewReport ? (
+            <div className="-mx-1 overflow-x-auto pb-2">
+              <DutyReportDocument report={previewReport} />
+              <div className="no-print mt-3 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleOpenOfficialSheet()}
+                  disabled={reportPending}
+                  className="text-xs font-medium text-primary underline-offset-2 hover:underline disabled:opacity-60"
+                >
+                  Open full page
+                </button>
               </div>
             </div>
-          )}
+          ) : null}
 
           {result.historicalComparison && (
             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs">

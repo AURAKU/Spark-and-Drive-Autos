@@ -264,8 +264,8 @@ export async function createShipmentsForPaidPartsOrder(
         data: {
           shipmentId: s.id,
           stage: "PENDING_SHIPPING_SETUP",
-          title: "International shipping — payment pending",
-          description: `(${leg.legLabel}) Pay this leg separately: sea, express air, or standard air—rates from admin. Not included in the parts subtotal.`,
+          title: "International shipping. Payment pending",
+          description: `(${leg.legLabel}) Pay this leg separately: sea, express air, or standard air. Rates from admin. Not included in the parts subtotal.`,
           visibleToCustomer: true,
         },
       });
@@ -284,7 +284,7 @@ export async function createShipmentsForPaidPartsOrder(
           feeAmount: null,
           feeCurrency: "GHS",
           deferredChinaShipping: true,
-          estimatedDuration: leg.chinaEta ?? "International shipping fee pending — team will confirm.",
+          estimatedDuration: leg.chinaEta ?? "International shipping fee pending. Team will confirm.",
           internalNotes: `Checkout-selected ${modeLabel} (${leg.chinaShippingChoice}). Product cost paid only.${quoted}`,
           currentStage: "PENDING_SHIPPING_SETUP",
         },
@@ -293,8 +293,8 @@ export async function createShipmentsForPaidPartsOrder(
         data: {
           shipmentId: s.id,
           stage: "PENDING_SHIPPING_SETUP",
-          title: "International shipping — fee pending",
-          description: `(${leg.legLabel}) You chose ${modeLabel} freight. The international leg is not included in your parts payment — operations will confirm the shipping fee for separate payment.`,
+          title: "International shipping. Fee pending",
+          description: `(${leg.legLabel}) You chose ${modeLabel} freight. The international leg is not included in your parts payment. Operations will confirm the shipping fee for separate payment.`,
           visibleToCustomer: true,
         },
       });
@@ -330,7 +330,7 @@ export async function createShipmentsForPaidPartsOrder(
       userId: params.userId,
       type: NotificationType.SHIPPING,
       title: "Shipping updates available",
-      body: `Logistics for order ${params.orderReference} — open your order to track progress.`,
+      body: `Logistics for order ${params.orderReference}. Open your order to track progress.`,
       href: `/dashboard/orders/${params.orderId}`,
     },
   });
@@ -360,7 +360,7 @@ export async function ensureCarSeaShipmentInTx(
       deliveryMode: "SEA",
       feeAmount: params.feeGhs != null ? params.feeGhs : null,
       feeCurrency: "GHS",
-      estimatedDuration: params.estimatedDuration ?? "Sea freight to Ghana — timing confirmed by operations.",
+      estimatedDuration: params.estimatedDuration ?? "Sea freight to Ghana. Timing confirmed by operations.",
       currentStage: "PENDING_SHIPPING_SETUP",
     },
   });

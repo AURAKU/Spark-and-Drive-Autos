@@ -59,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {supportStaff && !admin ? (
             <div className="mt-4 rounded-xl border border-[var(--brand)]/25 bg-[var(--brand)]/[0.06] p-3">
               <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--brand)]">Support</p>
-              <p className="mt-1 text-xs text-muted-foreground">Reply to customers in Live Support Chat — same threads as the full team.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Reply to customers in Live Support Chat. Same threads as the full team.</p>
               <Link
                 href={staffOpsHref}
                 className="mt-3 flex w-full items-center justify-center rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-black transition hover:opacity-90"
@@ -88,7 +88,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <>
                   <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Operations</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Customer dashboard first — switch to admin when you need tools.
+                    Customer dashboard first. Switch to admin when you need tools.
                   </p>
                   <ViewModeButton targetMode="admin" redirectTo={staffOpsHref} className="mt-3 w-full">
                     Switch to admin

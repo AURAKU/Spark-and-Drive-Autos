@@ -21,7 +21,7 @@ export async function AdminPreviewBanner() {
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
         <p className="text-xs text-amber-100/95 sm:text-sm">
           <span className="font-semibold text-amber-50">Customer preview</span>
-          <span className="text-amber-100/80"> — you’re still signed in as staff; this only changes shortcuts.</span>
+          <span className="text-amber-100/80">. You’re still signed in as staff; this only changes shortcuts.</span>
         </p>
         <ViewModeButton targetMode="admin" redirectTo="/admin" variant="outline" className="shrink-0 border-amber-500/30 text-amber-50">
           Switch to admin

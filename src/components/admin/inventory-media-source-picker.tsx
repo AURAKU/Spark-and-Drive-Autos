@@ -217,7 +217,7 @@ export function InventoryMediaSourcePicker(props: Props) {
             <DialogHeader>
               <DialogTitle>Preview video</DialogTitle>
               <DialogDescription className="text-zinc-400">
-                Review the clip before uploading. The full video is stored — no forced crop or trim.
+                Review the clip before uploading. The full video is stored. No forced crop or trim.
               </DialogDescription>
             </DialogHeader>
             {videoPreview ? (

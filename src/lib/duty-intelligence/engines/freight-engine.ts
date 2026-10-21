@@ -144,7 +144,7 @@ export async function estimateFreight(params: {
     containerType,
     source: "HISTORICAL",
     basis: `${origin.replace(/_/g, " ")} → Tema · ${method.replace(/_/g, " ")} · estimated fallback`,
-    formula: `Estimated GHS ${freightGhs} (no matrix row — using regional average)`,
+    formula: `Estimated GHS ${freightGhs} (no matrix row. Using regional average)`,
   };
 }
 

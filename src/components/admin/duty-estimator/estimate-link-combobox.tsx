@@ -104,7 +104,7 @@ export function EstimateLinkCombobox({
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-border bg-card py-1 text-sm shadow-xl dark:border-white/15 dark:bg-zinc-950"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-muted-foreground">No matches — try another keyword or id.</li>
+            <li className="px-3 py-2 text-muted-foreground">No matches. Try another keyword or id.</li>
           ) : (
             filtered.map((item) => (
               <li

@@ -30,7 +30,7 @@ let ghBootstrapInFlight: Promise<boolean> | null = null;
 async function bootstrapGhanaDutyConfigIfMissing(): Promise<boolean> {
   if (!ghBootstrapInFlight) {
     ghBootstrapInFlight = (async () => {
-      console.warn("[duty-intelligence] Missing Ghana (GH) duty config — running idempotent bootstrap...");
+      console.warn("[duty-intelligence] Missing Ghana (GH) duty config. Running idempotent bootstrap...");
       const result = await initializeGhanaDutyConfig();
       if (!result.ok) {
         console.error("[duty-intelligence] Ghana bootstrap failed:", result.error);

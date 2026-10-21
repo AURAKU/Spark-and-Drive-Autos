@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Security surveillance",
   description:
-    "Detection and response hub for auth abuse, payments, webhooks, and admin actions — correlate IPs and accounts.",
+    "Detection and response hub for auth abuse, payments, webhooks, and admin actions. Correlate IPs and accounts.",
 };
 
 const PAGE_SIZE = 25;
@@ -115,7 +115,7 @@ export default async function AdminProtectionCenterPage(props: { searchParams: S
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
         Central feed for suspicious and high-risk activity: failed logins, rate limits, payment anomalies, webhook
         verification issues, checkout edge cases, and admin-driven account suspensions. Each row captures identifiers
-        your security team can use to correlate behaviour — user id, email, phone where known, client IP, path, and user
+        your security team can use to correlate behaviour. User id, email, phone where known, client IP, path, and user
         agent (best-effort from headers; complement with WAF, IDS, and provider dashboards). Suspend or lift access from
         the feed, then confirm in{" "}
         <Link href="/admin/users" className="text-[var(--brand)] hover:underline">

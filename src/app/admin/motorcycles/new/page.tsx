@@ -15,7 +15,7 @@ export default function AdminNewMotorcyclePage() {
           ← Inventory
         </Link>
       </div>
-      <p className="text-sm text-muted-foreground">Fast admin mode — publish in under 2 minutes with only required fields.</p>
+      <p className="text-sm text-muted-foreground">Fast admin mode. Publish in under 2 minutes with only required fields.</p>
       <MotorcycleFastForm />
     </div>
   );

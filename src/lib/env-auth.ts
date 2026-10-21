@@ -53,7 +53,7 @@ export function getAuthSecret(): string {
     );
   }
   console.warn(
-    "[env] AUTH_SECRET / NEXTAUTH_SECRET missing or short — using an insecure dev-only default. Set AUTH_SECRET in .env for stable sessions."
+    "[env] AUTH_SECRET / NEXTAUTH_SECRET missing or short. Using an insecure dev-only default. Set AUTH_SECRET in .env for stable sessions."
   );
   return "dev-only-insecure-auth-secret-min-32-chars!!";
 }

@@ -220,7 +220,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 Payment intelligence
               </PageHeading>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-                Live revenue, settlement health, wallet flows, and inventory-level profit — aligned with the same date window as
+                Live revenue, settlement health, wallet flows, and inventory-level profit. Aligned with the same date window as
                 orders and shipping.
               </p>
             </div>
@@ -551,7 +551,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
             </p>
             {profitIntel.ordersWithMissingCost > 0 ? (
               <p className="mt-2 text-xs text-amber-200/90">
-                {profitIntel.ordersWithMissingCost} attribution(s) missing supplier cost — margin may be overstated until costs are set.
+                {profitIntel.ordersWithMissingCost} attribution(s) missing supplier cost. Margin may be overstated until costs are set.
               </p>
             ) : null}
           </div>

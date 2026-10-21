@@ -53,7 +53,7 @@ export function CarFavoriteButton({ carId, carSlug, isSignedIn, initialFavorite 
       disabled={pending}
       aria-label={favorite ? "Remove vehicle from favorites" : "Save vehicle to favorites"}
       aria-pressed={favorite}
-      title={favorite ? "Remove from favorites" : "Save to favorites — view in dashboard"}
+      title={favorite ? "Remove from favorites" : "Save to favorites. View in dashboard"}
       className={cn(
         "inline-flex h-8 min-w-[2.75rem] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition disabled:opacity-60",
         favorite

@@ -233,7 +233,7 @@ export function AdminCommsClient({
                     Open conversation →
                   </button>
                 ) : (
-                  <p className="mt-2 text-xs text-zinc-500">No chat thread yet — customer may not have messaged.</p>
+                  <p className="mt-2 text-xs text-zinc-500">No chat thread yet. Customer may not have messaged.</p>
                 )}
               </div>
             ))
@@ -400,8 +400,8 @@ export function AdminCommsClient({
                 <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center">
                   <p className="text-sm font-medium text-zinc-400">Select a thread</p>
                   <p className="mt-1 max-w-sm text-xs text-zinc-600">
-                    Choose a conversation to read and reply. All Live Support Chat threads—including inquiries, order
-                    inquiries, leads, quotes, and direct messages—appear in this list.
+                    Choose a conversation to read and reply. All Live Support Chat threads. Including inquiries, order
+                    inquiries, leads, quotes, and direct messages. Appear in this list.
                   </p>
                 </div>
               )}

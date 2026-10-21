@@ -87,7 +87,7 @@ export function AdminPaymentIntelligenceCharts({
   const hasProfitSignal = profitBar.some((b) => b.profit > 0 || b.revenue > 0);
   const kindHint =
     orderKindFilter === "PARTS"
-      ? "Parts filter limits Paystack rows to parts orders only — if customers paid from wallet only, counts can be zero while wallet data still shows above."
+      ? "Parts filter limits Paystack rows to parts orders only. If customers paid from wallet only, counts can be zero while wallet data still shows above."
       : orderKindFilter === "CAR"
         ? "Cars filter limits Paystack rows to vehicle orders in this window."
         : null;
@@ -123,7 +123,7 @@ export function AdminPaymentIntelligenceCharts({
                 <p className="max-w-xs text-xs leading-relaxed text-zinc-600">
                   {paymentRecordCount === 0
                     ? "There are no payment records for the current filters. Try “All kinds”, widen the date range, or review wallet activity in the commercial summary."
-                    : "All matching payments have zero count per status (unusual) — clear filters or verify data."}
+                    : "All matching payments have zero count per status (unusual). Clear filters or verify data."}
                   {kindHint ? ` ${kindHint}` : ""}
                 </p>
               </div>
@@ -223,7 +223,7 @@ export function AdminPaymentIntelligenceCharts({
               <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-black/25 px-4 text-center">
                 <p className="text-sm font-medium text-zinc-400">No attributed profit in this window</p>
                 <p className="max-w-xs text-xs text-zinc-600">
-                  Profit requires successful Paystack rows in this window — vehicle/parts orders (with costs) or Parts Finder
+                  Profit requires successful Paystack rows in this window. Vehicle/parts orders (with costs) or Parts Finder
                   activations. Widen filters or switch to “All kinds”.
                 </p>
               </div>

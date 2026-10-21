@@ -127,7 +127,7 @@ function buildBasisNote(level: DutyConfidenceLevel, input: ConfidenceInput): str
     return `Estimate informed by ${input.cohort.length} similar verified imports and configured rules.`;
   }
   if (level === "LIMITED_EVIDENCE") {
-    return "Limited verified data — treat as planning estimate only.";
+    return "Limited verified data. Treat as planning estimate only.";
   }
   return "Additional vehicle or classification data is needed before presenting a precise total.";
 }
@@ -136,7 +136,7 @@ function buildUncertaintyReasons(input: ConfidenceInput, level: DutyConfidenceLe
   const reasons: string[] = [];
   if (level === "LIMITED_EVIDENCE") reasons.push("Small historical cohort");
   if (input.hsCertainty === "INFERRED" || input.hsCertainty === "UNKNOWN") {
-    reasons.push("HS classification inferred — confirm specifications");
+    reasons.push("HS classification inferred. Confirm specifications");
   }
   if (!input.vehicleDataComplete) reasons.push("Incomplete vehicle specification");
   if (input.customsValueCertainty === "COHORT_HINT") reasons.push("Customs value uses cohort ratio hint");
@@ -167,7 +167,7 @@ export function buildHistoricalComparison(params: {
       note:
         differencePct != null && differencePct < 2
           ? `Estimate aligns within ${differencePct}% of ${cohortDuty.length} matched verified case(s).`
-          : `Compared against ${cohortDuty.length} matched verified case(s) — avg duty ${avgActualDutyGhs.toLocaleString()} GHS.`,
+          : `Compared against ${cohortDuty.length} matched verified case(s). Avg duty ${avgActualDutyGhs.toLocaleString()} GHS.`,
     };
   }
 
@@ -190,7 +190,7 @@ export function buildHistoricalComparison(params: {
     note:
       differencePct != null && differencePct < 2
         ? `Estimate aligns within ${differencePct}% of ${withDuty.length} similar cleared imports.`
-        : `Compared against ${withDuty.length} similar imports — avg actual duty ${avgActualDutyGhs.toLocaleString()} GHS.`,
+        : `Compared against ${withDuty.length} similar imports. Avg actual duty ${avgActualDutyGhs.toLocaleString()} GHS.`,
   };
 }
 

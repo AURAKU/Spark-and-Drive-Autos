@@ -1,13 +1,13 @@
 "use client";
 
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 
 import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { MediaFullscreenViewer } from "@/components/media/media-fullscreen-viewer";
 import { Button } from "@/components/ui/button";
+import { useChunkedThumbCount, useGalleryMediaPreload } from "@/hooks/use-gallery-media-preload";
 import type { PartGalleryImage } from "@/lib/part-gallery-images";
-import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { cn } from "@/lib/utils";
 
 export type { PartGalleryImage };
@@ -24,6 +24,9 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
   const count = images.length;
   const safe = count > 0 ? Math.min(index, count - 1) : 0;
   const current = images[safe] ?? null;
+  const urls = useMemo(() => images.map((img) => img.url), [images]);
+  const unlockedThumbs = useChunkedThumbCount(count, safe, 6);
+  useGalleryMediaPreload(urls, safe, "partDetailHero");
 
   const go = useCallback(
     (delta: number) => {
@@ -36,30 +39,6 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
   useEffect(() => {
     if (count > 0 && index >= count) setIndex(0);
   }, [count, index]);
-
-  useEffect(() => {
-    if (count <= 1) return;
-    const links: HTMLLinkElement[] = [];
-    const preset = "galleryStage" as const;
-    const pushPreload = (url: string) => {
-      const href = optimizeCloudinaryUrl(url, preset);
-      const link = document.createElement("link");
-      link.rel = "preload";
-      link.as = "image";
-      link.href = href;
-      document.head.appendChild(link);
-      links.push(link);
-    };
-    const nextIdx = (safe + 1) % count;
-    const prevIdx = (safe - 1 + count) % count;
-    const nu = images[nextIdx]?.url;
-    const pu = images[prevIdx]?.url;
-    if (nu) pushPreload(nu);
-    if (pu && prevIdx !== nextIdx) pushPreload(pu);
-    return () => {
-      for (const l of links) l.remove();
-    };
-  }, [count, images, safe]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -106,15 +85,16 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
           }
         >
           <VehicleCoverImage
-            key={current.id}
             src={current.url}
-            alt={count > 1 ? `${productTitle} — photo ${safe + 1} of ${count}` : productTitle}
+            alt={count > 1 ? `${productTitle}. Photo ${safe + 1} of ${count}` : productTitle}
             fill
             loading="eager"
             imagePlaceholder
             className="object-cover"
             sizes="(max-width: 1024px) 100vw, 50vw"
             deliveryPreset="partDetailHero"
+            upgradePreset="galleryPremium"
+            chunkPriority="hero"
           />
         </button>
 
@@ -183,15 +163,21 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
                   selected ? "border-[var(--brand)] ring-2 ring-[var(--brand)]/40" : "border-white/10 opacity-80 hover:opacity-100",
                 )}
               >
-                <VehicleCoverImage
-                  src={img.url}
-                  alt=""
-                  fill
-                  loading="lazy"
-                  className="object-cover"
-                  sizes="64px"
-                  deliveryPreset="galleryStrip"
-                />
+                {i < unlockedThumbs ? (
+                  <VehicleCoverImage
+                    src={img.url}
+                    alt=""
+                    fill
+                    loading="lazy"
+                    imagePlaceholder
+                    className="object-cover"
+                    sizes="64px"
+                    deliveryPreset="galleryStrip"
+                    chunkPriority={i <= 2 ? "visible" : "idle"}
+                  />
+                ) : (
+                  <span className="absolute inset-0 animate-pulse bg-white/5" aria-hidden />
+                )}
               </button>
             );
           })}
@@ -247,9 +233,8 @@ function PartImageGalleryInner({ images, productTitle, className }: Props) {
         ) : null}
         <div className="relative mx-auto h-[min(78dvh,calc(100dvh-12rem))] w-full max-w-[min(100vw,1200px)]">
           <VehicleCoverImage
-            key={`fs-${current.id}`}
             src={current.url}
-            alt={`${productTitle} — photo ${safe + 1} of ${count}`}
+            alt={`${productTitle}. Photo ${safe + 1} of ${count}`}
             fill
             loading="eager"
             className="object-contain"

@@ -31,7 +31,7 @@ export function GhanaPartsTrackingInfoButton({ variant = "customer", className }
         )}
         aria-label="Open Ghana stock parts and accessories delivery tracking reference"
       >
-        Delivery tracking — Ghana stock (parts &amp; accessories)
+        Delivery tracking. Ghana stock (parts &amp; accessories)
       </DialogTrigger>
       <DialogContent
         className="max-h-[90dvh] max-w-lg overflow-y-auto border-border bg-card sm:max-w-2xl"
@@ -50,7 +50,7 @@ export function GhanaPartsTrackingInfoButton({ variant = "customer", className }
           </p>
           {variant === "admin" ? (
             <p className="text-amber-200/90">
-              In <span className="font-mono">Shipping &amp; fulfilment</span>, use the same stage controls —{" "}
+              In <span className="font-mono">Shipping &amp; fulfilment</span>, use the same stage controls . {" "}
               <strong className="text-amber-100">Parts · Ghana</strong> rows use this 6-step rail in the customer app.
             </p>
           ) : null}

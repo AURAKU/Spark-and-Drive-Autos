@@ -75,7 +75,7 @@ export default async function DashboardPaymentDetailPage({ params, searchParams 
               <>
                 For <span className="font-medium text-amber-950 dark:text-white">{payment.order.car.title}</span>, send
                 funds using the instructions below. Then upload a clear payment screenshot or official receipt here.
-                Our team will review and approve it—only after approval is your purchase confirmed and your inventory
+                Our team will review and approve it. Only after approval is your purchase confirmed and your inventory
                 position secured per your payment type (reservation or full payment).
               </>
             ) : (

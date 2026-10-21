@@ -3,6 +3,7 @@ import { dutyCalculationInputSchema } from "@/lib/duty-intelligence/types";
 import { reconcilePayableDutyLines } from "@/lib/duty-intelligence/charge-reconciliation";
 import { DUTY_ESTIMATE_DISCLAIMER_LONG, DUTY_ESTIMATE_DISCLAIMER_SHORT } from "@/lib/duty/disclaimer";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
+import { LEGAL_COMPANY } from "@/lib/legal";
 
 export type DutyReportLine = {
   category: string;
@@ -12,6 +13,22 @@ export type DutyReportLine = {
   rateLabel: string | null;
   payableAmount: number;
   code: string;
+  lineNo: string;
+};
+
+export type DutyReportSpecChip = {
+  label: string;
+  value: string;
+};
+
+export type DutyReportCompany = {
+  brandName: string;
+  legalName: string;
+  websiteHost: string;
+  websiteUrl: string;
+  phone: string;
+  address: string;
+  registrationNumber: string;
 };
 
 export type DutyReportData = {
@@ -57,6 +74,9 @@ export type DutyReportData = {
     customsValueGhs: number;
     depreciationPercent: number | null;
   };
+  vehicleTitle: string;
+  specChips: DutyReportSpecChip[];
+  company: DutyReportCompany;
   dutyLines: DutyReportLine[];
   dutyGroups: Array<{ heading: string; lines: DutyReportLine[] }>;
   totals: {
@@ -64,6 +84,7 @@ export type DutyReportData = {
     taxesAndLeviesGhs: number | null;
     portAndAdminChargesGhs: number | null;
     estimatedDutyPayableGhs: number;
+    estimatedDutyPayableUsd: number | null;
     estimatedLandedCostGhs: number;
     lowEstimateGhs: number | null;
     expectedEstimateGhs: number | null;
@@ -111,6 +132,100 @@ export function moneyNumber(value: unknown): number {
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
   }
   return 0;
+}
+
+export function formatSheetNumber(amount: number | null | undefined): string {
+  if (amount == null || !Number.isFinite(amount)) return "0.00";
+  return moneyNumber(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function formatSheetRate(rate: number | null | undefined, rateType?: string | null): string {
+  if (rate == null || !Number.isFinite(rate)) return "1.00";
+  const isPercent = rateType === "PERCENTAGE" || rateType === "PERCENT" || rateType === "BLENDED" || rate > 1;
+  const decimal = isPercent && rate > 1 ? rate / 100 : isPercent ? rate : rate;
+  if (rateType === "FIXED") return "1.00";
+  return decimal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function websiteParts(raw?: string | null): { host: string; url: string } {
+  const fallbackHost = "www.sparkanddriveautos.com";
+  const fallbackUrl = "https://www.sparkanddriveautos.com";
+  const value = (raw ?? "").trim();
+  if (!value) return { host: fallbackHost, url: fallbackUrl };
+  try {
+    const u = new URL(value.startsWith("http") ? value : `https://${value}`);
+    const host = u.hostname.toLowerCase();
+    if (host === "localhost" || host.endsWith(".local") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+      return { host: fallbackHost, url: fallbackUrl };
+    }
+    return {
+      host: host === "sparkanddriveautos.com" ? fallbackHost : u.hostname,
+      url: `https://${u.hostname}`,
+    };
+  } catch {
+    return { host: fallbackHost, url: fallbackUrl };
+  }
+}
+
+export function buildDutyReportPreview(params: {
+  input: unknown;
+  result: DutyIntelligenceResult;
+  reference?: string;
+}): DutyReportData {
+  const stamp = new Date();
+  const ymd = stamp.toISOString().slice(0, 10).replace(/-/g, "");
+  return buildDutyReportData({
+    calculationId: "preview",
+    reportReference: params.reference?.trim() || `SDA-${ymd}`,
+    generatedAt: stamp,
+    preparedBy: "Spark & Drive Autos",
+    inputJson: params.input,
+    resultJson: params.result,
+  });
+}
+
+function inferTaxableBase(params: {
+  amount: number;
+  rate?: number;
+  rateType?: string;
+  customsValueGhs: number;
+  cifGhs: number;
+}): number | null {
+  const { amount, rate, rateType, customsValueGhs, cifGhs } = params;
+  if (rateType === "FIXED" || rate == null || !Number.isFinite(rate) || rate === 0) {
+    return amount > 0 && (rateType === "FIXED" || rate === 1) ? amount : customsValueGhs || cifGhs || null;
+  }
+  const decimal = rate > 1 ? rate / 100 : rate;
+  if (decimal === 0) return customsValueGhs || cifGhs || null;
+  return moneyNumber(amount / decimal);
+}
+
+function buildVehicleTitle(params: {
+  year?: number | null;
+  make?: string | null;
+  model?: string | null;
+  category?: string | null;
+  engineCc?: number | null;
+}): string {
+  const parts = [
+    params.year != null ? String(params.year) : null,
+    params.make?.trim(),
+    params.model?.trim(),
+    params.category?.trim(),
+    params.engineCc != null ? `${params.engineCc >= 1000 ? (params.engineCc / 1000).toFixed(1).replace(/\.0$/, "") : params.engineCc}` : null,
+  ].filter(Boolean);
+  return parts.join(" ") || "Vehicle import duty estimate";
+}
+
+function depreciationFromAssumptions(assumptions: string[]): number | null {
+  for (const line of assumptions) {
+    const match = line.match(/(\d+(?:\.\d+)?)\s*%[^\n]{0,24}depreciat/i) ?? line.match(/depreciat[^\n]{0,24}(\d+(?:\.\d+)?)\s*%/i);
+    if (match) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
 }
 
 export function formatReportMoney(amount: number | null | undefined, currency = "GHS"): string {
@@ -206,15 +321,28 @@ export function buildDutyReportData(params: {
     { expectedTotalGhs: result.summary?.totalGraTaxesGhs },
   );
   const chargeItems = reconciliation.payableLines;
-  const dutyLines: DutyReportLine[] = chargeItems.map((item) => ({
-    category: item.category,
-    chargeName: item.label,
-    taxableBaseLabel: item.basis || "—",
-    taxableBaseAmount: null,
-    rateLabel: item.rate != null ? (item.rateType === "PERCENTAGE" || item.rateType === "PERCENT" ? `${item.rate}%` : String(item.rate)) : null,
-    payableAmount: moneyNumber(item.amountGhs),
-    code: item.code,
-  }));
+  const customsValueGhs = moneyNumber(result.summary.customsValueGhs);
+  const cifGhs = moneyNumber(result.summary.cifGhs);
+  const dutyLines: DutyReportLine[] = chargeItems.map((item, index) => {
+    const payableAmount = moneyNumber(item.amountGhs);
+    const taxableBaseAmount = inferTaxableBase({
+      amount: payableAmount,
+      rate: item.rate,
+      rateType: item.rateType,
+      customsValueGhs,
+      cifGhs,
+    });
+    return {
+      category: item.category,
+      chargeName: item.label,
+      taxableBaseLabel: item.basis || "Assessed value",
+      taxableBaseAmount,
+      rateLabel: formatSheetRate(item.rate, item.rateType),
+      payableAmount,
+      code: item.code,
+      lineNo: String(index + 1).padStart(2, "0"),
+    };
+  });
 
   const customsDuty = chargeItems
     .filter((i) => i.category === "DUTY")
@@ -239,6 +367,27 @@ export function buildDutyReportData(params: {
       : typeof powerFromSpec === "string" && Number.isFinite(Number(powerFromSpec))
         ? Number(powerFromSpec)
         : null;
+
+  const ageYears = result.vehicleClassification?.ageYears;
+  const depreciationPercent = depreciationFromAssumptions(assumptions);
+  const web = websiteParts(params.website);
+  const fxRate = moneyNumber(result.exchangeRate?.rate);
+  const payableGhs = reconciliation.totalEstimatedDutyPayableGhs;
+  const payableUsd = fxRate > 0 ? moneyNumber(payableGhs / fxRate) : null;
+  const fuelLabel = vehicle?.fuelType ? engineTypeLabel(vehicle.fuelType) : null;
+  const fuelAndCc =
+    fuelLabel && vehicle?.engineCc
+      ? `${fuelLabel} ${vehicle.engineCc}`
+      : fuelLabel ?? (vehicle?.engineCc != null ? `${vehicle.engineCc} cc` : null);
+  const specChips: DutyReportSpecChip[] = [
+    { label: "Type", value: result.vehicleClassification?.commercial ? "Commercial" : "Passenger" },
+    ...(fuelAndCc ? [{ label: "Fuel & CC", value: fuelAndCc }] : []),
+    ...(ageYears != null ? [{ label: "On arrival", value: `${Number(ageYears).toFixed(1)} yrs` }] : []),
+    ...(depreciationPercent != null ? [{ label: "Depreciation", value: `${depreciationPercent.toFixed(1)}%` }] : []),
+    ...(fxRate > 0
+      ? [{ label: "FX rate", value: `${fxRate.toLocaleString("en-US", { maximumFractionDigits: 5 })}` }]
+      : []),
+  ];
 
   return {
     reportReference: params.reportReference,
@@ -268,12 +417,29 @@ export function buildDutyReportData(params: {
       hsCode: result.hsCode ?? null,
       originCountry: vehicle?.countryOfOrigin ?? null,
     },
+    vehicleTitle: buildVehicleTitle({
+      year: vehicle?.year,
+      make: vehicle?.manufacturer,
+      model: vehicle?.model,
+      category: vehicle?.vehicleCategory ?? result.vehicleClassification?.category,
+      engineCc: vehicle?.engineCc,
+    }),
+    specChips,
+    company: {
+      brandName: "Spark & Drive Autos",
+      legalName: LEGAL_COMPANY.businessName,
+      websiteHost: web.host,
+      websiteUrl: web.url,
+      phone: LEGAL_COMPANY.phone,
+      address: LEGAL_COMPANY.officeAddress,
+      registrationNumber: LEGAL_COMPANY.registrationNumber,
+    },
     costInputs: {
       purchaseCurrency: purchase?.fobCurrency ?? result.exchangeRate?.fromCurrency ?? "USD",
       fobForeign: purchase?.fobAmount ?? 0,
       freightForeignOrGhs: result.summary.freightGhs,
       insuranceForeignOrGhs: result.summary.insuranceGhs,
-      fxRate: moneyNumber(result.exchangeRate?.rate),
+      fxRate,
       fxSource: result.exchangeRate?.source ?? null,
       fxEffectiveDate: result.exchangeRate?.effectiveDate ?? null,
       fobGhs: moneyNumber(result.summary.fobGhs),
@@ -281,7 +447,7 @@ export function buildDutyReportData(params: {
       insuranceGhs: moneyNumber(result.summary.insuranceGhs),
       cifGhs: moneyNumber(result.summary.cifGhs),
       customsValueGhs: moneyNumber(result.summary.customsValueGhs),
-      depreciationPercent: null,
+      depreciationPercent,
     },
     dutyLines,
     dutyGroups: groupDutyLines(dutyLines),
@@ -289,7 +455,8 @@ export function buildDutyReportData(params: {
       customsDutyGhs: customsDuty > 0 ? customsDuty : null,
       taxesAndLeviesGhs: taxesLevies > 0 ? taxesLevies : null,
       portAndAdminChargesGhs: portAdmin > 0 ? portAdmin : null,
-      estimatedDutyPayableGhs: reconciliation.totalEstimatedDutyPayableGhs,
+      estimatedDutyPayableGhs: payableGhs,
+      estimatedDutyPayableUsd: payableUsd,
       estimatedLandedCostGhs: moneyNumber(result.summary.totalLandedCostGhs),
       lowEstimateGhs:
         result.estimateRange?.landedCostLowGhs != null
@@ -323,6 +490,6 @@ export function buildDutyReportData(params: {
     disclaimer: DUTY_ESTIMATE_DISCLAIMER_SHORT,
     disclaimerLong: [...DUTY_ESTIMATE_DISCLAIMER_LONG],
     ruleSetVersion: result.ruleSetVersion ?? result.formulaVersion ?? null,
-    website: params.website ?? "https://www.sparkanddriveautos.com",
+    website: web.url,
   };
 }

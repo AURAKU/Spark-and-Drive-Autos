@@ -55,4 +55,5 @@ backups/**/*.sql
 
 # local duplicate nested repo safeguard
 Spark-and-Drive-Autos/
+Spark-and-Drive-Autos-main/
 public/receipts/

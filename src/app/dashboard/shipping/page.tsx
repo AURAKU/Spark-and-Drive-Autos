@@ -62,7 +62,7 @@ export default async function DashboardShippingPage({ searchParams }: { searchPa
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         <span className="font-medium text-foreground/90">Shipping &amp; tracking</span>
         <span className="text-muted-foreground"> (Shipping &amp; Delivery Tracking)</span>
-        {" — "}
+        {". "}
         See delivery milestones for your cars and for parts &amp; accessories. Operations post updates as they move.
       </p>
       <div className="mt-4">

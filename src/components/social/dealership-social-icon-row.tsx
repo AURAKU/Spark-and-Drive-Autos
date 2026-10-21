@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useId } from "react";
 
 import { DEALERSHIP_SOCIAL } from "@/lib/dealership-social";
@@ -50,6 +52,14 @@ function IcSnapchat() {
   );
 }
 
+function IcTrendsHub() {
+  return (
+    // Official TrendsHub T mark (apple-touch / app icon).
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/brand/trendshub-logo.png" alt="" width={40} height={40} className="h-full w-full rounded-full object-cover" />
+  );
+}
+
 function IcInstagram({ gradId }: { gradId: string }) {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
@@ -70,7 +80,20 @@ export function DealershipSocialIconRow({ className }: { className?: string }) {
   const ig = useId().replace(/:/g, "");
 
   return (
-    <nav className={cn("flex flex-wrap items-center gap-2", className)} aria-label="Spark and Drive official social network links">
+    <nav className={cn("flex flex-wrap items-center gap-2", className)} aria-label="Spark and Drive official social network and live support links">
+      <Link
+        href="/chat"
+        className={cn(linkBase, "overflow-hidden p-0")}
+        aria-label="Live support chat. Available with or without an account"
+      >
+        <Image
+          src="/brand/logo-emblem.png"
+          alt=""
+          width={40}
+          height={40}
+          className="h-full w-full rounded-full object-cover p-0.5"
+        />
+      </Link>
       <a href={DEALERSHIP_SOCIAL.whatsapp} target="_blank" rel="noopener noreferrer" className={linkBase} aria-label="WhatsApp channel (official)">
         <IcWhatsApp />
       </a>
@@ -85,6 +108,9 @@ export function DealershipSocialIconRow({ className }: { className?: string }) {
       </a>
       <a href={DEALERSHIP_SOCIAL.snapchat} target="_blank" rel="noopener noreferrer" className={linkBase} aria-label="Snapchat (official)">
         <IcSnapchat />
+      </a>
+      <a href={DEALERSHIP_SOCIAL.trendshub} target="_blank" rel="noopener noreferrer" className={linkBase} aria-label="TrendsHub (official)">
+        <IcTrendsHub />
       </a>
     </nav>
   );

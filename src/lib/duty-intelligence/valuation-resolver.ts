@@ -66,12 +66,12 @@ export function buildValuationChain(params: {
 
     if (!purchaseLooksLikeCif) {
       fobGhs = roundGhs(params.purchaseFobGhs);
-      notes.push("CIF override with separate purchase FOB — freight/insurance kept distinct.");
+      notes.push("CIF override with separate purchase FOB. Freight/insurance kept distinct.");
     } else {
       // First pass: if insurance already resolved from (unknown FOB), back-solve FOB = CIF − freight − insurance.
       fobGhs = roundGhs(Math.max(0, cifGhs - freightGhs - insuranceGhs - otherGhs));
       fobInferredFromCif = true;
-      notes.push("CIF declared — FOB inferred as CIF − Freight − Insurance (not treated as including freight).");
+      notes.push("CIF declared. FOB inferred as CIF − Freight − Insurance (not treated as including freight).");
     }
 
     return {
@@ -93,7 +93,7 @@ export function buildValuationChain(params: {
 
   if (params.pricingBasis === "CFR") {
     const cifGhs = roundGhs(fobGhs + freightGhs + insuranceGhs + otherGhs);
-    notes.push("CFR basis — freight included with purchase; insurance still resolved separately.");
+    notes.push("CFR basis. Freight included with purchase; insurance still resolved separately.");
     return {
       pricingBasis: "CFR",
       fobGhs,
@@ -109,7 +109,7 @@ export function buildValuationChain(params: {
   }
 
   const cifGhs = roundGhs(fobGhs + freightGhs + insuranceGhs + otherGhs);
-  notes.push("FOB basis — CIF = FOB + Freight + Insurance.");
+  notes.push("FOB basis. CIF = FOB + Freight + Insurance.");
   return {
     pricingBasis: params.pricingBasis === "UNKNOWN" ? "FOB" : params.pricingBasis,
     fobGhs,

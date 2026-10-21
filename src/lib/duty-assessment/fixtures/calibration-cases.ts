@@ -55,7 +55,7 @@ export const JETOUR_DASHING_CALIBRATION: BillOfEntryIngestInput = {
     originalFilename: "jetour-dashing-boe.pdf",
     mimeType: "application/pdf",
   },
-  notes: "Verified historical calibration fixture — Jetour Dashing. Not a universal formula.",
+  notes: "Verified historical calibration fixture. Jetour Dashing. Not a universal formula.",
 };
 
 /** Verified calibration case B — BYD Sealion 6 EV (Prompt 1). Development/test only. */
@@ -116,7 +116,7 @@ export const BYD_SEALION6_CALIBRATION: BillOfEntryIngestInput = {
     originalFilename: "byd-sealion6-boe.pdf",
     mimeType: "application/pdf",
   },
-  notes: "Verified historical calibration fixture — BYD Sealion 6 EV. Not a universal formula.",
+  notes: "Verified historical calibration fixture. BYD Sealion 6 EV. Not a universal formula.",
 };
 
 export const CALIBRATION_FIXTURES = [JETOUR_DASHING_CALIBRATION, BYD_SEALION6_CALIBRATION] as const;

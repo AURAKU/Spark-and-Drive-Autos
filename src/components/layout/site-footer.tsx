@@ -15,14 +15,15 @@ const exploreLinks: readonly FooterLinkItem[] = [
   { href: "/inventory", label: "Browse cars" },
   { href: "/request-a-car", label: "Request a car" },
   { href: "/parts-finder/entry", label: "Spark Parts Finder" },
-  { href: "/chat", label: "Live Support Chat" },
   { href: "/parts", label: "Buy Parts & Accessories" },
   { href: "/motorcycles", label: "Motorcycles & e-bikes" },
+  { href: "/chat", label: "Live Support Chat" },
 ];
 
 const companyLinks = [
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
+  { href: "/faq#platform-guide", label: "Platform Guide" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -121,6 +122,17 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "minimal" 
           isFull ? "border-t border-border dark:border-white/5" : "",
         )}
       >
+        {isFull ? null : (
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <Link
+              href="/faq#platform-guide"
+              className="text-sm font-medium text-[var(--brand)] transition hover:underline"
+            >
+              Platform Guide
+            </Link>
+            <DealershipSocialIconRow />
+          </div>
+        )}
         <p>
           © {new Date().getFullYear()} Spark and Drive Autos | Spark and Drive Gear.
         </p>

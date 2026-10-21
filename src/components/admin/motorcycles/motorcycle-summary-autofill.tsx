@@ -220,7 +220,7 @@ export function MotorcycleSummaryAutofill({
           <DialogHeader>
             <DialogTitle>Review parsed fields</DialogTitle>
             <DialogDescription>
-              Select which fields to apply. Conflicts with existing values are highlighted — they stay unchecked unless
+              Select which fields to apply. Conflicts with existing values are highlighted. They stay unchecked unless
               you select them and choose overwrite.
             </DialogDescription>
           </DialogHeader>

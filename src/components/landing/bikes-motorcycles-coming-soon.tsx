@@ -14,7 +14,7 @@ const display = Anton({
 export function BikesMotorcyclesComingSoon() {
   return (
     <section
-      aria-label="Electric bikes and motorcycles — coming soon"
+      aria-label="Electric bikes and motorcycles. Coming soon"
       className={`relative min-h-[min(88dvh,900px)] w-full overflow-hidden border-y border-white/10 ${display.className}`}
     >
       <div className="absolute inset-0">

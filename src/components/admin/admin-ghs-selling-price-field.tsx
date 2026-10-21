@@ -115,7 +115,7 @@ export function AdminGhsSellingPriceField({
           {previewRmb != null ? formatConverted(previewRmb, "CNY") : rates ? "Enter a valid GHS amount" : "Loading rates…"}
         </p>
         <p className="mt-1 text-[11px] leading-snug text-zinc-600">
-          Sell in Ghana cedis — this listing stores the matching canonical RMB field for the catalog engine (same as
+          Sell in Ghana cedis. This listing stores the matching canonical RMB field for the catalog engine (same as
           China-origin parts).
         </p>
       </div>

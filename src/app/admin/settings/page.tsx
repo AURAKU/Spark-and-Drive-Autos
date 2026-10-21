@@ -117,7 +117,7 @@ export default async function AdminApiProvidersPage() {
         <PageHeading variant="dashboard">API providers</PageHeading>
         <p className="mt-2 max-w-3xl text-sm text-zinc-400">
           Configure payment channels (Paystack is the default), verify integration requirements, and review supporting
-          service environment variables. Secret values are never shown—only whether they are stored or detected.
+          service environment variables. Secret values are never shown. Only whether they are stored or detected.
         </p>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
           <p>
@@ -135,7 +135,7 @@ export default async function AdminApiProvidersPage() {
       </div>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="text-lg font-semibold text-white">Paystack — default payment channel</h2>
+        <h2 className="text-lg font-semibold text-white">Paystack. Default payment channel</h2>
         <p className="mt-2 text-sm text-zinc-400">
           Standard flow uses the{" "}
           <a
@@ -474,7 +474,7 @@ export default async function AdminApiProvidersPage() {
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h2 className="text-lg font-semibold text-white">Infrastructure environment</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Deployment variables (not stored in the database). Presence only—values are never displayed.
+          Deployment variables (not stored in the database). Presence only. Values are never displayed.
         </p>
         <dl className="mt-6 max-w-xl space-y-4 text-sm">
           <div className="flex justify-between gap-4">
@@ -540,7 +540,7 @@ export default async function AdminApiProvidersPage() {
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-zinc-400">
-              Apple OAuth (optional — off by default; set <code className="rounded bg-white/5 px-1">ENABLE_APPLE_OAUTH=1</code> + Apple
+              Apple OAuth (optional. Off by default; set <code className="rounded bg-white/5 px-1">ENABLE_APPLE_OAUTH=1</code> + Apple
               credentials)
             </dt>
             <dd>{flag(appleOauth)}</dd>
@@ -658,7 +658,7 @@ export default async function AdminApiProvidersPage() {
             <dd className="max-w-[min(100%,28rem)] text-right text-zinc-200">
               {latestBackupLog?.completedAt
                 ? `${formatDate(latestBackupLog.completedAt)} · ${latestBackupLog.fileName ?? "file name not recorded"}`
-                : "None logged yet — non-critical for serving traffic; recommended for ops and disaster recovery."}
+                : "None logged yet. Non-critical for serving traffic; recommended for ops and disaster recovery."}
             </dd>
           </div>
           <div className="flex justify-between gap-4">

@@ -24,10 +24,10 @@ export type HsProfileResolution = {
 };
 
 const EXACT_HS_PROFILES: Record<string, { profileId: string; description: string }> = {
-  "870323": { profileId: "GH-HS-870323-VERIFIED-V1", description: "Passenger ICE 1500–3000cc — Jetour-calibrated profile" },
-  "8703.23": { profileId: "GH-HS-870323-VERIFIED-V1", description: "Passenger ICE 1500–3000cc — Jetour-calibrated profile" },
-  "870380": { profileId: "GH-HS-870380-VERIFIED-V1", description: "Electric passenger — BYD Sealion 6 calibrated profile" },
-  "8703.80": { profileId: "GH-HS-870380-VERIFIED-V1", description: "Electric passenger — BYD Sealion 6 calibrated profile" },
+  "870323": { profileId: "GH-HS-870323-VERIFIED-V1", description: "Passenger ICE 1500–3000cc. Jetour-calibrated profile" },
+  "8703.23": { profileId: "GH-HS-870323-VERIFIED-V1", description: "Passenger ICE 1500–3000cc. Jetour-calibrated profile" },
+  "870380": { profileId: "GH-HS-870380-VERIFIED-V1", description: "Electric passenger. BYD Sealion 6 calibrated profile" },
+  "8703.80": { profileId: "GH-HS-870380-VERIFIED-V1", description: "Electric passenger. BYD Sealion 6 calibrated profile" },
 };
 
 export function resolveHsProfile(input: ClassificationInput): HsProfileResolution | null {
@@ -76,7 +76,7 @@ export function resolveHsProfile(input: ClassificationInput): HsProfileResolutio
       profileId: "GH-HS-870380-VERIFIED-V1",
       method: "CATEGORY_FUEL",
       confidence: "MEDIUM",
-      description: "Inferred electric HS 8703.80 — verify before relying on total",
+      description: "Inferred electric HS 8703.80. Verify before relying on total",
     };
   }
 

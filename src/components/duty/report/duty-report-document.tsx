@@ -1,7 +1,5 @@
-import Image from "next/image";
-
-import type { DutyReportData } from "@/lib/duty-intelligence/report-model";
-import { formatReportMoney } from "@/lib/duty-intelligence/report-model";
+import { LEGAL_COMPANY } from "@/lib/legal";
+import { formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value == null || value === "") return null;
@@ -18,49 +16,62 @@ function Field({ label, value }: { label: string; value: string | number | null 
 export function DutyReportDocument({ report }: { report: DutyReportData }) {
   const generatedLabel = (() => {
     try {
-      return new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short" }).format(
-        new Date(report.generatedAt),
-      );
+      return new Intl.DateTimeFormat("en-GH", { dateStyle: "medium" }).format(new Date(report.generatedAt));
     } catch {
       return report.generatedAt;
     }
   })();
 
   return (
-    <article className="duty-report-sheet mx-auto w-full max-w-[210mm] bg-white text-neutral-900 shadow-sm print:shadow-none">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5 sm:px-8">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/brand/logo-emblem.png"
-            alt="Spark & Drive Autos"
-            width={56}
-            height={56}
-            className="h-14 w-14 object-contain"
-            priority
-          />
-          <div>
-            <p className="text-lg font-bold tracking-tight text-neutral-900">Spark & Drive Autos</p>
-            <p className="text-sm font-semibold text-teal-800">Vehicle Duty & Landed Cost Estimate</p>
+    <article
+      id="duty-estimate-sheet"
+      className="duty-report-sheet mx-auto w-full max-w-[210mm] bg-white text-neutral-900 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)] print:shadow-none"
+    >
+      <header className="px-6 pt-6 sm:px-10">
+        <div className="flex items-start justify-between gap-4 text-[11px] text-neutral-500">
+          <p className="font-mono tracking-wide">{report.reportReference}</p>
+          <p>{generatedLabel}</p>
+        </div>
+        <h1 className="mt-5 text-center text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">
+          {report.vehicleTitle}
+        </h1>
+        <div className="mt-5 flex flex-col items-center">
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-neutral-200 bg-white shadow-sm">
+            {/* Regular img so print and PDF-style capture keep the official emblem. */}
+            <img
+              src="/brand/logo-emblem.png"
+              alt={report.company.brandName}
+              width={88}
+              height={88}
+              className="h-[4.4rem] w-[4.4rem] object-contain"
+            />
           </div>
+          <p className="mt-3 text-sm font-semibold tracking-tight text-neutral-800">{report.company.brandName}</p>
+          <a
+            href={report.company.websiteUrl}
+            className="mt-0.5 text-xs text-teal-800 hover:underline"
+          >
+            {report.company.websiteHost}
+          </a>
         </div>
-        <div className="text-right text-xs text-neutral-600">
-          <p>
-            <span className="font-semibold text-neutral-800">Reference:</span> {report.reportReference}
+        <dl className="mt-6 grid grid-cols-2 gap-x-3 gap-y-3 border-y border-neutral-200 py-4 text-center sm:grid-cols-3 lg:grid-cols-5">
+          {report.specChips.map((chip) => (
+            <div key={chip.label}>
+              <dt className="text-[10px] font-semibold tracking-[0.14em] text-neutral-500 uppercase">{chip.label}</dt>
+              <dd className="mt-1 text-sm font-medium text-neutral-900">{chip.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {report.vehicle.vinOrChassisMasked ? (
+          <p className="mt-3 text-center font-mono text-xs tracking-[0.18em] text-neutral-600">
+            {report.vehicle.vinOrChassisMasked}
           </p>
-          <p className="mt-1">
-            <span className="font-semibold text-neutral-800">Generated:</span> {generatedLabel}
-          </p>
-          {report.ruleSetVersion ? (
-            <p className="mt-1">
-              <span className="font-semibold text-neutral-800">Rule set:</span> {report.ruleSetVersion}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
       </header>
 
       {(report.customer.name || report.customer.email || report.customer.phone) && (
-        <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
-          <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Customer</h2>
+        <section className="border-b border-neutral-100 px-6 py-4 sm:px-10">
+          <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Prepared for</h2>
           <dl className="mt-3 space-y-1.5">
             <Field label="Name" value={report.customer.name} />
             <Field label="Email" value={report.customer.email} />
@@ -69,194 +80,93 @@ export function DutyReportDocument({ report }: { report: DutyReportData }) {
         </section>
       )}
 
-      <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
-        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Vehicle details</h2>
-        <dl className="mt-3 space-y-1.5">
-          <Field label="Make" value={report.vehicle.make} />
-          <Field label="Model" value={report.vehicle.model} />
-          <Field label="Trim" value={report.vehicle.trim} />
-          <Field label="Manufacture year" value={report.vehicle.manufactureYear} />
-          <Field label="Powertrain" value={report.vehicle.fuelType} />
-          <Field
-            label="Engine capacity"
-            value={report.vehicle.engineCc != null ? `${report.vehicle.engineCc} cc` : null}
-          />
-          <Field label="Power output" value={report.vehicle.powerKw != null ? `${report.vehicle.powerKw} kW` : null} />
-          <Field label="Transmission" value={report.vehicle.transmission} />
-          <Field label="Drivetrain" value={report.vehicle.drivetrain} />
-          <Field label="Category" value={report.vehicle.vehicleCategory} />
-          <Field label="Seating" value={report.vehicle.seats} />
-          <Field label="Weight" value={report.vehicle.weightKg != null ? `${report.vehicle.weightKg} kg` : null} />
-          <Field label="VIN / chassis" value={report.vehicle.vinOrChassisMasked} />
-          <Field label="HS code" value={report.vehicle.hsCode} />
-          <Field label="Origin country" value={report.vehicle.originCountry} />
-        </dl>
-      </section>
-
-      <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
-        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Cost & valuation</h2>
-        <div className="mt-3 sda-table-scroll">
-          <table className="w-full min-w-[420px] border-collapse text-sm">
+      <section className="px-6 py-5 sm:px-10">
+        <h2 className="text-base font-semibold text-neutral-900">Taxes &amp; Duty Payable</h2>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-[13px]">
+            <thead>
+              <tr className="border-b border-neutral-300 text-left text-[11px] tracking-wide text-neutral-500 uppercase">
+                <th className="py-2 pr-2 font-semibold">#</th>
+                <th className="py-2 pr-2 font-semibold">Descriptor</th>
+                <th className="py-2 pr-2 text-right font-semibold">Base amount</th>
+                <th className="py-2 pr-2 text-right font-semibold">Rate</th>
+                <th className="py-2 text-right font-semibold">Payable</th>
+              </tr>
+            </thead>
             <tbody>
-              {[
-                ["Purchase currency", report.costInputs.purchaseCurrency],
-                [
-                  "FOB (purchase value)",
-                  `${report.costInputs.purchaseCurrency} ${report.costInputs.fobForeign.toFixed(2)}`,
-                ],
-                ["FX rate", `1 ${report.costInputs.purchaseCurrency} = ${report.costInputs.fxRate} GHS`],
-                ["FX source", report.costInputs.fxSource],
-                ["FX effective date", report.costInputs.fxEffectiveDate],
-                ["FOB (GHS)", formatReportMoney(report.costInputs.fobGhs)],
-                ["Freight (GHS)", formatReportMoney(report.costInputs.freightGhs)],
-                ["Insurance (GHS)", formatReportMoney(report.costInputs.insuranceGhs)],
-                ["CIF value (GHS)", formatReportMoney(report.costInputs.cifGhs)],
-                ["Customs / assessed value (GHS)", formatReportMoney(report.costInputs.customsValueGhs)],
-              ]
-                .filter(([, v]) => v != null && String(v).trim() !== "")
-                .map(([label, value]) => (
-                  <tr key={String(label)} className="border-b border-neutral-100">
-                    <td className="py-2 pr-3 text-neutral-500">{label}</td>
-                    <td className="py-2 text-right font-medium text-neutral-900">{value}</td>
-                  </tr>
-                ))}
+              {report.dutyLines.map((line) => (
+                <tr key={line.code} className="border-b border-neutral-100 break-inside-avoid">
+                  <td className="py-2 pr-2 font-mono text-neutral-500">{line.lineNo}</td>
+                  <td className="py-2 pr-2 font-medium text-neutral-900">{line.chargeName}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums text-neutral-700">
+                    {formatSheetNumber(line.taxableBaseAmount)}
+                  </td>
+                  <td className="py-2 pr-2 text-right tabular-nums text-neutral-700">{line.rateLabel ?? "1.00"}</td>
+                  <td className="py-2 text-right font-medium tabular-nums text-neutral-900">
+                    {formatSheetNumber(line.payableAmount)}
+                  </td>
+                </tr>
+              ))}
+              {report.dutyLines.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-neutral-600">
+                    No charge lines were recorded for this calculation.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-neutral-500">
-          Freight and insurance may be system-derived from shipping matrices unless an override was provided.
-        </p>
-      </section>
-
-      <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
-        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Duty & charge breakdown</h2>
-        <div className="mt-3 space-y-4">
-          {report.dutyGroups.map((group) => (
-            <div key={group.heading}>
-              <h3 className="text-sm font-semibold text-neutral-800">{group.heading}</h3>
-              <div className="mt-2 sda-table-scroll">
-                <table className="w-full min-w-[520px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-neutral-200 text-left text-xs tracking-wide text-neutral-500 uppercase">
-                      <th className="py-2 pr-2 font-semibold">Charge</th>
-                      <th className="py-2 pr-2 font-semibold">Taxable base</th>
-                      <th className="py-2 pr-2 font-semibold">Rate</th>
-                      <th className="py-2 text-right font-semibold">Payable</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.lines.map((line) => (
-                      <tr key={line.code} className="border-b border-neutral-100 break-inside-avoid">
-                        <td className="py-2 pr-2 font-medium text-neutral-900">{line.chargeName}</td>
-                        <td className="py-2 pr-2 text-neutral-600">{line.taxableBaseLabel}</td>
-                        <td className="py-2 pr-2 text-neutral-600">{line.rateLabel ?? "—"}</td>
-                        <td className="py-2 text-right font-medium text-neutral-900">
-                          {formatReportMoney(line.payableAmount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-          {report.dutyLines.length === 0 ? (
-            <p className="text-sm text-neutral-600">No charge lines were recorded for this calculation.</p>
+        <div className="mt-6 text-right">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-neutral-500 uppercase">Total payable (GHS)</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums text-neutral-900">
+            {formatSheetNumber(report.totals.estimatedDutyPayableGhs)}
+          </p>
+          {report.totals.estimatedDutyPayableUsd != null ? (
+            <p className="mt-1 text-sm tabular-nums text-neutral-500">
+              USD {formatSheetNumber(report.totals.estimatedDutyPayableUsd)}
+            </p>
           ) : null}
         </div>
       </section>
 
-      <section className="border-b border-neutral-100 px-6 py-5 sm:px-8">
-        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Totals</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
-            <p className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">Estimated duty payable</p>
-            <p className="mt-1 text-2xl font-bold text-neutral-900">
-              {formatReportMoney(report.totals.estimatedDutyPayableGhs)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-teal-700/30 bg-teal-50 px-4 py-3">
-            <p className="text-xs font-semibold tracking-wide text-teal-800 uppercase">Estimated landed cost</p>
-            <p className="mt-1 text-2xl font-bold text-teal-900">
-              {formatReportMoney(report.totals.estimatedLandedCostGhs)}
-            </p>
-          </div>
+      <section className="border-t border-neutral-100 px-6 py-4 sm:px-10">
+        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Valuation used</h2>
+        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          <p className="flex justify-between gap-3">
+            <span className="text-neutral-500">FOB</span>
+            <span className="tabular-nums font-medium">{formatSheetNumber(report.costInputs.fobGhs)}</span>
+          </p>
+          <p className="flex justify-between gap-3">
+            <span className="text-neutral-500">Freight</span>
+            <span className="tabular-nums font-medium">{formatSheetNumber(report.costInputs.freightGhs)}</span>
+          </p>
+          <p className="flex justify-between gap-3">
+            <span className="text-neutral-500">Insurance</span>
+            <span className="tabular-nums font-medium">{formatSheetNumber(report.costInputs.insuranceGhs)}</span>
+          </p>
+          <p className="flex justify-between gap-3">
+            <span className="text-neutral-500">CIF / assessed value</span>
+            <span className="tabular-nums font-medium">{formatSheetNumber(report.costInputs.customsValueGhs)}</span>
+          </p>
         </div>
-        {(report.totals.lowEstimateGhs != null ||
-          report.totals.expectedEstimateGhs != null ||
-          report.totals.highEstimateGhs != null) && (
-          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-            {report.totals.lowEstimateGhs != null ? (
-              <p>
-                <span className="text-neutral-500">Low:</span>{" "}
-                <span className="font-medium">{formatReportMoney(report.totals.lowEstimateGhs)}</span>
-              </p>
-            ) : null}
-            {report.totals.expectedEstimateGhs != null ? (
-              <p>
-                <span className="text-neutral-500">Expected:</span>{" "}
-                <span className="font-medium">{formatReportMoney(report.totals.expectedEstimateGhs)}</span>
-              </p>
-            ) : null}
-            {report.totals.highEstimateGhs != null ? (
-              <p>
-                <span className="text-neutral-500">High:</span>{" "}
-                <span className="font-medium">{formatReportMoney(report.totals.highEstimateGhs)}</span>
-              </p>
-            ) : null}
-          </div>
-        )}
       </section>
 
-      <section className="border-b border-neutral-100 px-6 py-4 sm:px-8">
-        <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Confidence & assumptions</h2>
-        <p className="mt-2 text-sm font-semibold text-neutral-900">{report.confidence.label}</p>
-        {report.confidence.reasons.length > 0 ? (
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
-            {report.confidence.reasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        ) : null}
-        {report.assumptions.length > 0 ? (
-          <div className="mt-3">
-            <p className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">Assumptions</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-neutral-700">
-              {report.assumptions.map((a) => (
-                <li key={a}>{a}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {report.confidence.uncertaintyReasons.length > 0 ? (
-          <div className="mt-3">
-            <p className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">Uncertainty</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-neutral-700">
-              {report.confidence.uncertaintyReasons.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="px-6 py-4 sm:px-8">
+      <section className="px-6 py-5 sm:px-10">
         <h2 className="text-xs font-semibold tracking-[0.16em] text-neutral-500 uppercase">Disclaimer</h2>
-        <p className="mt-2 text-sm leading-relaxed text-neutral-700">{report.disclaimer}</p>
-        <div className="mt-3 space-y-2 text-xs leading-relaxed text-neutral-600">
+        <p className="mt-2 text-[12px] leading-relaxed text-neutral-600">{report.disclaimer}</p>
+        <div className="mt-2 space-y-2 text-[11px] leading-relaxed text-neutral-500">
           {report.disclaimerLong.map((p) => (
             <p key={p}>{p}</p>
           ))}
+          <p>
+            Prepared by {report.company.brandName} ({report.company.legalName}, {report.company.registrationNumber}).
+            Office: {report.company.address}. {LEGAL_COMPANY.phone}. {report.company.websiteHost}.
+            Ghana Customs determines the final duty and other government charges at clearance. This document is a
+            planning estimate only and is not a Customs assessment.
+          </p>
         </div>
       </section>
-
-      <footer className="flex flex-wrap items-end justify-between gap-3 border-t border-neutral-200 px-6 py-4 text-xs text-neutral-600 sm:px-8">
-        <div>
-          <p className="font-semibold text-neutral-800">Prepared by {report.preparedBy}</p>
-          <p className="mt-1">{report.website}</p>
-        </div>
-        <p>Planning estimate only — not a Ghana Customs assessment.</p>
-      </footer>
     </article>
   );
 }

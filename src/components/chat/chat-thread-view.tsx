@@ -10,21 +10,17 @@ import { toast } from "sonner";
 import {
   FileText,
   Image as ImageIcon,
-  Mic,
-  Music2,
   PencilLine,
   SendHorizontal,
-  Square,
   Trash2,
-  Video,
 } from "lucide-react";
 
 import { setUserMessagingBlocked } from "@/actions/chat-moderation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CLOUDINARY_USER_MESSAGE, readPublicCloudinaryCloudName } from "@/lib/cloudinary-config-public";
-import { SPARK_ASSISTANT_LABEL } from "@/lib/live-support-assistant";
+import { displayAssistantBody, SPARK_ASSISTANT_LABEL, SPARK_CHAT_SUGGESTIONS } from "@/lib/live-support-assistant";
+import { isLiveSupportIdleSince } from "@/lib/live-support-idle";
 import { isAdminRole, isSupportStaffRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { useChatThreadRealtime } from "@/hooks/use-chat-thread-realtime";
@@ -61,6 +57,7 @@ export type ChatThreadDto = {
   status?: string | null;
   adminId?: string | null;
   assistantActive?: boolean;
+  lastMessageAt?: string | null;
   guestName: string | null;
   guestEmail: string | null;
   guestPhone?: string | null;
@@ -89,6 +86,42 @@ const MAX_BYTES = {
   audio: 20 * 1024 * 1024,
   raw: 25 * 1024 * 1024,
 } as const;
+
+function formatChatStamp(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function ChatMessageBody({
+  body,
+  assistant,
+  className,
+}: {
+  body: string;
+  assistant?: boolean;
+  className?: string;
+}) {
+  const text = assistant ? displayAssistantBody(body) : body;
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const blocks = paragraphs.length > 0 ? paragraphs : [text.trim()];
+  return (
+    <div className={cn("mt-2 space-y-3", className)}>
+      {blocks.map((para, i) => (
+        <p key={i} className="whitespace-pre-wrap leading-7 tracking-[0.01em]">
+          {para}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function maxBytesForFile(file: File): number {
   const t = file.type || "";
@@ -187,31 +220,25 @@ type Props = {
 export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLayout }: Props) {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
-  const urlThreadId = searchParams.get("threadId");
   const [localThreadId, setLocalThreadId] = useState<string | null>(null);
+  const staff = Boolean(session?.user?.role && isSupportStaffRole(session.user.role));
+  const admin = Boolean(session?.user?.role && isAdminRole(session.user.role));
+  const publicVisitor = controlledThreadId === undefined && !staff;
+  const urlThreadId = publicVisitor ? null : searchParams.get("threadId");
   const threadId =
     controlledThreadId !== undefined ? controlledThreadId : localThreadId || urlThreadId;
 
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [threadMeta, setThreadMeta] = useState<ChatThreadDto | null>(null);
   const [body, setBody] = useState("");
-  const [guestName, setGuestName] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [blocking, setBlocking] = useState(false);
-  const [recording, setRecording] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordChunksRef = useRef<Blob[]>([]);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-  const [recSeconds, setRecSeconds] = useState(0);
-
-  const staff = session?.user?.role && isSupportStaffRole(session.user.role);
-  const admin = Boolean(session?.user?.role && isAdminRole(session.user.role));
 
   const EDIT_WINDOW_MS = 60_000;
 
@@ -240,27 +267,54 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
     }));
   }, []);
 
-  const load = useCallback(async () => {
-    if (!pollUrl) return;
-    const res = await fetch(pollUrl);
+  const clearPublicThreadFromUrl = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const u = new URL(window.location.href);
+    if (!u.searchParams.has("threadId")) return;
+    u.searchParams.delete("threadId");
+    window.history.replaceState({}, "", `${u.pathname}${u.search}${u.hash}`);
+  }, []);
+
+  const resetPublicThread = useCallback(() => {
+    setLocalThreadId(null);
+    setMessages([]);
+    setThreadMeta(null);
+    setHasMore(false);
+    clearPublicThreadFromUrl();
+  }, [clearPublicThreadFromUrl]);
+
+  const load = useCallback(async (overrideThreadId?: string) => {
+    const id = overrideThreadId ?? threadId;
+    if (!id) return;
+    const res = await fetch(`/api/chat/messages?threadId=${encodeURIComponent(id)}&limit=80`);
+    if (res.status === 403 || res.status === 404 || res.status === 410) {
+      if (publicVisitor) resetPublicThread();
+      return;
+    }
     if (!res.ok) return;
     const data = (await res.json()) as {
       messages: ChatMessageDto[];
-      thread: ChatThreadDto;
+      thread: ChatThreadDto | null;
       hasMore?: boolean;
+      expired?: boolean;
     };
+    if (data.expired || !data.thread) {
+      if (publicVisitor) resetPublicThread();
+      return;
+    }
+    if (publicVisitor && isLiveSupportIdleSince(data.thread.lastMessageAt ?? data.messages.at(-1)?.createdAt)) {
+      resetPublicThread();
+      return;
+    }
     setMessages(normalizeMessages(data.messages));
     setThreadMeta(data.thread);
     setHasMore(Boolean(data.hasMore));
-    const id = data.thread?.id;
-    if (id) {
-      void fetch("/api/chat/messages/read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: id }),
-      }).catch(() => {});
-    }
-  }, [pollUrl, normalizeMessages]);
+    void fetch("/api/chat/messages/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: data.thread.id }),
+    }).catch(() => {});
+  }, [threadId, normalizeMessages, publicVisitor, resetPublicThread]);
 
   useChatThreadRealtime(threadId ?? null, load);
 
@@ -269,13 +323,39 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
   }, [load]);
 
   useEffect(() => {
-    if (!recording) {
-      setRecSeconds(0);
-      return;
-    }
-    const t = window.setInterval(() => setRecSeconds((s) => s + 1), 1000);
-    return () => window.clearInterval(t);
-  }, [recording]);
+    if (!publicVisitor) return;
+    clearPublicThreadFromUrl();
+  }, [publicVisitor, clearPublicThreadFromUrl]);
+
+  useEffect(() => {
+    if (controlledThreadId !== undefined || localThreadId || urlThreadId || staff) return;
+    let cancelled = false;
+    void fetch("/api/chat/thread")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { threadId?: string | null };
+        if (!cancelled && data.threadId) {
+          setLocalThreadId(data.threadId);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [controlledThreadId, localThreadId, urlThreadId, staff]);
+
+  useEffect(() => {
+    if (!publicVisitor || !threadId) return;
+    const tick = () => {
+      const last = threadMeta?.lastMessageAt ?? messages.at(-1)?.createdAt;
+      if (last && isLiveSupportIdleSince(last)) {
+        resetPublicThread();
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 15_000);
+    return () => window.clearInterval(id);
+  }, [publicVisitor, threadId, threadMeta?.lastMessageAt, messages, resetPublicThread]);
 
   const loadOlder = useCallback(async () => {
     if (!pollUrl || !threadId || loadingOlder || messages.length === 0 || !hasMore) return;
@@ -315,8 +395,9 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
 
   async function send(
     uploaded: Array<{ url: string; publicId: string; kind: AttachmentKind; mimeType?: string }> = [],
+    draft?: string,
   ) {
-    const text = body.trim();
+    const text = (draft ?? body).trim();
     if (!text && uploaded.length === 0) return;
     setLoading(true);
     try {
@@ -327,27 +408,33 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
         mimeType: a.mimeType ?? null,
         durationSec: null,
       }));
-      const res = await fetch("/api/chat/messages", {
+      const payload = {
+        threadId: threadId ?? undefined,
+        body: text,
+        attachments,
+      };
+      let res = await fetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          threadId: threadId ?? undefined,
-          body: text,
-          attachments,
-          guestName: session?.user ? undefined : guestName || undefined,
-          guestEmail: session?.user ? undefined : guestEmail || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      let data = await res.json();
+      if ((res.status === 403 || res.status === 410) && publicVisitor) {
+        resetPublicThread();
+        res = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, threadId: undefined }),
+        });
+        data = await res.json();
+      }
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setBody("");
       if (data.threadId && controlledThreadId === undefined) {
         setLocalThreadId(data.threadId as string);
-        const u = new URL(window.location.href);
-        u.searchParams.set("threadId", data.threadId);
-        window.history.replaceState({}, "", u.toString());
+        if (publicVisitor) clearPublicThreadFromUrl();
       }
-      await load();
+      await load(typeof data.threadId === "string" ? data.threadId : undefined);
       toast.success("Sent");
       if (!staff) {
         window.setTimeout(() => void load(), 900);
@@ -441,78 +528,6 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
   function canDeleteMessage(): boolean {
     return admin;
   }
-
-  async function startVoiceRecording() {
-    if (!threadId || !navigator.mediaDevices?.getUserMedia) {
-      toast.error("Microphone not available");
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recordChunksRef.current = [];
-      const mr = new MediaRecorder(stream);
-      mediaRecorderRef.current = mr;
-      mr.ondataavailable = (e) => {
-        if (e.data.size) recordChunksRef.current.push(e.data);
-      };
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || "audio/webm" });
-        recordChunksRef.current = [];
-        if (blob.size < 256) {
-          setRecording(false);
-          return;
-        }
-        if (blob.size > MAX_BYTES.audio) {
-          toast.error("Recording too long or too large (max 20 MB).");
-          setRecording(false);
-          return;
-        }
-        const ext = blob.type.includes("webm") ? "webm" : "ogg";
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type });
-        setUploading(true);
-        try {
-          const up = await uploadChatFile(file, threadId);
-          await send([
-            {
-              url: up.url,
-              publicId: up.publicId,
-              kind: up.kind,
-              mimeType: file.type,
-            },
-          ]);
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Upload failed");
-        } finally {
-          setUploading(false);
-          setRecording(false);
-        }
-      };
-      mr.start();
-      setRecording(true);
-    } catch {
-      toast.error("Could not access microphone");
-    }
-  }
-
-  function stopVoiceRecording() {
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== "inactive") {
-      mr.stop();
-    }
-    mediaRecorderRef.current = null;
-  }
-
-  function onVoiceRecordClick() {
-    if (uploading || loading || messagingBlockedForViewer) return;
-    if (recording) {
-      stopVoiceRecording();
-      return;
-    }
-    void startVoiceRecording();
-  }
-
-  const recTimeLabel = `${Math.floor(recSeconds / 60)}:${String(recSeconds % 60).padStart(2, "0")}`;
 
   async function toggleBlockCustomer() {
     const id = threadMeta?.customer?.id;
@@ -653,11 +668,13 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
 
   const split = Boolean(adminSplitLayout && showAdminMeta);
 
+  const mine = (m: ChatMessageDto) => (staff ? isAdminMessage(m) : isUserMessage(m));
+
   const messagesColumn = (
     <>
       <div
         ref={messagesContainerRef}
-        className="max-h-[min(70vh,720px)] space-y-3 overflow-y-auto rounded-2xl border border-sky-200/70 bg-gradient-to-b from-sky-50/90 to-white p-4 shadow-inner dark:border-white/[0.07] dark:from-white/[0.045] dark:to-transparent dark:bg-transparent"
+        className="sda-chat-thread max-h-[min(68vh,680px)] space-y-3.5 overflow-y-auto rounded-2xl border border-zinc-200 p-3 sm:p-4 dark:border-white/[0.06]"
       >
         {hasMore && messages.length > 0 ? (
           <div className="flex justify-center pb-1">
@@ -674,55 +691,86 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
           </div>
         ) : null}
         {messages.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-500">No messages yet.</p>
+          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/10">
+              <Image
+                src="/brand/logo-emblem.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-9 w-9 object-contain"
+              />
+            </div>
+            <p className="mt-4 text-base font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">Spark is ready when you are</p>
+            <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-zinc-400">
+              Ask how the site works. I will not quote prices, run paid tools, or look up other people.
+            </p>
+            <div className="mt-5 flex max-w-md flex-wrap justify-center gap-2">
+              {SPARK_CHAT_SUGGESTIONS.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={loading || messagingBlockedForViewer}
+                  onClick={() => void send([], item.text)}
+                  className="rounded-full border border-[var(--brand)]/25 bg-[var(--brand)]/10 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/50 hover:bg-[var(--brand)]/15 disabled:opacity-40"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className={`flex ${isAdminMessage(m) ? "justify-end" : "justify-start"}`}>
+            <div key={m.id} className={cn("flex", mine(m) ? "justify-end" : "justify-start")}>
               <div
                 className={cn(
-                  "max-w-[min(100%,520px)] rounded-2xl px-4 py-3 text-sm shadow-lg transition-[box-shadow,transform] duration-200 will-change-transform hover:shadow-xl",
-                  isAdminMessage(m)
-                    ? "border border-[var(--brand)]/25 bg-gradient-to-br from-[var(--brand)]/18 via-[var(--brand)]/8 to-sky-100 text-zinc-900 dark:to-zinc-950/80 dark:text-zinc-100"
+                  "max-w-[min(100%,34rem)] px-4 py-2.5 text-[15px] leading-relaxed shadow-[0_8px_24px_-12px_rgba(0,0,0,0.55)]",
+                  mine(m)
+                    ? "rounded-2xl rounded-br-md border border-[var(--brand)]/35 bg-gradient-to-br from-[var(--brand)] to-[#0a9fb0] text-zinc-950"
                     : isAssistantMessage(m)
-                      ? "border border-[var(--brand)]/30 bg-[var(--brand)]/12 text-zinc-900 dark:bg-[var(--brand)]/10 dark:text-zinc-100"
-                      : "border border-zinc-200/80 bg-white text-zinc-900 backdrop-blur-sm dark:border-white/[0.06] dark:bg-zinc-900/70 dark:text-zinc-100",
+                      ? "rounded-2xl rounded-bl-md border border-zinc-200 bg-white text-zinc-800 dark:border-[var(--brand)]/20 dark:bg-zinc-900/90 dark:text-zinc-100"
+                      : "rounded-2xl rounded-bl-md border border-zinc-200 bg-zinc-100 text-zinc-800 dark:border-white/10 dark:bg-zinc-800/90 dark:text-zinc-100",
                 )}
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px] text-zinc-500">
-                  <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                <div
+                  className={cn(
+                    "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] font-medium",
+                    mine(m) ? "text-zinc-900/65" : "text-zinc-500 dark:text-zinc-400",
+                  )}
+                >
+                  <span>
                     {isAdminMessage(m) ? (
                       <>
-                        <span className="mr-1.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+                        <span className="mr-1.5 rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
                           {staffSenderLabel(m)}
                         </span>
-                        <span className="text-zinc-500">
-                          {m.sender?.name ?? ""}
-                          {m.sender?.email ? (
-                            <span className="text-zinc-600"> · {m.sender.email}</span>
-                          ) : null}
-                        </span>
+                        {m.sender?.name ?? ""}
                       </>
                     ) : isUserMessage(m) ? (
-                      <span className="text-zinc-500 dark:text-zinc-400">Customer</span>
+                      staff ? "Customer" : "You"
                     ) : isAssistantMessage(m) ? (
-                      <span className="text-zinc-600 dark:text-zinc-300">{SPARK_ASSISTANT_LABEL}</span>
+                      SPARK_ASSISTANT_LABEL
                     ) : (
-                      <span>{m.senderType}</span>
+                      m.senderType
                     )}
                   </span>
-                  <time className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-600" dateTime={m.createdAt}>
-                    {new Date(m.createdAt).toLocaleString()}
+                  <time className="shrink-0 tabular-nums opacity-80" dateTime={m.createdAt}>
+                    {formatChatStamp(m.createdAt)}
                   </time>
                 </div>
                 {m.editedAt ? (
-                  <p className="mt-1 text-[10px] normal-case text-zinc-600">Edited</p>
+                  <p className={cn("mt-1 text-[10px]", mine(m) ? "text-zinc-900/55" : "text-zinc-500")}>Edited</p>
                 ) : null}
                 {m.deletedAt ? (
-                  <p className="mt-2 italic text-zinc-500">This message was deleted.</p>
+                  <p className="mt-2 italic opacity-70">This message was deleted.</p>
                 ) : (
                   <>
                     {m.body && m.body.trim() !== "\u00a0" && editingId !== m.id && (
-                      <p className="mt-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{m.body.trim()}</p>
+                      <ChatMessageBody
+                        body={m.body.trim()}
+                        assistant={isAssistantMessage(m)}
+                        className={mine(m) ? "text-zinc-950" : "text-zinc-800 dark:text-zinc-100"}
+                      />
                     )}
                     {editingId === m.id ? (
                       <div className="mt-2 space-y-2">
@@ -827,24 +875,6 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
         )}
       </div>
 
-      {!session?.user && !threadId ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-xs text-zinc-500">Your name</label>
-            <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <label className="text-xs text-zinc-500">Email</label>
-            <Input
-              type="email"
-              value={guestEmail}
-              onChange={(e) => setGuestEmail(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-        </div>
-      ) : null}
-
       {messagingBlockedForViewer ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           Messaging has been disabled for your account by an administrator. You can still read this conversation.
@@ -871,20 +901,26 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
         </div>
       ) : null}
 
-      <p className="px-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-500">
+      <p className="px-1 text-xs font-medium tracking-wide text-zinc-500">
         {assistantActive
-          ? "Spark assistant · a teammate will join if needed"
+          ? `${SPARK_ASSISTANT_LABEL} is on this chat · a teammate can join if needed`
           : "A teammate is on this conversation"}
       </p>
 
-      <div className="rounded-2xl border border-zinc-300/80 bg-zinc-800 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur-md dark:border-white/[0.08] dark:bg-zinc-950/60 dark:shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+      <div className="rounded-2xl border border-white/10 bg-zinc-900/80 p-1.5 shadow-[0_12px_40px_-20px_rgba(20,216,230,0.35)]">
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Type a message…"
-          rows={3}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+          placeholder="Write a message… Enter to send"
+          rows={2}
           disabled={messagingBlockedForViewer}
-          className="min-h-[88px] resize-none border-0 bg-transparent px-3 py-2.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[72px] resize-none border-0 bg-transparent px-3 py-2.5 text-[15px] leading-relaxed shadow-none placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-2 py-2">
           <div className="flex flex-wrap items-center gap-1">
@@ -912,40 +948,6 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
                     "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-transparent text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-200",
                     (uploading || messagingBlockedForViewer) && "pointer-events-none opacity-40",
                   )}
-                  title="Attach video"
-                >
-                  <Video className="h-4 w-4" />
-                  <input
-                    type="file"
-                    accept="video/*"
-                    multiple
-                    className="hidden"
-                    disabled={uploading || messagingBlockedForViewer}
-                    onChange={(e) => void onPickFiles(e.target.files)}
-                  />
-                </label>
-                <label
-                  className={cn(
-                    "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-transparent text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-200",
-                    (uploading || messagingBlockedForViewer) && "pointer-events-none opacity-40",
-                  )}
-                  title="Attach audio file"
-                >
-                  <Music2 className="h-4 w-4" />
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    multiple
-                    className="hidden"
-                    disabled={uploading || messagingBlockedForViewer}
-                    onChange={(e) => void onPickFiles(e.target.files)}
-                  />
-                </label>
-                <label
-                  className={cn(
-                    "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-transparent text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-200",
-                    (uploading || messagingBlockedForViewer) && "pointer-events-none opacity-40",
-                  )}
                   title="Attach document"
                 >
                   <FileText className="h-4 w-4" />
@@ -958,44 +960,16 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
                     onChange={(e) => void onPickFiles(e.target.files)}
                   />
                 </label>
-                <div className="mx-1 hidden h-5 w-px bg-white/10 sm:block" aria-hidden />
-                <button
-                  type="button"
-                  className={cn(
-                    "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-zinc-300 transition",
-                    recording
-                      ? "border-red-400/40 bg-red-500/20 text-red-100 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]"
-                      : "border-white/12 bg-white/[0.05] hover:border-[var(--brand)]/35 hover:bg-[var(--brand)]/10 hover:text-white",
-                  )}
-                  disabled={uploading || loading || messagingBlockedForViewer}
-                  title={recording ? "Stop and send recording" : "Record voice note"}
-                  aria-label={recording ? "Stop recording" : "Start voice recording"}
-                  aria-pressed={recording}
-                  onClick={() => onVoiceRecordClick()}
-                >
-                  {recording ? (
-                    <Square className="h-3.5 w-3.5 fill-current" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                </button>
-                {recording ? (
-                  <span className="text-xs tabular-nums text-red-300/90">{recTimeLabel}</span>
-                ) : (
-                  <span className="max-w-[10rem] truncate text-[10px] text-zinc-600 sm:max-w-none">
-                    Tap mic to record, tap again to send
-                  </span>
-                )}
               </>
             ) : (
-              <span className="px-1 text-[11px] text-zinc-600">Send a message to start — then you can attach files.</span>
+              <span className="px-1 text-xs text-zinc-500">Send your first message, then you can attach files.</span>
             )}
             {uploading ? <span className="text-xs text-zinc-500">Uploading…</span> : null}
           </div>
           <Button
             type="button"
             size="sm"
-            className="h-9 gap-1.5 rounded-full px-4 shadow-md"
+            className="h-10 gap-1.5 rounded-full bg-[var(--brand)] px-5 font-semibold text-zinc-950 shadow-[0_0_24px_-6px_rgba(20,216,230,0.7)] hover:bg-[var(--brand)]/90"
             disabled={loading || uploading || messagingBlockedForViewer}
             onClick={() => void send()}
           >
@@ -1014,7 +988,7 @@ export function ChatThreadView({ controlledThreadId, showAdminMeta, adminSplitLa
   );
 
   return (
-    <div className={split ? "flex min-h-0 flex-col gap-4 lg:flex-row lg:items-stretch" : "space-y-6"}>
+    <div className={split ? "flex min-h-0 flex-col gap-4 lg:flex-row lg:items-stretch" : "space-y-4"}>
       {!split && customerProfileCard}
       {split ? (
         <>

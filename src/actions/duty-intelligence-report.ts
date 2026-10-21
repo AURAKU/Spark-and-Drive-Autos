@@ -6,8 +6,12 @@ import type { DutyCalculationInput, DutyIntelligenceResult } from "@/lib/duty-in
 export async function prepareDutyReportAction(
   input: DutyCalculationInput,
   result: DutyIntelligenceResult,
-): Promise<{ ok: true; reportUrl: string; referenceNumber: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; reportUrl: string; exportUrl: string; referenceNumber: string }
+  | { ok: false; error: string }
+> {
   const saved = await ensureDutyReportCalculation({ input, result });
   if (!saved.ok) return { ok: false, error: saved.error };
-  return { ok: true, reportUrl: saved.reportUrl, referenceNumber: saved.referenceNumber };
+  const exportUrl = `/duty-report/${saved.id}/export?access=${encodeURIComponent(saved.accessToken)}`;
+  return { ok: true, reportUrl: saved.reportUrl, exportUrl, referenceNumber: saved.referenceNumber };
 }

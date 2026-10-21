@@ -149,8 +149,8 @@ export function AdminVehicleListPriceField({
       <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs">
         <p className="font-medium text-zinc-400">
           {previewVariant === "supplier"
-            ? "Stored supplier cost — canonical RMB (current admin rates)"
-            : "Checkout reference — GHS (current admin rates)"}
+            ? "Stored supplier cost. Canonical RMB (current admin rates)"
+            : "Checkout reference. GHS (current admin rates)"}
         </p>
         <p className="mt-0.5 text-sm text-[var(--brand)]">
           {previewGhs != null

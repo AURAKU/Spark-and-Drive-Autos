@@ -88,10 +88,10 @@ export function PartCardActions({
   return (
     <div className="flex flex-col gap-2">
       {outOfStock ? (
-        <p className="text-[11px] leading-snug text-amber-200/90">Out of stock — contact support for restock or alternatives.</p>
+        <p className="text-[11px] leading-snug text-amber-200/90">Out of stock. Contact support for restock or alternatives.</p>
       ) : null}
       {requiresOptions && !outOfStock ? (
-        <p className="text-[11px] text-zinc-500">Color, size, or type — open the product to choose options.</p>
+        <p className="text-[11px] text-zinc-500">Color, size, or type. Open the product to choose options.</p>
       ) : null}
       <div className="flex items-center gap-2">
       {canQuickAdd ? (

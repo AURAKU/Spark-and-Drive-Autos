@@ -331,7 +331,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
                   </tr>
                 ))}
                 {initialData.shippingCostMatrix.length === 0 && (
-                  <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">No shipping costs — initialize configuration first.</td></tr>
+                  <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">No shipping costs. Initialize configuration first.</td></tr>
                 )}
               </tbody>
             </table>
@@ -379,7 +379,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
                   </tr>
                 ))}
                 {initialData.insuranceRules.length === 0 && (
-                  <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">No insurance rules — initialize configuration first.</td></tr>
+                  <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">No insurance rules. Initialize configuration first.</td></tr>
                 )}
               </tbody>
             </table>
@@ -408,7 +408,7 @@ export function AdminDutyIntelligenceClient({ initialData }: { initialData: Dash
       {tab === "Verified Imports" && (
         <div className="space-y-4">
           {importState.error && <p className="text-sm text-destructive">{importState.error}</p>}
-          {importState.ok && <p className="text-sm text-emerald-600">Verified import recorded — calibration updated.</p>}
+          {importState.ok && <p className="text-sm text-emerald-600">Verified import recorded. Calibration updated.</p>}
           <form action={importAction} className="grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/10">
             <input name="manufacturer" placeholder="Manufacturer" className="rounded border border-border px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40" />
             <input name="model" placeholder="Model" className="rounded border border-border px-3 py-2 text-sm dark:border-white/15 dark:bg-black/40" />

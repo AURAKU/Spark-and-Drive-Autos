@@ -44,7 +44,7 @@ function readPage(sp: Record<string, string | string[] | undefined>): number {
 
 export const metadata = {
   title: "Browse Motorcycles & E-Bikes | Spark and Drive Autos",
-  description: "Gasoline, electric motorcycles, scooters, and e-bikes — browse inventory with shipping and duty estimates.",
+  description: "Gasoline, electric motorcycles, scooters, and e-bikes. Browse inventory with shipping and duty estimates.",
 };
 
 export default async function MotorcyclesBrowsePage(props: { searchParams: SearchParams }) {
@@ -122,7 +122,7 @@ export default async function MotorcyclesBrowsePage(props: { searchParams: Searc
         <div>
           <PageHeading variant="hero">Motorcycles & E-Bikes</PageHeading>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Sport bikes, scooters, electric motorcycles, and e-bicycles — with automatic shipping and duty estimates.
+            Sport bikes, scooters, electric motorcycles, and e-bicycles. With automatic shipping and duty estimates.
           </p>
         </div>
         <SharePageButton url={`${getPublicAppUrl()}/motorcycles`} title="Spark & Drive Motorcycles" />

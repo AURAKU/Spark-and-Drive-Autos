@@ -224,7 +224,7 @@ export async function adminReassignPartReviewUserAction(
       include: { part: { select: { id: true, slug: true } } },
     });
     if (!review?.partId) return { error: "Only product reviews can be reassigned." };
-    if (!review.userId) return { error: "This review has no author to replace — use delete or publish-as-user instead." };
+    if (!review.userId) return { error: "This review has no author to replace. Use delete or publish-as-user instead." };
 
     const users = await prisma.user.findMany({
       where: { name: { equals: userName.data, mode: "insensitive" } },

@@ -84,13 +84,13 @@ export const DEFAULT_ROLE_ADMIN_PAGES: Record<EditableStaffRole, readonly AdminP
 };
 
 export const ROLE_JOB_SUMMARY: Record<RbacUserRole, string> = {
-  CUSTOMER: "Storefront shopper — personal dashboard only. No admin console.",
-  SERVICE_ASSISTANT: "Front-line support — live chat, inquiries, and Ghana Card queue only.",
-  SALES_ADMIN: "Sales floor — inventory, leads, quotes, estimates, and customer orders.",
-  SOURCING_MANAGER: "Supply — parts catalog, Parts Finder, verified requests, and sourcing estimates.",
-  LOGISTICS_MANAGER: "Fulfillment — shipping, order movement, deposits, and duty tracking.",
-  FINANCE_ADMIN: "Money — payments, receipts, disputes, duty intelligence, and FX rates.",
-  SUPER_ADMIN: "Full platform control — every admin page, role access editor, and system settings.",
+  CUSTOMER: "Storefront shopper. Personal dashboard only. No admin console.",
+  SERVICE_ASSISTANT: "Front-line support. Live chat, inquiries, and Ghana Card queue only.",
+  SALES_ADMIN: "Sales floor. Inventory, leads, quotes, estimates, and customer orders.",
+  SOURCING_MANAGER: "Supply. Parts catalog, Parts Finder, verified requests, and sourcing estimates.",
+  LOGISTICS_MANAGER: "Fulfillment. Shipping, order movement, deposits, and duty tracking.",
+  FINANCE_ADMIN: "Money. Payments, receipts, disputes, duty intelligence, and FX rates.",
+  SUPER_ADMIN: "Full platform control. Every admin page, role access editor, and system settings.",
 };
 
 /** Account (dashboard) surfaces — what each role should use personally. */
@@ -143,7 +143,7 @@ export const ROLE_ACCOUNT_ACCESS: Record<
     denied: ["User directory, API environment settings", "Support inbox as primary (unless granted)"],
   },
   SUPER_ADMIN: {
-    granted: ["Everything — admin console, role access editor, settings, and personal dashboard"],
+    granted: ["Everything. Admin console, role access editor, settings, and personal dashboard"],
     denied: ["Nothing within the product (by design)"],
   },
 };

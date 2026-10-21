@@ -1,4 +1,5 @@
 import { AttachmentKind, MessageSenderType } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
@@ -21,6 +22,11 @@ import {
   maybePostLiveSupportAssistantReply,
   threadAssistantState,
 } from "@/lib/live-support-auto-reply";
+import {
+  archiveIfIdlePublicThread,
+  ensurePublicChatThread,
+  isLiveSupportIdle,
+} from "@/lib/live-support-session";
 
 const attachmentSchema = z.object({
   url: z.string().url(),
@@ -78,16 +84,16 @@ export async function POST(req: Request) {
   const cookieStore = await cookies();
   const guestCookie = cookieStore.get("sda_guest")?.value;
   const isStaff = Boolean(session?.user?.id && isSupportStaffRole(session.user.role));
-
-  if (!isStaff && !session?.user?.id) {
-    return NextResponse.json({ error: "Sign in to use live support chat." }, { status: 401 });
-  }
-  const customerId = session!.user!.id;
+  const customerId = session?.user?.id ?? null;
 
   const data = parsed.data;
   const text = sanitizePlainText(data.body, 8000);
+  const guestName = !customerId && data.guestName ? sanitizePlainText(data.guestName, 120) : null;
+  const guestEmail = !customerId && data.guestEmail ? data.guestEmail.toLowerCase() : null;
 
   let threadId = data.threadId;
+  let newGuestCookie: string | null = null;
+  let guestToken = guestCookie ?? null;
 
   if (threadId) {
     const existing = await findThreadOrThrow(threadId);
@@ -109,27 +115,56 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-  } else {
+    if (access !== "admin" && isLiveSupportIdle(existing)) {
+      await archiveIfIdlePublicThread(existing);
+      threadId = undefined;
+    } else if (access === "guest" && (guestName || guestEmail)) {
+      await prisma.chatThread.update({
+        where: { id: existing.id },
+        data: {
+          ...(guestName ? { guestName } : {}),
+          ...(guestEmail ? { guestEmail } : {}),
+        },
+      });
+    }
+  }
+
+  if (!threadId) {
     if (isStaff) {
       return NextResponse.json({ error: "Admin replies require threadId" }, { status: 400 });
     }
 
-    const lead = await ensureLead({ customerId: customerId, sourceChannel: "CHAT", title: "Chat" });
+    if (!customerId && !guestToken) {
+      guestToken = `gst_${randomUUID().replaceAll("-", "")}`;
+      newGuestCookie = guestToken;
+    }
 
-    const thread = await prisma.chatThread.create({
-      data: {
-        customerId,
-        guestToken: null,
-        subject: "Customer Service chat",
-        carId: data.carId,
-        leadId: lead?.id,
-      },
+    const lead = customerId
+      ? await ensureLead({ customerId, sourceChannel: "CHAT", title: "Chat" })
+      : null;
+
+    threadId = await ensurePublicChatThread({
+      customerId,
+      guestToken,
+      carId: data.carId,
+      guestName,
+      guestEmail,
+      leadId: lead?.id ?? null,
     });
-    threadId = thread.id;
+
+    if (guestName || guestEmail) {
+      await prisma.chatThread.update({
+        where: { id: threadId },
+        data: {
+          ...(guestName ? { guestName } : {}),
+          ...(guestEmail ? { guestEmail } : {}),
+        },
+      });
+    }
   }
 
   const senderType = isStaff ? MessageSenderType.ADMIN : MessageSenderType.USER;
-  const senderUserId = customerId;
+  const senderUserId = isStaff || customerId ? session!.user!.id : null;
 
   try {
     assertChatAttachmentsSafe(
@@ -179,9 +214,9 @@ export async function POST(req: Request) {
       senderType: msg.senderType,
     });
 
-    if (isStaff) {
+    if (isStaff && senderUserId) {
       await claimThreadForStaff(threadId!, senderUserId);
-    } else {
+    } else if (!isStaff) {
       const capturedThreadId = threadId!;
       const capturedMessageId = msg.id;
       after(() => {
@@ -197,6 +232,14 @@ export async function POST(req: Request) {
       messageId: msg.id,
       message: msg,
     });
+    if (newGuestCookie) {
+      res.cookies.set("sda_guest", newGuestCookie, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
     return res;
   } catch (e) {
     if (e instanceof Error && e.message === "EMPTY_MESSAGE") {
@@ -253,6 +296,13 @@ export async function GET(req: Request) {
     const access = await getChatThreadAccess(thread, guest);
     if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (isLiveSupportIdle(thread)) {
+      await archiveIfIdlePublicThread(thread);
+      return NextResponse.json(
+        { expired: true, thread: null, messages: [], hasMore: false },
+        { status: 410 },
+      );
     }
   }
 

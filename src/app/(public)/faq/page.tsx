@@ -1,3 +1,4 @@
+import { PlatformGuide } from "@/components/guides/platform-guide";
 import { PageHeading, SectionHeading } from "@/components/typography/page-headings";
 
 type FaqItem = { q: string; answer: string[] };
@@ -15,7 +16,7 @@ export default function FaqPage() {
       q: "Can you source vehicles or parts internationally?",
       answer: [
         "Yes. We provide sourcing support based on supplier availability and your approved specifications.",
-        "All sourcing requests are subject to confirmation—no request is guaranteed until commercial terms are agreed.",
+        "All sourcing requests are subject to confirmation. No request is guaranteed until commercial terms are agreed.",
       ],
     },
     {
@@ -71,8 +72,10 @@ export default function FaqPage() {
       <PageHeading>Frequently Asked Questions</PageHeading>
       <p className="mt-6 text-sm leading-relaxed text-zinc-300 sm:text-[0.9375rem]">
         Find answers to common questions about vehicles, parts and accessories, sourcing, payments, reservations, and
-        your account.
+        your account. The Platform Guide below walks through every live page, including where to tap next.
       </p>
+
+      <PlatformGuide />
 
       <div className="mt-10 space-y-4">
         {items.map((item) => (

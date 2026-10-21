@@ -147,7 +147,7 @@ export function ProtectionCenterHub(props: {
         <h2 className="text-sm font-semibold text-amber-100">Mission · detection &amp; response</h2>
         <p className="mt-2 max-w-4xl text-xs leading-relaxed text-zinc-400">
           This console aggregates automated signals across authentication, API abuse patterns, payments, webhooks, and
-          privileged admin actions — similar to a CCTV control room for digital behaviour. Use it to spot repeat
+          privileged admin actions. Similar to a CCTV control room for digital behaviour. Use it to spot repeat
           offenders, correlate IP addresses with accounts, and decide when to suspend platform access. It does not
           replace perimeter security (firewall, bot management, Paystack dashboard); it is your internal evidence trail
           and triage queue.
@@ -164,7 +164,7 @@ export function ProtectionCenterHub(props: {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-white">Last 24h — by channel</h2>
+          <h2 className="text-sm font-semibold text-white">Last 24h. By channel</h2>
           <ul className="mt-3 flex flex-wrap gap-2">
             {props.byChannel.map((c) => (
               <li key={c.channel}>
@@ -177,7 +177,7 @@ export function ProtectionCenterHub(props: {
           </ul>
         </section>
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <h2 className="text-sm font-semibold text-white">Last 24h — by severity</h2>
+          <h2 className="text-sm font-semibold text-white">Last 24h. By severity</h2>
           <ul className="mt-3 flex flex-wrap gap-2">
             {props.bySeverity.map((s) => (
               <li key={s.severity}>
@@ -297,7 +297,7 @@ export function ProtectionCenterHub(props: {
                                 id {uid.slice(0, 8)}…
                               </Link>
                             ) : (
-                              <span className="text-zinc-600">—</span>
+                              <span className="text-zinc-600">. </span>
                             )}
                           </div>
                         )}
@@ -352,7 +352,7 @@ export function ProtectionCenterHub(props: {
         <aside className="space-y-4">
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <h2 className="text-sm font-semibold text-white">Top IPs (7d)</h2>
-            <p className="mt-1 text-[11px] text-zinc-500">Frequent sources — correlate with auth and payment noise.</p>
+            <p className="mt-1 text-[11px] text-zinc-500">Frequent sources. Correlate with auth and payment noise.</p>
             <ol className="mt-3 space-y-2 text-sm text-zinc-300">
               {props.topIps.length === 0 ? <li className="text-zinc-600">No data.</li> : null}
               {props.topIps.map((r) => (

@@ -121,7 +121,7 @@ export function InquiryPanel({ carId, title, disabled }: { carId: string; title:
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="mt-1"
-            placeholder="Tell us what you need—budget, timeline, financing questions, etc."
+            placeholder="Tell us what you need. Budget, timeline, financing questions, etc."
           />
         </div>
         <Button type="button" onClick={submit} disabled={loading}>

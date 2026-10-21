@@ -370,7 +370,7 @@ export default async function AdminPartsFinderSessionDetailPage(props: Props) {
       </section>
 
       <p className="mt-12 text-xs text-muted-foreground">
-        {PARTS_FINDER_PRODUCT_NAME} — admin review view
+        {PARTS_FINDER_PRODUCT_NAME}. Admin review view
       </p>
     </div>
   );

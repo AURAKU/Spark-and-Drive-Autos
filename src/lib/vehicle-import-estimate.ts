@@ -226,9 +226,9 @@ export function deriveDutyEstimate(input: DutyLogicInput): DutyLogicResult {
 
   const powertrainHint =
     input.engineType === "ELECTRIC"
-      ? " Powertrain: BEV — classified using configurable electric HS rules (no engine cc); duty relief may apply only to eligible categories."
+      ? " Powertrain: BEV. Classified using configurable electric HS rules (no engine cc); duty relief may apply only to eligible categories."
       : input.engineType === "HYBRID" || input.engineType === "PLUGIN_HYBRID"
-        ? " Powertrain: hybrid / PHEV — combined ICE/electric treatment uses configurable Duty Intelligence rules."
+        ? " Powertrain: hybrid / PHEV. Combined ICE/electric treatment uses configurable Duty Intelligence rules."
         : "";
 
   const uncertaintyNote =

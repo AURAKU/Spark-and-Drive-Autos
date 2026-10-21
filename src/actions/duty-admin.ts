@@ -187,7 +187,7 @@ export async function updateDutyWorkflowStageAction(
           title: "Import duty update",
           body:
             customerVisibleNote.data?.trim() ||
-            `Duty status: ${dutyWorkflowLabel(stageParsed.data)} — order ${duty.order.reference}`,
+            `Duty status: ${dutyWorkflowLabel(stageParsed.data)}. Order ${duty.order.reference}`,
           href: `/dashboard/orders/${duty.order.id}`,
         },
       });
@@ -324,7 +324,7 @@ export async function createDutyPaymentRequestAction(
           toStatus: "AWAITING_PROOF",
           source: "ADMIN_DUTY_PAYMENT",
           actorUserId: session.user.id,
-          note: "Duty settlement — customer should upload proof from Payments.",
+          note: "Duty settlement. Customer should upload proof from Payments.",
         },
       });
 

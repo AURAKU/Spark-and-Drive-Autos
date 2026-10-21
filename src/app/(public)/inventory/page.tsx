@@ -187,7 +187,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
         </div>
         <SharePageButton
           url={shareUrl}
-          title="Browse Cars - Spark and Drive Autos"
+          title="Browse Cars on Spark and Drive Autos"
           text="Check out these cars on Spark and Drive Autos."
           className="h-10 shrink-0 rounded-lg border border-white/20 bg-white/[0.03] px-3 text-zinc-200 transition hover:bg-white/8 dark:border-white/20 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/8"
         />

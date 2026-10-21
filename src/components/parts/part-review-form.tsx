@@ -29,7 +29,7 @@ export function PartReviewForm({ partId }: Props) {
 
   useEffect(() => {
     if (state?.ok) {
-      toast.success("Thanks — your review is now live.");
+      toast.success("Thanks. Your review is now live.");
       router.refresh();
     } else if (state?.error) toast.error(state.error);
   }, [state, router]);
@@ -62,7 +62,7 @@ export function PartReviewForm({ partId }: Props) {
           minLength={10}
           maxLength={4000}
           rows={4}
-          placeholder="Quality, fit, delivery — what should other buyers know?"
+          placeholder="Quality, fit, delivery. What should other buyers know?"
           className="border-white/15 bg-black/40 text-sm"
         />
       </div>

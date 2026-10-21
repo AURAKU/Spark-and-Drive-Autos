@@ -265,7 +265,7 @@ export function AdminOrdersInteractive({ rows, emptyHint }: Props) {
                       {o.paymentStatus ? (
                         <PaymentStatusBadge status={o.paymentStatus as PaymentStatus} />
                       ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
+                        <span className="text-sm text-muted-foreground">. </span>
                       )}
                     </td>
                     <td className="break-all px-4 py-3.5 align-top text-sm text-muted-foreground" title={o.preview.customerEmail}>

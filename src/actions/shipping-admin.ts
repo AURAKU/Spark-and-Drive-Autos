@@ -60,7 +60,7 @@ export async function appendShipmentStatusEvent(
           userId: ship.order.userId,
           type: "SHIPPING",
           title: "Shipping update",
-          body: `${parsed.data.title.trim()} — order ${ship.order.reference}`,
+          body: `${parsed.data.title.trim()}. Order ${ship.order.reference}`,
           href: `/dashboard/orders/${ship.orderId}`,
         },
       });
@@ -196,7 +196,7 @@ export async function bulkTransitionShipmentStage(
           userId: s.order.userId,
           type: "SHIPPING",
           title: "Shipping update",
-          body: `${parsed.data.title.trim()} — order ${s.order.reference}`,
+          body: `${parsed.data.title.trim()}. Order ${s.order.reference}`,
           href: `/dashboard/orders/${s.orderId}`,
         },
       });

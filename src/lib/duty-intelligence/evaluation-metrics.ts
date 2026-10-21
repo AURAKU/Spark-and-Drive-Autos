@@ -186,7 +186,7 @@ export function computeEvaluationMetrics(rows: PredictionEvaluationRow[]): Evalu
     generalizedAccuracyClaimSupported,
     note: generalizedAccuracyClaimSupported
       ? "Holdout metrics available for supported accuracy reporting."
-      : `Only ${rows.length} verified fixture(s) — use as exact regression cases; do not claim generalized model accuracy.`,
+      : `Only ${rows.length} verified fixture(s). Use as exact regression cases; do not claim generalized model accuracy.`,
   };
 }
 

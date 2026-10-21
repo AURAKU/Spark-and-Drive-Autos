@@ -5,7 +5,14 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CloudinaryDeliveryPreset } from "@/lib/cloudinary-delivery";
-import { cloudinaryBlurPlaceholderUrl, optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
+import {
+  cloudinaryBlurPlaceholderUrl,
+  cloudinarySrcSet,
+  isCloudinaryMediaUrl,
+  optimizeCloudinaryUrl,
+  shouldBypassNextImageOptimizer,
+} from "@/lib/cloudinary-delivery";
+import { acquireMediaSlot, type MediaLoadPriority } from "@/lib/media/media-load-scheduler";
 import { VEHICLE_IMAGE_PLACEHOLDER_SRC } from "@/lib/vehicle-image-fallback";
 import { cn } from "@/lib/utils";
 
@@ -20,15 +27,18 @@ type Props = {
   imagePlaceholder?: boolean;
   /** When set, Cloudinary URLs get bandwidth-friendly transforms; other URLs unchanged. */
   deliveryPreset?: CloudinaryDeliveryPreset;
+  /** After the display image paints, idle-upgrade to this higher-fidelity preset. */
+  upgradePreset?: CloudinaryDeliveryPreset;
+  /** Scheduler rank. Hero is granted immediately; idle waits until the lane is free. */
+  chunkPriority?: MediaLoadPriority;
 } & ({ fill: true; width?: never; height?: never } | { fill?: false; width: number; height: number });
 
 function shouldUnoptimizeImageUrl(url: string): boolean {
   if (!url.startsWith("http")) return false;
-  if (url.includes("res.cloudinary.com")) return false;
-  return true;
+  return shouldBypassNextImageOptimizer(url);
 }
 
-function useInView(enabled: boolean, rootMargin = "240px 0px") {
+function useInView(enabled: boolean, rootMargin = "280px 0px") {
   const ref = useRef<HTMLElement | null>(null);
   const [inView, setInView] = useState(!enabled);
 
@@ -59,6 +69,28 @@ function useInView(enabled: boolean, rootMargin = "240px 0px") {
   return { ref, inView };
 }
 
+function useMediaLane(enabled: boolean, priority: MediaLoadPriority) {
+  const [granted, setGranted] = useState(!enabled);
+
+  useEffect(() => {
+    if (!enabled) {
+      setGranted(true);
+      return;
+    }
+    const slot = acquireMediaSlot(priority);
+    let active = true;
+    void slot.ready.then(() => {
+      if (active) setGranted(true);
+    });
+    return () => {
+      active = false;
+      slot.release();
+    };
+  }, [enabled, priority]);
+
+  return granted;
+}
+
 export function VehicleCoverImage(props: Props) {
   const {
     src,
@@ -69,27 +101,82 @@ export function VehicleCoverImage(props: Props) {
     loading = "lazy",
     imagePlaceholder = false,
     deliveryPreset = "none",
+    upgradePreset,
+    chunkPriority,
   } = props;
+
   const resolved = useMemo(() => {
     if (!src?.trim()) return VEHICLE_IMAGE_PLACEHOLDER_SRC;
     return optimizeCloudinaryUrl(src.trim(), deliveryPreset);
   }, [src, deliveryPreset]);
 
-  const blurSrc = useMemo(() => cloudinaryBlurPlaceholderUrl(resolved), [resolved]);
+  const responsive = useMemo(() => {
+    if (!src?.trim() || !isCloudinaryMediaUrl(src)) return { src: resolved };
+    return cloudinarySrcSet(src.trim(), deliveryPreset);
+  }, [src, deliveryPreset, resolved]);
+
+  const upgradeSrc = useMemo(() => {
+    if (!upgradePreset || !src?.trim() || !isCloudinaryMediaUrl(src)) return null;
+    return optimizeCloudinaryUrl(src.trim(), upgradePreset);
+  }, [src, upgradePreset]);
+
+  const blurSrc = useMemo(() => cloudinaryBlurPlaceholderUrl(src || resolved), [src, resolved]);
   const deferLoad = !priority && loading !== "eager";
   const { ref, inView } = useInView(deferLoad);
+  const lanePriority = chunkPriority ?? (priority || loading === "eager" ? "hero" : "visible");
+  const granted = useMediaLane(inView && deferLoad, lanePriority);
+  const canFetch = inView && (priority || loading === "eager" || granted);
 
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [displaySrc, setDisplaySrc] = useState(responsive.src);
+  const [displaySrcSet, setDisplaySrcSet] = useState(responsive.srcSet);
+  const [paintedSrc, setPaintedSrc] = useState<string | null>(null);
+  const [hiResReady, setHiResReady] = useState(false);
 
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
-  }, [resolved]);
+    setHiResReady(false);
+    setDisplaySrc(responsive.src);
+    setDisplaySrcSet(responsive.srcSet);
+  }, [responsive.src, responsive.srcSet]);
 
-  const current = failed ? VEHICLE_IMAGE_PLACEHOLDER_SRC : resolved;
+  useEffect(() => {
+    if (!upgradeSrc || !loaded || failed || !canFetch) return;
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (conn?.saveData) return;
+    let cancelled = false;
+    const idle = window.requestIdleCallback?.bind(window);
+    const start = () => {
+      const img = document.createElement("img");
+      img.decoding = "async";
+      img.onload = () => {
+        if (cancelled) return;
+        setDisplaySrc(upgradeSrc);
+        setDisplaySrcSet(undefined);
+        setHiResReady(true);
+      };
+      img.src = upgradeSrc;
+    };
+    if (idle) {
+      const id = idle(start, { timeout: 1800 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback?.(id);
+      };
+    }
+    const id = window.setTimeout(start, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [upgradeSrc, loaded, failed, canFetch]);
+
+  const current = failed ? VEHICLE_IMAGE_PLACEHOLDER_SRC : displaySrc;
   const unoptimized = shouldUnoptimizeImageUrl(current);
-  const showPlaceholder = imagePlaceholder && (!loaded || !inView) && !failed;
+  const showPlaceholder = imagePlaceholder && !paintedSrc && (!loaded || !canFetch) && !failed;
+  const cloudinaryNative = isCloudinaryMediaUrl(src) && !failed;
 
   const onError = () => {
     if (current !== VEHICLE_IMAGE_PLACEHOLDER_SRC) {
@@ -116,27 +203,56 @@ export function VehicleCoverImage(props: Props) {
     </>
   ) : null;
 
+  const commonClass = cn(
+    className,
+    "transition-opacity duration-300 ease-out will-change-transform",
+    showPlaceholder ? "opacity-0" : "opacity-100",
+  );
+
   if (props.fill) {
     return (
       <span ref={ref as RefObject<HTMLSpanElement>} className="relative block h-full w-full overflow-hidden">
         {placeholderLayer}
-        {inView ? (
+        {paintedSrc && paintedSrc !== current ? (
+          // eslint-disable-next-line @next/next/no-img-element -- keep last sharp frame while the next decode finishes
+          <img src={paintedSrc} alt="" className={cn("absolute inset-0 h-full w-full", className)} aria-hidden />
+        ) : null}
+        {canFetch && cloudinaryNative ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary srcset + no Next re-encode
+          <img
+            src={current}
+            srcSet={hiResReady ? undefined : displaySrcSet}
+            sizes={sizes}
+            alt={alt}
+            decoding="async"
+            fetchPriority={priority ? "high" : deferLoad ? "low" : "auto"}
+            loading={priority ? "eager" : loading}
+            className={cn("absolute inset-0 h-full w-full", commonClass)}
+            onError={onError}
+            onLoad={() => {
+              setLoaded(true);
+              setPaintedSrc(current);
+            }}
+          />
+        ) : canFetch ? (
           <Image
             src={current}
             alt={alt}
             fill
             sizes={sizes}
             loading={priority ? undefined : loading}
-            className={cn(
-              className,
-              "transition-opacity duration-300 ease-out will-change-transform",
-              showPlaceholder ? "opacity-0" : "opacity-100",
-            )}
+            className={commonClass}
             priority={priority}
             unoptimized={unoptimized}
             onError={onError}
-            onLoad={() => setLoaded(true)}
+            onLoad={() => {
+              setLoaded(true);
+              setPaintedSrc(current);
+            }}
           />
+        ) : paintedSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element -- hold last frame while the next slot is granted
+          <img src={paintedSrc} alt={alt} className={cn("absolute inset-0 h-full w-full", className)} />
         ) : null}
       </span>
     );
@@ -159,7 +275,26 @@ export function VehicleCoverImage(props: Props) {
           ) : null}
         </span>
       ) : null}
-      {inView ? (
+      {canFetch && cloudinaryNative ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary srcset + no Next re-encode
+        <img
+          src={current}
+          srcSet={hiResReady ? undefined : displaySrcSet}
+          sizes={sizes}
+          alt={alt}
+          width={props.width}
+          height={props.height}
+          decoding="async"
+          fetchPriority={priority ? "high" : deferLoad ? "low" : "auto"}
+          loading={priority ? "eager" : loading}
+          className={cn(commonClass, showPlaceholder ? "absolute inset-0" : undefined)}
+          onError={onError}
+          onLoad={() => {
+            setLoaded(true);
+            setPaintedSrc(current);
+          }}
+        />
+      ) : canFetch ? (
         <Image
           src={current}
           alt={alt}
@@ -167,15 +302,14 @@ export function VehicleCoverImage(props: Props) {
           height={props.height}
           sizes={sizes}
           loading={priority ? undefined : loading}
-          className={cn(
-            className,
-            "transition-opacity duration-300 ease-out",
-            showPlaceholder ? "absolute inset-0 opacity-0" : "opacity-100",
-          )}
+          className={cn(commonClass, showPlaceholder ? "absolute inset-0" : undefined)}
           priority={priority}
           unoptimized={unoptimized}
           onError={onError}
-          onLoad={() => setLoaded(true)}
+          onLoad={() => {
+            setLoaded(true);
+            setPaintedSrc(current);
+          }}
         />
       ) : null}
     </span>

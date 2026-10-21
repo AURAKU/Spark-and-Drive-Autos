@@ -10,7 +10,7 @@ export default function ContactPage() {
       <PageHeading>Contact Us</PageHeading>
       <p className="mt-6 max-w-3xl text-sm leading-relaxed text-zinc-300 sm:text-[0.9375rem]">
         Get in touch with our team for sales support, sourcing requests, order inquiries, payment verification, or
-        complaint resolution. We&apos;re here to help—clearly and promptly.
+        complaint resolution. We&apos;re here to help, clearly and promptly.
       </p>
 
       <div className="mt-10 grid gap-5 sm:grid-cols-2">
@@ -70,7 +70,7 @@ export default function ContactPage() {
       <section className="mt-5 rounded-2xl border border-[var(--brand)]/20 bg-white/[0.03] p-5 shadow-[0_0_32px_-16px_rgba(20,216,230,0.15)]">
         <SectionHeading>Live Customer Support</SectionHeading>
         <p className="mt-5 text-sm leading-relaxed text-zinc-300 sm:text-[0.9375rem]">
-          Available directly inside your dashboard.
+          Available to everyone. With or without an account.
         </p>
         <p className="mt-3 text-sm leading-relaxed text-zinc-300 sm:text-[0.9375rem]">
           <span className="mr-2 inline-block" aria-hidden>

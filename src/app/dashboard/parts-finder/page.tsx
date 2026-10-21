@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_TAGLINE =
-  "Search engine — parts matching powered by external discovery and ranked confidence guidance.";
+  "Search engine. Parts matching powered by external discovery and ranked confidence guidance.";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

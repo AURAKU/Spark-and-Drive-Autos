@@ -78,7 +78,7 @@ export function DutyCalculatorPanel({ defaultYear, defaultCifGhs, defaultPowertr
     <div className={`rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-black/40 ${compact ? "p-4" : "p-5"}`}>
       <h3 className="text-sm font-semibold text-white">Duty estimate calculator</h3>
       <p className="mt-1 text-xs text-zinc-500">
-        Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling — not necessarily the list price). Rates follow{" "}
+        Enter a <span className="text-zinc-400">CIF-style value in GHS</span> (customs valuation basis you are modelling. Not necessarily the list price). Rates follow{" "}
         <span className="text-zinc-400">Spark &amp; Drive Duty Intelligence</span> configuration; BEV uses configurable duty bands without engine cc.
       </p>
       <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>

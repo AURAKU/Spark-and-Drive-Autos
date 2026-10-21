@@ -31,7 +31,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
         className,
       )}
     >
-      {/* Sliding thumb — springy easing reads as intentional, tactile */}
+      {/* Sliding thumb. Springy easing reads as intentional, tactile */}
       <span
         aria-hidden
         className={cn(

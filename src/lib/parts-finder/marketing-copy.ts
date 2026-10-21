@@ -12,7 +12,7 @@ export const PARTS_FINDER_HERO_LINE =
 
 /** Supporting line: how we work (external signals, ranking, user-safe output). */
 export const PARTS_FINDER_ENGINE_PROMISE =
-  "We interpret your vehicle and part intent, gather web evidence, rank candidates for fit and quality signals, and return a short curated list—never a raw dump of unvetted links.";
+  "We interpret your vehicle and part intent, gather web evidence, rank candidates for fit and quality signals, and return a short curated list. Never a raw dump of unvetted links.";
 
 /** Secondary benefit line (results surface). */
 export const PARTS_FINDER_RESULTS_PROMISE =
@@ -23,4 +23,4 @@ export const PARTS_FINDER_NAV_LABEL = "Parts Finder";
 
 /** Compact card hook on dashboard overview. */
 export const PARTS_FINDER_CARD_HOOK =
-  "Web-aware search — refined matches, never raw link dumps.";
+  "Web-aware search. Refined matches, never raw link dumps.";

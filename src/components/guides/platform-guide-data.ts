@@ -71,7 +71,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
       {
         id: "cars-home",
         title: "Start from the storefront",
-        tap: "Tap Browse cars on the home page — the teal button in the first row of actions.",
+        tap: "Tap Browse cars on the home page. The teal button in the first row of actions.",
         detail:
           "The home hero has three primary actions: Browse cars, Browse Electric Bikes & Motorcycles, and Buy Parts & Accessories. You can also open Inventory later from the footer on the home page. Guests can browse every published listing without an account.",
         mock: "home",
@@ -84,7 +84,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
         title: "Filter what you can buy online",
         tap: "Set Stock status to Available only, choose Ghana or China, then tap Apply.",
         detail:
-          "Find Your Next Car lists published Ghana and China stock only — in-transit units are excluded. Available only is stock you can pay for online. Sold only is browse-only for reference. Search by brand, model, or keywords.",
+          "Find Your Next Car lists published Ghana and China stock only. In-transit units are excluded. Available only is stock you can pay for online. Sold only is browse-only for reference. Search by brand, model, or keywords.",
         mock: "inventory",
         highlight: "apply-filters",
         route: "/inventory?availability=available",
@@ -194,7 +194,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
       {
         id: "pf-signin",
         title: "Sign in before the engine opens",
-        tap: "Tap Sign in to activate if you are a guest — entry sends you to login first.",
+        tap: "Tap Sign in to activate if you are a guest. Entry sends you to login first.",
         detail:
           "The entry route checks your session. Guests go to login, then return to Parts Finder. After sign-in, expired or unpaid memberships go to Activate or renew. Active members land on search. Nothing in the catalog is hidden from guests; only the search engine is gated.",
         mock: "parts-finder",
@@ -208,7 +208,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
         title: "Search with VIN, chassis, or OEM",
         tap: "On Find Parts, enter VIN or chassis plus the part you need, then run the search.",
         detail:
-          "The engine interprets vehicle and part intent, gathers web evidence, and returns a short ranked list — never a raw dump of unvetted links. Confidence tiers describe match quality; they are not OEM certification and do not guarantee fit.",
+          "The engine interprets vehicle and part intent, gathers web evidence, and returns a short ranked list. Never a raw dump of unvetted links. Confidence tiers describe match quality; they are not OEM certification and do not guarantee fit.",
         mock: "parts-finder",
         highlight: "vin-search",
         route: "/parts-finder/search",
@@ -250,7 +250,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
       },
       {
         id: "req-car",
-        title: "Request a car — account required",
+        title: "Request a car. Account required",
         tap: "Create Account or Sign in, then complete make, model, and sourcing notes.",
         detail:
           "Vehicle sourcing is signed-in only so the enquiry stays on your account and updates stay in one place. After you submit, track it under Dashboard → Customer Inquiry & Request. Sourcing is best-effort and not guaranteed until commercial terms are agreed.",
@@ -262,7 +262,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
       },
       {
         id: "req-parts",
-        title: "Request autoparts — pay the fee",
+        title: "Request autoparts. Pay the fee",
         tap: "Fill the part and vehicle details, then pay the request fee to start the search.",
         detail:
           "Guests can submit name, email, and phone. Signed-in customers skip those fields. A request fee in Ghana cedis is charged before work starts. Replies arrive in your messages. This is a sourcing enquiry, not a confirmed order.",
@@ -344,7 +344,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
         title: "Where the calculator lives",
         tap: "Open a China-sourced car listing, then scroll to Import planning.",
         detail:
-          "There is no standalone public duty calculator. On China and in-transit car pages, Import planning embeds Spark & Drive Duty Intelligence. The list price is pre-filled as a non-CIF placeholder — change it to the valuation you will declare.",
+          "There is no standalone public duty calculator. On China and in-transit car pages, Import planning embeds Spark & Drive Duty Intelligence. The list price is pre-filled as a non-CIF placeholder. Change it to the valuation you will declare.",
         mock: "duty",
         highlight: "duty-calc",
         route: "/inventory?source=IN_CHINA",
@@ -411,7 +411,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
         title: "Add your Ghana Card",
         tap: "In Dashboard → Profile, open verification and save your Ghana Card number and expiry.",
         detail:
-          "Ghana Card details are used at checkout and delivery. Save the number and expiry, then wait for review. You can also manage Ghana delivery addresses on Profile. Keep the card details accurate — checkout can require them.",
+          "Ghana Card details are used at checkout and delivery. Save the number and expiry, then wait for review. You can also manage Ghana delivery addresses on Profile. Keep the card details accurate. Checkout can require them.",
         mock: "ghana-card",
         highlight: "ghana-save",
         route: "/dashboard/profile?view=verification",
@@ -447,7 +447,7 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
   {
     id: "chat",
     title: "Live support chat",
-    summary: "Sign in, then message the team with text, photos, files, or a voice note.",
+    summary: "Ask SPARK or a teammate. No account required. Add a photo or document if it helps.",
     duration: "3 steps",
     icon: "chat",
     accent: "brand",
@@ -455,26 +455,25 @@ export const PLATFORM_GUIDE_JOURNEYS: GuideJourney[] = [
     steps: [
       {
         id: "chat-open",
-        title: "Open Customer Service Live Support",
+        title: "Open Live Support Chat",
         tap: "Go to Live Support Chat from the home footer, or open /chat.",
         detail:
-          "Live support is signed-in only so the conversation is tied to your account and the team can help you securely. Guests see Create Account and Sign in first. You can still browse inventory, parts, and this FAQ without chatting.",
-        mock: "chat-gate",
-        highlight: "create-account",
+          "Guests can chat without an account or a name. SPARK answers how the public site works. A teammate can join the same thread. Sign in only if you want the chat saved to your dashboard.",
+        mock: "chat-thread",
+        highlight: "composer",
         route: "/chat",
         routeLabel: "Open live support",
       },
       {
         id: "chat-send",
         title: "Send a message the team can act on",
-        tap: "Type in the composer, or tap the round mic once to record and again to send.",
+        tap: "Type in the composer. Attach an image or document if it helps.",
         detail:
-          "You can send text, images, video, documents, and voice notes. Include the car slug, part OEM, or order reference when you have one. Messages update in real time when configured, with a quick refresh otherwise.",
+          "You can send text, images, and documents. Include the car listing, part OEM, or order reference when you have one. SPARK will not quote prices or run paid tools from chat.",
         mock: "chat-thread",
         highlight: "composer",
         route: "/chat",
         routeLabel: "Open live support",
-        needsAccount: true,
       },
       {
         id: "chat-continue",

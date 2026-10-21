@@ -125,7 +125,7 @@ export function LazyVideo({
   );
 
   const posterUrl = poster?.trim()
-    ? optimizeCloudinaryUrl(poster.trim(), "galleryStrip")
+    ? optimizeCloudinaryUrl(poster.trim(), "posterStage")
     : undefined;
 
   const thumbSrc = posterUrl ?? VEHICLE_IMAGE_PLACEHOLDER_SRC;
@@ -163,10 +163,13 @@ export function LazyVideo({
               src={thumbSrc}
               alt=""
               fill
-              loading="lazy"
+              loading={featured ? "eager" : "lazy"}
+              priority={featured}
+              imagePlaceholder
               className="object-cover"
               sizes="(max-width:768px) 100vw, 50vw"
-              deliveryPreset={posterUrl ? "galleryStrip" : "none"}
+              deliveryPreset={posterUrl ? "posterStage" : "none"}
+              chunkPriority={featured ? "visible" : "idle"}
             />
             <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
               <CirclePlay className="size-14 text-white drop-shadow-md" strokeWidth={1.25} aria-hidden />

@@ -236,7 +236,7 @@ export async function createPartsWalletOrder(input: {
   const receiptReference = createReceiptReference();
   const lineTitle = (i: (typeof normalizedItems)[number]) => {
     const extra = formatOptionsLine(i.options ?? {});
-    return extra ? `${i.part.title} — ${extra}` : i.part.title;
+    return extra ? `${i.part.title}. ${extra}` : i.part.title;
   };
   const receiptLineItems = normalizedItems.map((i) => ({
     title: lineTitle(i),
@@ -251,7 +251,7 @@ export async function createPartsWalletOrder(input: {
       (leg.chinaFeeGhs ?? 0) > 0
     ) {
       receiptLineItems.push({
-        title: `International shipping — ${leg.legLabel} (${leg.chinaShippingChoice === "SEA" ? "Sea" : "Air"})`,
+        title: `International shipping. ${leg.legLabel} (${leg.chinaShippingChoice === "SEA" ? "Sea" : "Air"})`,
         quantity: 1,
         unitPrice: leg.chinaFeeGhs!,
         total: leg.chinaFeeGhs!,
@@ -631,7 +631,7 @@ export async function createPartsPaystackPendingOrder(
   const receiptReference = createReceiptReference();
   const lineTitle = (i: (typeof normalizedItems)[number]) => {
     const extra = formatOptionsLine(i.options ?? {});
-    return extra ? `${i.part.title} — ${extra}` : i.part.title;
+    return extra ? `${i.part.title}. ${extra}` : i.part.title;
   };
 
   const addressSnapshot: Prisma.InputJsonValue = {

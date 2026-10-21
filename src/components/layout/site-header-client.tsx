@@ -1,7 +1,8 @@
 "use client";
 
-import { Activity, Bell, ChevronDown, Home, LayoutDashboard, LogOut, Menu, UserCircle2 } from "lucide-react";
+import { Activity, Bell, ChevronDown, Compass, Home, LayoutDashboard, LogOut, Menu, UserCircle2 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
 import { toast } from "sonner";
@@ -161,9 +162,31 @@ export function SiteHeaderClient({
                   <Activity className="size-4" aria-hidden /> System health
                 </DropdownMenuItem>
               ) : null}
+              <DropdownMenuSeparator className="bg-border dark:bg-white/10" />
+              <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => router.push("/faq#platform-guide")}>
+                <Compass className="size-4" aria-hidden /> Platform Guide
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
+            {!isLoggedIn ? (
+              <>
+                <Link
+                  href="/login#email"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-sm transition hover:border-[var(--brand)]/45 hover:bg-muted sm:px-3 sm:text-sm dark:border-white/20 dark:bg-white/[0.06] dark:text-zinc-100"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/register#phone"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] px-2.5 text-xs font-semibold text-black shadow-[0_0_22px_-10px_rgba(20,216,230,0.7)] transition hover:opacity-90 sm:px-3 sm:text-sm"
+                >
+                  <span className="sm:hidden">Join</span>
+                  <span className="hidden sm:inline">Create account</span>
+                </Link>
+              </>
+            ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:border-[var(--brand)]/45 hover:bg-muted dark:border-white/20 dark:bg-gradient-to-b dark:from-white/[0.12] dark:to-white/[0.04] dark:text-zinc-100 dark:shadow-[0_0_26px_-14px_rgba(20,216,230,0.8)] dark:hover:bg-white/[0.12]"
@@ -313,6 +336,7 @@ export function SiteHeaderClient({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
 
         <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">

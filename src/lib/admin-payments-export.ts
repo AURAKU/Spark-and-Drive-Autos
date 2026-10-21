@@ -45,7 +45,7 @@ export function buildPaymentsIntelExportXlsHtml(rows: Awaited<ReturnType<typeof 
   });
   return `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>
 <table border="1">
-<tr><th colspan="8">Payment intelligence — ${escapeXml(label)} (${rows.length} row${rows.length === 1 ? "" : "s"})</th></tr>
+<tr><th colspan="8">Payment intelligence. ${escapeXml(label)} (${rows.length} row${rows.length === 1 ? "" : "s"})</th></tr>
 <tr>${header.map((h) => `<th>${escapeXml(h)}</th>`).join("")}</tr>
 ${trs.join("\n")}
 </table>

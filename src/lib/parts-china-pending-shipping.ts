@@ -78,7 +78,7 @@ async function settleShipmentInTx(
     data: {
       userId: args.userId,
       type: NotificationType.SHIPPING,
-      title: "Pre-order (China) — shipping selected",
+      title: "Pre-order (China). Shipping selected",
       body: "Your international leg is confirmed. Track updates under Shipping & delivery.",
       href: "/dashboard/shipping",
     },

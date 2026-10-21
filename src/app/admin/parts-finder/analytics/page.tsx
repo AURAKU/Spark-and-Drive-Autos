@@ -52,7 +52,7 @@ export default async function AdminPartsFinderAnalyticsPage() {
     <div>
       <PageHeading variant="dashboard">Parts Finder · Operations analytics</PageHeading>
       <p className="mt-2 text-sm text-muted-foreground">
-        All figures are computed from persisted sessions, conversions, memberships, and payments — no sampled placeholders.
+        All figures are computed from persisted sessions, conversions, memberships, and payments. No sampled placeholders.
       </p>
       <p className="mt-3 text-xs">
         <Link href="/admin/parts-finder" className="text-[var(--brand)] hover:underline">
@@ -84,7 +84,7 @@ export default async function AdminPartsFinderAnalyticsPage() {
           <PartsFinderStatCard
             label="Suspended"
             value={a.membership.suspended}
-            hint="Admin suspended — search blocked."
+            hint="Admin suspended. Search blocked."
           />
           <PartsFinderStatCard
             label="Membership revenue (GHS)"

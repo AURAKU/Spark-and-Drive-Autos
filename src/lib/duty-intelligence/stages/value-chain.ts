@@ -51,7 +51,7 @@ export async function resolveExchangeRate(params: {
       fromCurrency: "GHS",
       effectiveDate: new Date().toISOString(),
       lineItems,
-      notes: ["FOB already in GHS — no conversion required."],
+      notes: ["FOB already in GHS. No conversion required."],
     };
   }
 

@@ -14,13 +14,13 @@ type VideoLike = {
 export function resolveCarVideoPosterUrl(video: VideoLike, firstCarImageUrl?: string | null): string {
   const thumb = video.thumbnailUrl?.trim();
   if (thumb) {
-    return isCloudinaryMediaUrl(thumb) ? optimizeCloudinaryUrl(thumb, "galleryStrip") : thumb;
+    return isCloudinaryMediaUrl(thumb) ? optimizeCloudinaryUrl(thumb, "posterStage") : thumb;
   }
   const derived = cloudinaryVideoFramePosterUrl(video.url);
-  if (derived) return optimizeCloudinaryUrl(derived, "galleryStrip");
+  if (derived) return derived;
   const fallback = firstCarImageUrl?.trim();
   if (fallback) {
-    return isCloudinaryMediaUrl(fallback) ? optimizeCloudinaryUrl(fallback, "card") : fallback;
+    return isCloudinaryMediaUrl(fallback) ? optimizeCloudinaryUrl(fallback, "posterStage") : fallback;
   }
   return VEHICLE_IMAGE_PLACEHOLDER_SRC;
 }

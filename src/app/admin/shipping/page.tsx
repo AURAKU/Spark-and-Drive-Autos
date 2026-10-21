@@ -129,7 +129,7 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
           </PageHeading>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
             Flow-based tracking for parts &amp; accessories (Ghana stock vs China stock) and cars (Ghana vs China / in
-            transit). The calendar uses <span className="text-zinc-200">order created</span> time — match it with payment
+            transit). The calendar uses <span className="text-zinc-200">order created</span> time. Match it with payment
             intelligence for one timeline.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">

@@ -117,7 +117,7 @@ export function PartForm({
 
   useEffect(() => {
     if (state?.ok && state.id && mode === "create") {
-      toast.success("Part created — add more photos and videos below");
+      toast.success("Part created. Add more photos and videos below");
       if (onCreated) {
         onCreated(state.id);
         return;
@@ -320,7 +320,7 @@ export function PartForm({
         <p className="mt-2 text-xs text-zinc-500">
           Labeled lines (e.g. <span className="font-mono text-zinc-400">OEM:</span>,{" "}
           <span className="font-mono text-zinc-400">selling price: GHS 350</span>) take priority. Values stop at commas or the
-          next label. Heuristic rows are marked—please verify. Use <span className="font-medium text-zinc-300">Overwrite</span>{" "}
+          next label. Heuristic rows are marked. Please verify. Use <span className="font-medium text-zinc-300">Overwrite</span>{" "}
           only when you intend to replace fields you already filled.
         </p>
       </div>
@@ -435,7 +435,7 @@ export function PartForm({
         amountName="supplierCostAmount"
         currencyName="supplierCostCurrency"
         label="Supplier / distributor cost (optional)"
-        description="Your landed or invoice cost — stored as RMB for margin; not shown to customers."
+        description="Your landed or invoice cost. Stored as RMB for margin; not shown to customers."
         defaultAmount={supplierSeed?.amount ?? part?.supplierDisplayAmount ?? undefined}
         defaultCurrency={supplierSeed?.currency ?? part?.supplierCostCurrency ?? "GHS"}
         required={false}
@@ -492,14 +492,14 @@ export function PartForm({
           name="internalNotes"
           rows={3}
           className="mt-1"
-          placeholder="Admin-only — not on the storefront"
+          placeholder="Admin-only. Not on the storefront"
           defaultValue={part?.internalNotes ?? ""}
         />
       </div>
 
-      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Internal — supplier / distributor</p>
+      <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Internal. Supplier / distributor</p>
       <p className="sm:col-span-2 text-xs text-zinc-500">
-        Admin-only — not shown on the storefront. Use to record where you sourced the product and a contact number for your
+        Admin-only. Not shown on the storefront. Use to record where you sourced the product and a contact number for your
         own follow-up.
       </p>
       <div className="sm:col-span-2">
@@ -583,7 +583,7 @@ export function PartForm({
             defaultChecked={part?.stockStatusLocked ?? false}
             className="rounded border-white/20"
           />
-          Lock stock status (manual override — required for &quot;Pre Order on Request&quot;)
+          Lock stock status (manual override. Required for &quot;Pre Order on Request&quot;)
         </label>
       </div>
       <div>
@@ -649,7 +649,7 @@ export function PartForm({
           <p className="text-sm font-medium text-white">Photos and videos</p>
           <p className="mt-1 text-xs text-zinc-500">
             Use the media panel below this form to upload multiple images and videos, set the cover, and reorder
-            gallery items — the same flow as car inventory.
+            gallery items. The same flow as car inventory.
           </p>
           {part?.coverImageUrl ? (
             <>

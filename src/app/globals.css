@@ -880,3 +880,277 @@
   }
 }
 
+/* About showroom — in-scene motion (road sweep, bay pulse, ken burns) */
+.sda-about-showcase {
+  isolation: isolate;
+}
+
+.sda-about-showcase-img {
+  transform-origin: 50% 58%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sda-about-showcase {
+    animation: sda-about-frame-glow 4.4s ease-in-out infinite;
+  }
+
+  .sda-about-showcase-img {
+    will-change: transform;
+    animation: sda-about-kenburns 16s ease-in-out infinite alternate;
+  }
+
+  .sda-about-showcase-sweep,
+  .sda-about-showcase-road,
+  .sda-about-showcase-lane,
+  .sda-about-showcase-bay,
+  .sda-about-showcase-headlamp {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .sda-about-showcase-sweep {
+    top: -18%;
+    bottom: -18%;
+    width: 22%;
+    left: -30%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 28%,
+      rgba(255, 255, 255, 0.62) 50%,
+      color-mix(in srgb, var(--brand) 70%, white) 58%,
+      rgba(255, 255, 255, 0.18) 72%,
+      transparent 100%
+    );
+    transform: skewX(-24deg);
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: sda-about-sweep 3.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .sda-about-showcase-road {
+    left: -28%;
+    bottom: 13%;
+    height: 16%;
+    width: 48%;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--brand) 78%, transparent),
+      rgba(255, 255, 255, 0.55),
+      transparent
+    );
+    filter: blur(12px);
+    mix-blend-mode: screen;
+    animation: sda-about-road 2.7s ease-in-out infinite;
+  }
+
+  .sda-about-showcase-lane {
+    left: 8%;
+    right: 8%;
+    bottom: 20%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--brand) 0%, transparent) 20%,
+      color-mix(in srgb, var(--brand) 85%, white) 50%,
+      transparent 80%
+    );
+    opacity: 0;
+    filter: blur(0.4px);
+    animation: sda-about-lane 2.7s ease-in-out infinite 0.18s;
+  }
+
+  .sda-about-showcase-bay {
+    left: 50%;
+    top: 47%;
+    width: 46%;
+    height: 48%;
+    border-radius: 999px;
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--brand) 55%, transparent) 0%,
+      color-mix(in srgb, var(--brand) 18%, transparent) 42%,
+      transparent 72%
+    );
+    mix-blend-mode: screen;
+    animation: sda-about-bay 3.4s ease-in-out infinite;
+  }
+
+  .sda-about-showcase-headlamp {
+    top: 49%;
+    width: 9%;
+    height: 10%;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, color-mix(in srgb, var(--brand) 50%, transparent) 45%, transparent 72%);
+    mix-blend-mode: screen;
+    filter: blur(6px);
+    animation: sda-about-headlamp 2.2s ease-in-out infinite;
+  }
+
+  .sda-about-showcase-headlamp--left {
+    left: 41%;
+  }
+
+  .sda-about-showcase-headlamp--right {
+    left: 50%;
+    animation-delay: 0.28s;
+  }
+}
+
+@keyframes sda-about-kenburns {
+  0% {
+    transform: scale(1.05) translate3d(-1.4%, 0.8%, 0);
+  }
+  100% {
+    transform: scale(1.14) translate3d(1.6%, -1.1%, 0);
+  }
+}
+
+@keyframes sda-about-sweep {
+  0% {
+    left: -32%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.95;
+  }
+  72% {
+    opacity: 0.8;
+  }
+  100% {
+    left: 118%;
+    opacity: 0;
+  }
+}
+
+@keyframes sda-about-road {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(210%);
+    opacity: 0;
+  }
+}
+
+@keyframes sda-about-lane {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(-8%);
+  }
+  35% {
+    opacity: 0.7;
+  }
+  70% {
+    opacity: 0;
+    transform: translateX(10%);
+  }
+}
+
+@keyframes sda-about-bay {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  50% {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes sda-about-headlamp {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.18);
+  }
+}
+
+.sda-chat-page {
+  letter-spacing: -0.011em;
+}
+
+.sda-live-chat {
+  font-feature-settings: "ss01" on, "cv11" on;
+}
+
+.sda-live-chat textarea,
+.sda-live-chat input {
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.sda-chat-thread {
+  background:
+    radial-gradient(120% 80% at 12% 0%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 56%),
+    linear-gradient(180deg, rgba(9, 12, 16, 0.72), rgba(9, 12, 16, 0.28));
+}
+
+:root:not(.dark) .sda-chat-thread {
+  background: #f4f4f5;
+}
+
+@keyframes sda-about-frame-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 48px -12px rgba(20, 216, 230, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 64px -8px rgba(20, 216, 230, 0.62);
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    overflow: visible !important;
+    font-size: 12px !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .duty-report-sheet,
+  .duty-report-sheet * {
+    visibility: visible !important;
+  }
+
+  .duty-report-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 186mm;
+    max-width: none;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .duty-report-actions,
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+

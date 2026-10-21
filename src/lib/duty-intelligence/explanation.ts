@@ -28,7 +28,7 @@ export function buildEstimateExplanation(params: {
     uncertaintyReasons.push("Classification or rule data requires admin review before relying on the total");
   }
   if (params.calibration.cohortSize < 3) {
-    uncertaintyReasons.push(`Only ${params.calibration.cohortSize} similar verified case(s) — range reflects estimation uncertainty`);
+    uncertaintyReasons.push(`Only ${params.calibration.cohortSize} similar verified case(s). Range reflects estimation uncertainty`);
   }
   if (params.estimateRange.bandPct > 0) {
     uncertaintyReasons.push(`Estimate band ±${Math.round(params.estimateRange.bandPct * 100)}% based on cohort variance and data completeness`);
@@ -51,7 +51,7 @@ export function buildEstimateExplanation(params: {
 
   const whyRangeShown =
     params.estimateRange.bandPct === 0
-      ? "Exact verified profile — deterministic rule set reproduced verified assessment lines."
+      ? "Exact verified profile. Deterministic rule set reproduced verified assessment lines."
       : "A range is shown because customs valuation, ancillary fees, or classification may differ from similar cases.";
 
   const couldChange = [

@@ -218,7 +218,7 @@ export function PartsFinderMembershipPanel({ initial }: { initial: PartsFinderMe
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--brand)]">Activation analysis</p>
-              <p className="mt-0.5 text-xs text-zinc-500">Live sync with payment status — updates when your provider confirms.</p>
+              <p className="mt-0.5 text-xs text-zinc-500">Live sync with payment status. Updates when your provider confirms.</p>
             </div>
             {shouldPoll ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--brand)]">

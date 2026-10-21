@@ -387,7 +387,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "This vehicle has an active reservation deposit. Complete the remaining balance with our team — online full payment cannot replace that flow yet.",
+              "This vehicle has an active reservation deposit. Complete the remaining balance with our team. Online full payment cannot replace that flow yet.",
             code: "BALANCE_PAYMENT_ONLINE_UNAVAILABLE",
           },
           { status: 409 },

@@ -20,6 +20,7 @@ export default async function DutyReportPage(props: {
   const { id } = await props.params;
   const sp = await props.searchParams;
   const access = firstQuery(sp, "access");
+  const autoPrint = firstQuery(sp, "print") === "1";
   const loaded = await loadAuthorizedDutyReport(id, access);
 
   if (!loaded.ok) {
@@ -43,7 +44,7 @@ export default async function DutyReportPage(props: {
 
   return (
     <div className="px-3 py-6 sm:px-6 print:p-0">
-      <DutyReportActions calculationId={id} accessToken={access} backHref="/inventory" />
+      <DutyReportActions calculationId={id} accessToken={access} backHref="/inventory" autoPrint={autoPrint} />
       <DutyReportDocument report={loaded.report} />
     </div>
   );

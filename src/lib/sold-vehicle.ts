@@ -14,10 +14,10 @@ import { recordSecurityObservation } from "@/lib/security-observation";
 const CHUNK = 200;
 
 const BROADCAST_SOLD_BODY =
-  "This vehicle is fully paid and is no longer available for purchase here. Looking for something similar? Contact Spark and Drive Autos support—we’ll help you explore comparable options.";
+  "This vehicle is fully paid and is no longer available for purchase here. Looking for something similar? Contact Spark and Drive Autos support. We’ll help you explore comparable options.";
 
 const BROADCAST_RESERVED_BODY =
-  "This listing has been reserved by a buyer completing a purchase. Similar vehicles may be available—contact our support team for details.";
+  "This listing has been reserved by a buyer completing a purchase. Similar vehicles may be available. Contact our support team for details.";
 
 /** True if this vehicle already has a successful payment on a car order (blocks another buyer). */
 export async function carHasSuccessfulVehiclePayment(carId: string): Promise<boolean> {

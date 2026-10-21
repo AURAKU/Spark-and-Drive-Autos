@@ -80,7 +80,7 @@ export async function maybeNotifyAdminsGhanaLowStock(part: {
     part.stockQty <= 1 ? "Critical" : part.stockQty <= 2 ? "Very low" : part.stockQty <= 3 ? "Low" : "Restock soon";
 
   const title = `Ghana stock · ${tier} (${part.stockQty} left)`;
-  const body = `${marker}\n${part.title} — ${part.stockQty} unit(s) left in Ghana. Restock to avoid stockout.`;
+  const body = `${marker}\n${part.title}. ${part.stockQty} unit(s) left in Ghana. Restock to avoid stockout.`;
 
   await prisma.notification.createMany({
     data: adminIds.map((userId) => ({

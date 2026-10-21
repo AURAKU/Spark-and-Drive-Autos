@@ -180,7 +180,7 @@ function buildFallbackCandidates(n: NormalizedPartsQuery): ExternalCandidate[] {
   const part = n.partIntent || "replacement component";
 
   const seeds = [
-    `${vehicle ? `${vehicle} · ` : ""}${part} — supplier listings and cross-references`,
+    `${vehicle ? `${vehicle} · ` : ""}${part}. Supplier listings and cross-references`,
     `${vehicle ? `${vehicle} ` : ""}compatible ${part.toLowerCase()} options (market scan)`,
     `${vehicle ? `${vehicle} ` : ""}service parts reference overview`,
     n.vinTail ? `VIN-linked parts intelligence · tail ${n.vinTail}` : "",
@@ -190,7 +190,7 @@ function buildFallbackCandidates(n: NormalizedPartsQuery): ExternalCandidate[] {
   return seeds.slice(0, 5).map((title) => ({
     title,
     snippet:
-      "Configure SERPER_API_KEY for live web ingestion. This preview ranks intent only—confirm fitment before ordering.",
+      "Configure SERPER_API_KEY for live web ingestion. This preview ranks intent only. Confirm fitment before ordering.",
     sourceHint: "preview",
     ingestionSource: "FALLBACK_PREVIEW" as const,
     thumbnailUrl: null,

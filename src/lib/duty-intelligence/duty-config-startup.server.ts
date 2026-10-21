@@ -28,7 +28,7 @@ export async function runDutyConfigStartupSync(): Promise<RunDutyConfigStartupRe
     }
 
     console.warn(
-      "[duty-config-startup] Ghana duty configuration incomplete — running idempotent seed:",
+      "[duty-config-startup] Ghana duty configuration incomplete. Running idempotent seed:",
       health.missing.join(", "),
     );
 

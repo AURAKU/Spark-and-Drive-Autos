@@ -272,13 +272,13 @@ export async function transitionPaymentStatus(paymentId: string, opts: Transitio
       const vehicleLabel = payment.order.car?.title ?? "your vehicle";
       if (payment.paymentType === PaymentType.RESERVATION_DEPOSIT) {
         title = "Reservation confirmed";
-        body = `Your deposit for ${vehicleLabel} is confirmed. This vehicle is now reserved for you while you complete your purchase—follow the next steps on your order. Need help or a similar model? Contact our support team for details.`;
+        body = `Your deposit for ${vehicleLabel} is confirmed. This vehicle is now reserved for you while you complete your purchase. Follow the next steps on your order. Need help or a similar model? Contact our support team for details.`;
       } else if (payment.paymentType === PaymentType.FULL) {
         title = "Vehicle fully paid";
         body = `Your payment for ${vehicleLabel} is confirmed; the vehicle is recorded as fully paid. Thank you. Interested in another unit? Contact support to arrange similar options.`;
       }
       if (payment.provider === PaymentProvider.MANUAL && payment.orderId) {
-        body += ` Your official purchase receipt is ready—open your order to confirm the details and download your PDF receipt.`;
+        body += ` Your official purchase receipt is ready. Open your order to confirm the details and download your PDF receipt.`;
         notificationHref = `/dashboard/orders/${payment.orderId}`;
       }
     }
@@ -426,7 +426,7 @@ export async function recordPaymentProofSubmission(paymentId: string, userId: st
         actorUserId: userId,
         note:
           next !== prev
-            ? "Payment screenshot submitted — under review"
+            ? "Payment screenshot submitted. Under review"
             : "Additional payment screenshot uploaded",
       },
     });
@@ -440,7 +440,7 @@ export async function recordPaymentProofSubmission(paymentId: string, userId: st
         title: "Payment proof received",
         body:
           next !== prev
-            ? "We received your payment proof. Our team will review and confirm it—once approved, your purchase is finalized and your receipt will be available on your order."
+            ? "We received your payment proof. Our team will review and confirm it. Once approved, your purchase is finalized and your receipt will be available on your order."
             : "An additional screenshot was added to your payment record.",
         href: `/dashboard/payments/${paymentId}`,
       },

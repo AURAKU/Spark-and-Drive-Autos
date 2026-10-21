@@ -100,7 +100,7 @@ export function ShippingHubClient({
             <h2 className="mt-1 text-xl font-semibold text-white sm:text-2xl">Shipment control center</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
               Use the filters above to focus on parts (Ghana vs China stock) or cars (Ghana vs China / in transit). Expand a
-              row for milestones and fee/ETA edits — customer-visible updates sync to dashboards instantly.
+              row for milestones and fee/ETA edits. Customer-visible updates sync to dashboards instantly.
             </p>
             <a
               href={paymentsIntelHref}
@@ -204,7 +204,7 @@ export function ShippingHubClient({
             <Package className="mx-auto size-10 text-zinc-600" aria-hidden />
             <p className="mt-3 text-sm font-medium text-zinc-400">No shipments in this view</p>
             <p className="mt-1 text-xs text-zinc-600">
-              Adjust the date filter or source filter — or open Payment intelligence to confirm orders in range.
+              Adjust the date filter or source filter. Or open Payment intelligence to confirm orders in range.
             </p>
           </div>
         ) : (
@@ -277,7 +277,7 @@ export function ShippingHubClient({
                   <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Fulfilment flow</p>
                     {row.kind === "PARTS_GHANA" ? (
-                      <p className="mt-1 text-[11px] text-zinc-500">Ghana stock — 6 customer-facing milestones (see reference button above).</p>
+                      <p className="mt-1 text-[11px] text-zinc-500">Ghana stock. 6 customer-facing milestones (see reference button above).</p>
                     ) : null}
                     <div className="sda-chip-scroll mt-3 pb-1">
                       <ShipmentFlowByKind kind={row.kind} currentStage={row.currentStage} />

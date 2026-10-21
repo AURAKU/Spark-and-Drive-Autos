@@ -30,17 +30,17 @@ export function resolveImportDutyRateForPowertrain(params: {
     if (applyEvDutyWaiver) {
       return { rate: 0, label: "Modeled 0% import duty (EV relief scenario)." };
     }
-    return { rate: GHANA_EV_PASSENGER_IMPORT_DUTY_REF, label: `Reference ${(GHANA_EV_PASSENGER_IMPORT_DUTY_REF * 100).toFixed(0)}% on CIF — BEV.` };
+    return { rate: GHANA_EV_PASSENGER_IMPORT_DUTY_REF, label: `Reference ${(GHANA_EV_PASSENGER_IMPORT_DUTY_REF * 100).toFixed(0)}% on CIF. BEV.` };
   }
   if (powertrain === "HYBRID") {
     const rate = g * 0.72 + GHANA_EV_PASSENGER_IMPORT_DUTY_REF * 0.28;
-    return { rate, label: `Blended ~${(rate * 100).toFixed(1)}% — hybrid.` };
+    return { rate, label: `Blended ~${(rate * 100).toFixed(1)}%. Hybrid.` };
   }
   if (powertrain === "PLUGIN_HYBRID") {
     const rate = g * 0.48 + GHANA_EV_PASSENGER_IMPORT_DUTY_REF * 0.52;
-    return { rate, label: `Blended ~${(rate * 100).toFixed(1)}% — PHEV.` };
+    return { rate, label: `Blended ~${(rate * 100).toFixed(1)}%. PHEV.` };
   }
-  return { rate: g, label: `CIF × ${(g * 100).toFixed(0)}% — ICE age band (~${vehicleAgeYears}y).` };
+  return { rate: g, label: `CIF × ${(g * 100).toFixed(0)}%. ICE age band (~${vehicleAgeYears}y).` };
 }
 
 export const dutyEstimateInputSchema = z
@@ -122,6 +122,6 @@ export function computeDutyEstimate(input: DutyEstimateInput, referenceYear = ne
     lines,
     totalGhs: Math.round(lines.reduce((s, l) => s + l.amountGhs, 0) * 100) / 100,
     methodologyNote:
-      "Sync fallback estimate — use the Duty Intelligence API for full landed cost with port, shipping, and agent charges.",
+      "Sync fallback estimate. Use the Duty Intelligence API for full landed cost with port, shipping, and agent charges.",
   };
 }

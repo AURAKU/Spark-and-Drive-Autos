@@ -13,7 +13,7 @@ export default function AdminHealthPage() {
         <p className="mt-2 text-sm text-zinc-500">
           Live readiness from <code className="rounded bg-white/10 px-1 text-xs">/api/admin/health/readiness</code>.
           <code className="ml-2 rounded bg-white/10 px-1 text-xs">ok</code> means database, Paystack, Cloudinary, and
-          active legal policy — not every optional integration.
+          active legal policy. Not every optional integration.
         </p>
         <p className="mt-2 text-sm text-zinc-500">
           Infrastructure variables and provider tests:{" "}

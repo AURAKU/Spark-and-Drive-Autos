@@ -54,7 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Back to user view
             </ViewModeButton>
             <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
-              Returns to the customer dashboard — same session, same account.
+              Returns to the customer dashboard. Same session, same account.
             </p>
           </div>
           <AdminSidebarNav links={links} />

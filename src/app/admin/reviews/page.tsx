@@ -60,7 +60,7 @@ export default async function AdminReviewsPage(props: { searchParams: SearchPara
       <PageHeading variant="dashboard">Review management</PageHeading>
       <p className="mt-2 max-w-3xl text-sm text-zinc-400">
         Moderate customer submissions for parts and accessories, publish reviews on behalf of a buyer account, reassign
-        authorship, or remove content. The storefront and profile only show normal customer reviews — attribution never
+        authorship, or remove content. The storefront and profile only show normal customer reviews. Attribution never
         shows as staff.
       </p>
       <div className="mt-8">

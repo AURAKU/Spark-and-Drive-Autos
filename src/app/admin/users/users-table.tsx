@@ -99,7 +99,7 @@ export function UsersTable({
 
       {qRaw ? (
         <p className="text-sm text-zinc-400">
-          Filtered by <span className="font-mono text-zinc-200">{searchParams.get("q")}</span> — showing{" "}
+          Filtered by <span className="font-mono text-zinc-200">{searchParams.get("q")}</span>. Showing{" "}
           {visibleUsers.length} of {users.length}.{" "}
           <Link href="/admin/users" className="text-[var(--brand)] hover:underline">
             Clear filter
@@ -223,7 +223,7 @@ export function UsersTable({
                       {u.legalAcceptedAt ? (
                         <span title="Last profile bulk legal acceptance recorded">{u.legalAcceptedAt.slice(0, 10)}</span>
                       ) : (
-                        <span title="No bulk acceptance timestamp yet (may still have row-level acceptances)">—</span>
+                        <span title="No bulk acceptance timestamp yet (may still have row-level acceptances)">. </span>
                       )}
                     </td>
                     <td className="px-3 py-3 align-top text-xs">
@@ -245,7 +245,7 @@ export function UsersTable({
                           </p>
                         </>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">. </span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 align-top tabular-nums text-foreground">{u.walletBalance.toFixed(2)}</td>
@@ -267,10 +267,10 @@ export function UsersTable({
                             )}
                             title={
                               u.messagingBlocked
-                                ? "Messaging blocked — open Live Support to manage"
+                                ? "Messaging blocked. Open Live Support to manage"
                                 : u.supportChatThreadId
                                   ? "Open latest chat thread"
-                                  : "Live Support — no thread yet; open hub"
+                                  : "Live Support. No thread yet; open hub"
                             }
                             aria-label={
                               u.messagingBlocked
@@ -354,7 +354,7 @@ export function UsersTable({
                             ) : null}
                           </div>
                         ) : (
-                          <p className="text-[10px] text-muted-foreground">Super admin — limited actions.</p>
+                          <p className="text-[10px] text-muted-foreground">Super admin. Limited actions.</p>
                         )}
                         {canManagePrivileged ? (
                           <div className="flex w-full max-w-[20rem] flex-col items-end gap-1.5 border-t border-border/50 pt-2 dark:border-white/10">

@@ -204,7 +204,7 @@ export default async function PartsManagementPage(props: { searchParams: SearchP
       {tab === "catalog" && ghanaLowStockParts.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-amber-500/35 bg-amber-500/[0.12] px-4 py-4 text-sm">
           <p className="font-semibold text-amber-100">
-            Ghana stock alert — {ghanaLowStockParts.length} SKU{ghanaLowStockParts.length === 1 ? "" : "s"} between 1 and{" "}
+            Ghana stock alert. {ghanaLowStockParts.length} SKU{ghanaLowStockParts.length === 1 ? "" : "s"} between 1 and{" "}
             {GHANA_LOW_STOCK_ALERT_MAX} units (published, in Ghana)
           </p>
           <p className="mt-1 text-xs text-amber-200/80">

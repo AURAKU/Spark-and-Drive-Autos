@@ -151,7 +151,7 @@ export default async function AdminHome(props: { searchParams: SearchParams }) {
     <div>
       <PageHeading variant="dashboard">Command Center</PageHeading>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-        Live operational snapshot across vehicle inventory, parts, and payments — with quick actions to the workflows you
+        Live operational snapshot across vehicle inventory, parts, and payments. With quick actions to the workflows you
         use every day.
       </p>
       <div className="mt-10">

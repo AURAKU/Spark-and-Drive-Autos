@@ -379,7 +379,7 @@ export function PartsCartClient({
                   {selectedStockIssues.some((s) => s.id === row.id) && !isChinaPreOrderPart(row.part) ? (
                     <p className="mt-1 text-xs text-amber-200/90">
                       {row.part.stockQty < 1
-                        ? "This SKU is out of stock — remove it or contact support."
+                        ? "This SKU is out of stock. Remove it or contact support."
                         : `With your other selected lines for this product, total quantity is above in-stock units (${row.part.stockQty}). Lower a line or deselect an item.`}
                     </p>
                   ) : null}
@@ -463,7 +463,7 @@ export function PartsCartClient({
               />
               <span>
                 <span className="font-medium text-white">Pay immediately (Paystack)</span>
-                <span className="mt-0.5 block text-zinc-500">Card, mobile money, bank — via Paystack</span>
+                <span className="mt-0.5 block text-zinc-500">Card, mobile money, bank. Via Paystack</span>
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-2 text-xs has-[:checked]:border-[var(--brand)]/50 has-[:checked]:bg-[var(--brand)]/10">
@@ -497,7 +497,7 @@ export function PartsCartClient({
         {chinaQuoteReference ? (
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
             Overseas freight reference (~GHS {chinaQuoteReference.feeGhs.toLocaleString()}, {chinaQuoteReference.eta}
-            ) — not charged at checkout. Operations will confirm the international fee for separate payment.
+            ). Not charged at checkout. Operations will confirm the international fee for separate payment.
           </p>
         ) : null}
         {hasChinaSelected && hasBillableChinaSelected && !chinaQuotes ? (
@@ -508,7 +508,7 @@ export function PartsCartClient({
         ) : null}
         {chinaQuotes && hasBillableChinaSelected ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
-            <p className="text-xs font-semibold text-white">Overseas Stock — delivery preference</p>
+            <p className="text-xs font-semibold text-white">Overseas Stock. Delivery preference</p>
             <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
               Choose how we should plan the international leg. Your wallet charge is parts only; freight is quoted for
               reference and invoiced after confirmation. Pre-order lines follow the separate pre-order flow.

@@ -87,7 +87,7 @@ export default async function DashboardEstimatesPage(props: { searchParams: Sear
       <div>
         <PageHeading variant="dashboard">Duty Estimates</PageHeading>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Ghana import duty planning for your vehicles — prepared by Spark and Drive. These are not final customs
+          Ghana import duty planning for your vehicles. Prepared by Spark and Drive. These are not final customs
           assessments; they help you budget before clearance.
         </p>
       </div>
@@ -140,7 +140,7 @@ export default async function DashboardEstimatesPage(props: { searchParams: Sear
                     className="text-xs text-zinc-400 transition hover:text-[var(--brand)]"
                   >
                     Vehicle order <span className="font-mono text-zinc-300">{row.orderReference}</span>
-                    <span className="text-zinc-500"> — shipping, clearance &amp; duty payment requests</span>
+                    <span className="text-zinc-500">. Shipping, clearance &amp; duty payment requests</span>
                   </Link>
                 </div>
               ) : null}

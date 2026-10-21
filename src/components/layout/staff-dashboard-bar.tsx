@@ -26,7 +26,7 @@ export async function StaffDashboardBar() {
       <div className="border-b border-[var(--brand)]/15 bg-gradient-to-r from-[var(--brand)]/[0.07] via-transparent to-transparent px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-relaxed text-zinc-300 sm:text-sm">
-            <span className="font-medium text-zinc-200">Staff</span> — you land on the customer dashboard first. When
+            <span className="font-medium text-zinc-200">Staff</span>. You land on the customer dashboard first. When
             you&apos;re ready, switch to admin for operations. Same session and permissions.
           </p>
           <ViewModeButton targetMode="admin" redirectTo={href} className="w-full shrink-0 sm:w-auto">
@@ -41,7 +41,7 @@ export async function StaffDashboardBar() {
     <div className="border-b border-[var(--brand)]/15 bg-gradient-to-r from-[var(--brand)]/[0.07] via-transparent to-transparent px-4 py-3 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs leading-relaxed text-zinc-300 sm:text-sm">
-          <span className="font-medium text-zinc-200">Service assistant</span> — open the inbox to help customers with
+          <span className="font-medium text-zinc-200">Service assistant</span>. Open the inbox to help customers with
           inquiries and chat. Admin-only tools stay restricted.
         </p>
         <Link

@@ -94,7 +94,7 @@ export function runCalibrationLayer(params: {
       valuation: {
         method: "CONFIGURED",
         cohortSize: 0,
-        note: "No matching historical cohort — using configured freight/insurance and declared FOB.",
+        note: "No matching historical cohort. Using configured freight/insurance and declared FOB.",
       },
       adjustments: [],
       expectedVariancePct: 12,
@@ -149,7 +149,7 @@ export function runCalibrationLayer(params: {
       factor: 1,
       sampleCount: cohortSize,
       method: cohortSize >= threshold ? "TRIMMED_MEAN" : "MEDIAN_RATIO",
-      note: `Cohort median duty reference GHS ${Math.round(dutyMedian).toLocaleString()} — not applied to deterministic tax lines.`,
+      note: `Cohort median duty reference GHS ${Math.round(dutyMedian).toLocaleString()}. Not applied to deterministic tax lines.`,
       appliedTo: "CONFIDENCE",
     });
   }
@@ -182,7 +182,7 @@ export function runCalibrationLayer(params: {
       cohortSize,
       note:
         cohortSize < threshold
-          ? `Only ${cohortSize} similar case(s) available — insufficient for generalized model accuracy claims.`
+          ? `Only ${cohortSize} similar case(s) available. Insufficient for generalized model accuracy claims.`
           : `${cohortSize} similar cases used for valuation hints.`,
     },
     adjustments,

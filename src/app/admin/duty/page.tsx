@@ -196,7 +196,7 @@ export default async function AdminDutyPage(props: { searchParams: SearchParams 
         <PageHeading variant="dashboard">Duty tracking</PageHeading>
         <p className="sda-readable-muted mt-2 max-w-3xl text-sm leading-relaxed">
           Manage import duty for vehicle orders arriving in Ghana. Estimates come from Spark &amp; Drive Duty Intelligence
-          — final charges are determined by Ghana Customs at clearance. Link each case to sea freight, publish
+         . Final charges are determined by Ghana Customs at clearance. Link each case to sea freight, publish
           customer-visible updates, record assessed duty, and raise duty payment requests when ready.
         </p>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">

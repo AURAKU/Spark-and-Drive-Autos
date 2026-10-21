@@ -65,7 +65,7 @@ export async function AdminRolesReference() {
                     Admin access granted
                   </p>
                   {r.role === "CUSTOMER" ? (
-                    <p className="mt-1 text-xs text-zinc-500">None — storefront and personal dashboard only.</p>
+                    <p className="mt-1 text-xs text-zinc-500">None. Storefront and personal dashboard only.</p>
                   ) : r.role === "SUPER_ADMIN" ? (
                     <p className="mt-1 text-xs text-zinc-300">All admin pages ({ADMIN_PAGE_CATALOG.length}).</p>
                   ) : (

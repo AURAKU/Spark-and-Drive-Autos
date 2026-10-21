@@ -107,7 +107,7 @@ export function MotorcycleCreateMediaField({ value, onChange }: Props) {
     <div className="space-y-6">
       <div className="rounded-xl border border-border p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold">Cover photo *</h3>
-        <p className="mt-1 text-xs text-muted-foreground">Upload from your device — same flow as cars and parts inventory.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Upload from your device. Same flow as cars and parts inventory.</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/50 dark:border-white/15">
             <Upload className="size-4" />
@@ -154,7 +154,7 @@ export function MotorcycleCreateMediaField({ value, onChange }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold">Gallery photos</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Optional — uploaded when you publish.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Optional. Uploaded when you publish.</p>
           </div>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/50 dark:border-white/15">
             <Upload className="size-4" />

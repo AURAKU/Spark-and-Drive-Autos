@@ -446,7 +446,7 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
       </div>
       <div className="sm:col-span-2">
         <Label htmlFor="coverImagePublicId">Cover image Cloudinary public ID</Label>
-        <p className="mt-0.5 text-xs text-zinc-500">Optional — used for destructive deletes from Cloudinary later.</p>
+        <p className="mt-0.5 text-xs text-zinc-500">Optional. Used for destructive deletes from Cloudinary later.</p>
         <Input id="coverImagePublicId" name="coverImagePublicId" className="mt-1" />
       </div>
 
@@ -479,7 +479,7 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
           type="number"
           min={0}
           step="0.01"
-          placeholder="Optional — listing & checkout"
+          placeholder="Optional. Listing & checkout"
           className="mt-1"
         />
       </div>
@@ -491,12 +491,12 @@ export function NewCarForm({ onCreated }: NewCarFormProps) {
       <p className="sm:col-span-2 mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Tags &amp; structured data</p>
       <div className="sm:col-span-2">
         <Label htmlFor="tags">Badges / tags</Label>
-        <p className="mt-0.5 text-xs text-zinc-500">Comma-separated — e.g. Low mileage, One owner</p>
+        <p className="mt-0.5 text-xs text-zinc-500">Comma-separated. E.g. Low mileage, One owner</p>
         <Input id="tags" name="tags" placeholder="Tag one, Tag two" className="mt-1" />
       </div>
       <div className="sm:col-span-2">
         <Label htmlFor="specifications">Specifications JSON</Label>
-        <p className="mt-0.5 text-xs text-zinc-500">Object or array of label/value pairs — valid JSON only.</p>
+        <p className="mt-0.5 text-xs text-zinc-500">Object or array of label/value pairs. Valid JSON only.</p>
         <Textarea
           id="specifications"
           name="specifications"

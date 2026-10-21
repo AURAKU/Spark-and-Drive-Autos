@@ -195,6 +195,15 @@ test("buildDutyReportData for gasoline Jetour-style estimate", () => {
     Math.round(report.dutyLines.reduce((s, l) => s + l.payableAmount, 0) * 100) / 100,
     report.totals.estimatedDutyPayableGhs,
   );
+  assert.match(report.vehicleTitle, /2023 Jetour Dashing/);
+  assert.equal(report.company.brandName, "Spark & Drive Autos");
+  assert.equal(report.company.websiteHost, "www.sparkanddriveautos.com");
+  assert.equal(report.dutyLines[0]?.lineNo, "01");
+  assert.equal(report.dutyLines[0]?.rateLabel, "0.20");
+  assert.ok(report.specChips.some((c) => c.label === "Type" && c.value === "Passenger"));
+  assert.ok(report.totals.estimatedDutyPayableUsd != null);
+  assert.match(report.disclaimer, /Spark & Drive Autos/);
+  assert.equal(report.disclaimer.toLowerCase().includes("auto-taxes"), false);
 });
 
 test("buildDutyReportData for EV BYD-style estimate", () => {
@@ -280,6 +289,20 @@ test("access token authorizes matching calculation only", () => {
 
 test("PDF filename is sanitized", () => {
   assert.equal(dutyReportPdfFilename("DI-ABC/../../x"), "Spark-Drive-Duty-Estimate-DI-ABC-x.pdf");
+});
+
+test("official duty sheet PDF is Spark-branded and has no third-party marks", async () => {
+  const { buildDutyIntelligenceReportPdf } = await import("@/lib/duty-intelligence/report-pdf");
+  const report = buildDutyReportData({
+    calculationId: "calc_pdf",
+    reportReference: "SDA-TESTPDF",
+    generatedAt: "2026-10-21T00:00:00.000Z",
+    inputJson: sampleResult().inputs,
+    resultJson: sampleResult(),
+  });
+  const pdf = await buildDutyIntelligenceReportPdf(report);
+  assert.ok(pdf.byteLength > 2000);
+  assert.equal(Buffer.from(pdf).subarray(0, 4).toString(), "%PDF");
 });
 
 test("empty line items yield empty unique list", () => {

@@ -39,7 +39,7 @@ export default async function AdminEstimateNewPage(props: { searchParams: Promis
         <div>
           <PageHeading variant="dashboard">Create Duty Estimate</PageHeading>
           <p className="mt-2 text-sm text-zinc-400">
-            Per-vehicle Ghana import duty planning for clients — include ranges, landed cost, and the standard customs
+            Per-vehicle Ghana import duty planning for clients. Include ranges, landed cost, and the standard customs
             disclaimer.
           </p>
         </div>

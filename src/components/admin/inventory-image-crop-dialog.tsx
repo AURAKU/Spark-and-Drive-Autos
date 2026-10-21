@@ -56,7 +56,7 @@ export function InventoryImageCropDialog({
         <DialogHeader>
           <DialogTitle>Crop photo</DialogTitle>
           <DialogDescription className="text-zinc-400">
-            Drag to reposition, pinch or use the slider to zoom. Crop any region — no fixed aspect ratio.
+            Drag to reposition, pinch or use the slider to zoom. Crop any region. No fixed aspect ratio.
           </DialogDescription>
         </DialogHeader>
 

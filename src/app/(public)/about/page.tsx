@@ -1,31 +1,33 @@
 import Image from "next/image";
 
+import { AboutShowcase } from "@/components/brand/about-showcase";
 import { PageHeading, SectionHeading } from "@/components/typography/page-headings";
+
+const emblemBlendMask = {
+  WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 76%)",
+  maskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 76%)",
+} as const;
 
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 sm:py-16">
       <div className="flex flex-col items-center text-center">
         <div className="relative h-36 w-36 sm:h-44 sm:w-44">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-[18%] rounded-full bg-[var(--brand)]/18 blur-3xl dark:bg-[var(--brand)]/22"
+          />
           <Image
             src="/brand/about-logo-emblem.png"
             alt="Spark &amp; Drive Autos emblem"
             fill
-            className="object-contain"
+            className="object-contain dark:mix-blend-screen"
+            style={emblemBlendMask}
             sizes="(max-width: 640px) 9rem, 11rem"
             priority
           />
         </div>
-        <div className="relative mt-8 aspect-[16/9] w-full max-w-3xl overflow-hidden rounded-2xl border border-[var(--brand)]/30 bg-black/40 shadow-[0_0_48px_-12px_rgba(20,216,230,0.35)]">
-          <Image
-            src="/brand/about-brand-showcase.png"
-            alt="Spark &amp; Drive Autos brand illustration"
-            fill
-            className="object-cover object-center"
-            sizes="(max-width: 896px) 100vw, 896px"
-            priority
-          />
-        </div>
+        <AboutShowcase />
       </div>
 
       <PageHeading className="mt-12" align="center">
@@ -73,7 +75,7 @@ export default function AboutPage() {
         <SectionHeading>Our commitment</SectionHeading>
         <div className="mt-5 space-y-4 text-sm leading-relaxed text-zinc-300 sm:text-[0.9375rem]">
           <p>
-            We are committed to delivering a premium, responsible automotive experience—combining digital transparency
+            We are committed to delivering a premium, responsible automotive experience, combining digital transparency
             with hands-on customer support.
           </p>
           <p>

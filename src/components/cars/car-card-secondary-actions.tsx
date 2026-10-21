@@ -72,7 +72,7 @@ export function CarCardSecondaryActions({
     try {
       if (navigator.share) {
         try {
-          await navigator.share({ title: carTitle, text: `${carTitle} — Spark and Drive Autos`, url: shareUrl });
+          await navigator.share({ title: carTitle, text: `${carTitle}. Spark and Drive Autos`, url: shareUrl });
           toast.success("Link shared.");
           return;
         } catch (err) {

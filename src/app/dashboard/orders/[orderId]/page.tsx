@@ -165,8 +165,8 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
             </div>
           </dl>
           <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-            Complete the remaining balance before the due date. Pay offline via bank or MoMo as instructed by support —
-            online card checkout for the balance may not be available yet for reserved vehicles.
+            Complete the remaining balance before the due date. Pay offline via bank or MoMo as instructed by support.
+            Online card checkout for the balance may not be available yet for reserved vehicles.
           </p>
         </div>
       ) : null}
@@ -293,10 +293,10 @@ export default async function DashboardOrderDetailPage({ params }: Props) {
           <h2 className="text-lg font-semibold text-white">Shipping &amp; tracking</h2>
           <p className="mt-2 text-sm text-zinc-500">
             {order.orderStatus === "CANCELLED"
-              ? "This order was cancelled — no active shipment tracking."
+              ? "This order was cancelled. No active shipment tracking."
               : order.orderStatus === "DRAFT" || order.orderStatus === "PENDING_PAYMENT"
                 ? "Shipment tracking appears after checkout is completed and logistics are set up."
-                : "No shipment record is linked to this order yet. If you already paid, contact support — operations can attach logistics to your order."}
+                : "No shipment record is linked to this order yet. If you already paid, contact support. Operations can attach logistics to your order."}
           </p>
         </div>
       )}

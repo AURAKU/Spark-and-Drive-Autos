@@ -303,7 +303,7 @@ export async function POST(req: Request) {
     data: {
       userId: session.user.id,
       type: NotificationType.PAYMENT,
-      title: "Secure your vehicle — upload payment proof",
+      title: "Secure your vehicle. Upload payment proof",
       body:
         "Complete your payment using the bank, Alipay, or cash instructions on file. Then upload a clear screenshot or official receipt on your payment page so our team can verify it. Approval confirms your purchase and generates your official receipt.",
       href: `/dashboard/payments/${payment.id}`,

@@ -223,7 +223,7 @@ export function MotorcycleFastForm() {
       {step === 1 && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Add a cover photo from your device or camera. Crop any region before upload — no fixed aspect ratio.
+            Add a cover photo from your device or camera. Crop any region before upload. No fixed aspect ratio.
             More gallery media can be added on the edit page after saving.
           </p>
           <InventoryMediaSourcePicker

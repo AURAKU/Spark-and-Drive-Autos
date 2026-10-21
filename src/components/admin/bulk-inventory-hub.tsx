@@ -145,7 +145,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, page, totalPages
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h2 className="text-sm font-semibold text-white">Filter &amp; sort (this page)</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Up to 2,000 rows loaded. Export uses the same filters when no rows are ticked — tick rows to export only those
+          Up to 2,000 rows loaded. Export uses the same filters when no rows are ticked. Tick rows to export only those
           IDs.
         </p>
         <form className="mt-4 flex flex-wrap items-end gap-3" method="get">
@@ -252,7 +252,7 @@ export function BulkInventoryHub({ inventory, rows, totalCount, page, totalPages
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <h2 className="text-sm font-semibold text-white">Download template (CSV for Excel)</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            First row is headers — must match export. Leave <code className="rounded bg-black/40 px-1">id</code> empty to
+            First row is headers. Must match export. Leave <code className="rounded bg-black/40 px-1">id</code> empty to
             create; set <code className="rounded bg-black/40 px-1">id</code> to update an existing row.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">

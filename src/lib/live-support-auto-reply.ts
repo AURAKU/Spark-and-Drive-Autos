@@ -121,10 +121,16 @@ async function postIfEligible(threadId: string): Promise<void> {
     return { role, text };
   });
 
+  const threadOwner = await prisma.chatThread.findUnique({
+    where: { id: threadId },
+    select: { customerId: true },
+  });
+
   const generated = await generateLiveSupportReply({
     userText,
     hasAttachments,
     recentTurns,
+    viewer: threadOwner?.customerId ? "customer" : "guest",
   });
 
   const refreshed = await threadAssistantState(threadId);

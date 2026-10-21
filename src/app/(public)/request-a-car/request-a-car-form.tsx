@@ -126,7 +126,7 @@ export function RequestACarForm({
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <PageHeading>Request a car</PageHeading>
       <p className="mt-3 text-sm text-zinc-400">
-        Tell us what you are looking for—Ghana inventory, China sourcing, or either. This creates a sourcing lead for our
+        Tell us what you are looking for. Ghana inventory, China sourcing, or either. This creates a sourcing lead for our
         team. Track submissions under{" "}
         <Link href="/dashboard/inquiry-requests#sourcing" className="text-[var(--brand)] hover:underline">
           Customer inquiry &amp; requests
@@ -240,7 +240,7 @@ export function RequestACarForm({
             <SourcingRiskAcknowledgementNotice riskVersion={sourcingRiskVersion} contractVersion={sourcingContractVersion} />
           </div>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Operational controls only — not a substitute for legal advice. You must accept the active sourcing risk policy
+            Operational controls only. Not a substitute for legal advice. You must accept the active sourcing risk policy
             and sourcing contract versions shown below.
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-zinc-400">

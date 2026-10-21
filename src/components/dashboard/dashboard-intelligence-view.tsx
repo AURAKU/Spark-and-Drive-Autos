@@ -76,7 +76,7 @@ export function DashboardIntelligenceView({ data }: Props) {
         </div>
       </header>
 
-      {/* Key metrics — bento */}
+      {/* Key metrics. Bento */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/parts"
@@ -125,7 +125,7 @@ export function DashboardIntelligenceView({ data }: Props) {
             <Bell className="size-4 text-amber-600 dark:text-amber-400/90" aria-hidden />
           </div>
           <p className="mt-3 text-3xl font-bold tabular-nums text-foreground sm:text-4xl">{data.unreadNotifications}</p>
-          <p className="mt-2 text-sm text-muted-foreground">Unread — tap to open inbox</p>
+          <p className="mt-2 text-sm text-muted-foreground">Unread. Tap to open inbox</p>
         </Link>
       </div>
 
@@ -162,7 +162,7 @@ export function DashboardIntelligenceView({ data }: Props) {
                 ) : data.partsFinder.state === "PENDING_PAYMENT" ? (
                   <div className="border-t border-border pt-2 dark:border-white/5">
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      Payment pending — the dates above update once your payment is confirmed and access activates.
+                      Payment pending. The dates above update once your payment is confirmed and access activates.
                     </p>
                   </div>
                 ) : data.partsFinder.renewalRequired ? (

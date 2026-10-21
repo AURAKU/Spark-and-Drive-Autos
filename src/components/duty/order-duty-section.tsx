@@ -27,12 +27,12 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
     return (
       <div className="mt-10 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-black/40 p-5">
         <h2 className="text-lg font-semibold text-white">Import duty (Ghana)</h2>
-        <p className="mt-1 text-xs text-zinc-500">Sea import clearance — your case appears here once sea freight is set up.</p>
+        <p className="mt-1 text-xs text-zinc-500">Sea import clearance. Your case appears here once sea freight is set up.</p>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
           <p className="text-sm leading-relaxed text-zinc-300">
             We have not opened a duty file for this order yet. That usually happens after your vehicle is on a sea
             shipment and our operations team links clearance tracking to your order. You will see stage updates and any
-            duty payment requests here — not before we have something concrete to share.
+            duty payment requests here. Not before we have something concrete to share.
           </p>
           <p className="mt-3 text-xs text-zinc-500">
             For planning estimates before your file is open, use the Duty Intelligence calculator on vehicle listings or
@@ -67,7 +67,7 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
   return (
     <div className="mt-10 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-black/40 p-5">
       <h2 className="text-lg font-semibold text-white">Import duty (Ghana)</h2>
-      <p className="mt-1 text-xs text-zinc-500">Sea import clearance — updates from our operations team.</p>
+      <p className="mt-1 text-xs text-zinc-500">Sea import clearance. Updates from our operations team.</p>
 
       <div className="mt-4 rounded-xl border border-[var(--brand)]/20 bg-[var(--brand)]/5 px-4 py-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand)]">Current stage</p>
@@ -110,7 +110,7 @@ export async function OrderDutySection({ orderId, orderKind }: { orderId: string
           </p>
           <p className="mt-1 text-lg font-semibold text-emerald-100">{formatMoney(Number(duty.assessedDutyGhs), duty.currency)}</p>
           <p className="mt-2 text-xs text-emerald-100/70">
-            This is the amount our team recorded for settlement in Spark &amp; Drive — not a Ghana Customs assessment
+            This is the amount our team recorded for settlement in Spark &amp; Drive. Not a Ghana Customs assessment
             certificate. Final charges follow your clearance paperwork at the port.
           </p>
         </div>

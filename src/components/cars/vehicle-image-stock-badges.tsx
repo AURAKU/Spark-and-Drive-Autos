@@ -14,7 +14,7 @@ import { getVehicleStockBadgeForDisplay, type VehicleStockBadgeVariant } from "@
 import { cn } from "@/lib/utils";
 
 const SOLD_AFTER_PAYMENT_HINT =
-  "Purchased — this vehicle is marked Sold automatically in our system after a successful full payment. It is no longer available for checkout.";
+  "Purchased. This vehicle is marked Sold automatically in our system after a successful full payment. It is no longer available for checkout.";
 
 type CarPick = Pick<Car, "sourceType" | "listingState" | "availabilityStatus">;
 

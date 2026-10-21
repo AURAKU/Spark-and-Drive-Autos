@@ -102,7 +102,7 @@ export default async function AdminOrderInquiryDetailPage(props: Props) {
                 {r.user.name ?? r.user.email} <span className="text-zinc-500">({r.user.email})</span>
               </>
             ) : (
-              <span className="text-amber-200/90">Guest submission — notify by email externally, or customer registers with matching email.</span>
+              <span className="text-amber-200/90">Guest submission. Notify by email externally, or customer registers with matching email.</span>
             )}
           </dd>
         </div>

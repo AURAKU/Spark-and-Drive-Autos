@@ -39,7 +39,7 @@ export function SharePageButton({ url, title, text, className }: Props) {
       }
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
-        toast.success("Link copied. Paste it anywhere—opening it opens this page.");
+        toast.success("Link copied. Paste it anywhere. Opening it opens this page.");
         return;
       }
       window.prompt("Copy this link:", url);

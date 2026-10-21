@@ -1,13 +1,13 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
-import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { VehicleCoverImage } from "@/components/cars/vehicle-cover-image";
 import { MediaFullscreenViewer } from "@/components/media/media-fullscreen-viewer";
 import { Button } from "@/components/ui/button";
+import { useChunkedThumbCount, useGalleryMediaPreload } from "@/hooks/use-gallery-media-preload";
 import type { CarGalleryImage } from "@/lib/car-gallery";
-import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -22,6 +22,9 @@ function CarGalleryInner({ images, children }: Props) {
   const count = images.length;
   const safeActive = count > 0 ? Math.min(active, count - 1) : 0;
   const current = count > 0 ? images[safeActive] : null;
+  const urls = useMemo(() => images.map((im) => im.url), [images]);
+  const unlockedThumbs = useChunkedThumbCount(count, safeActive, 6);
+  useGalleryMediaPreload(urls, safeActive, "galleryStage");
 
   const go = useCallback(
     (delta: number) => {
@@ -30,30 +33,6 @@ function CarGalleryInner({ images, children }: Props) {
     },
     [count],
   );
-
-  useEffect(() => {
-    if (count <= 1) return;
-    const links: HTMLLinkElement[] = [];
-    const preset = "galleryStage" as const;
-    const pushPreload = (url: string) => {
-      const href = optimizeCloudinaryUrl(url, preset);
-      const link = document.createElement("link");
-      link.rel = "preload";
-      link.as = "image";
-      link.href = href;
-      document.head.appendChild(link);
-      links.push(link);
-    };
-    const nextIdx = (safeActive + 1) % count;
-    const prevIdx = (safeActive - 1 + count) % count;
-    const nextUrl = images[nextIdx]?.url;
-    const prevUrl = images[prevIdx]?.url;
-    if (nextUrl) pushPreload(nextUrl);
-    if (prevUrl && prevIdx !== nextIdx) pushPreload(prevUrl);
-    return () => {
-      for (const l of links) l.remove();
-    };
-  }, [count, images, safeActive]);
 
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -92,7 +71,6 @@ function CarGalleryInner({ images, children }: Props) {
           aria-label={`View image ${safeActive + 1} of ${count} full screen`}
         >
           <VehicleCoverImage
-            key={current!.id}
             src={current!.url}
             alt={current!.alt}
             fill
@@ -102,6 +80,8 @@ function CarGalleryInner({ images, children }: Props) {
             className="object-cover"
             sizes="(max-width:1024px) 100vw, 58vw"
             deliveryPreset="galleryStage"
+            upgradePreset="galleryPremium"
+            chunkPriority="hero"
           />
         </button>
 
@@ -178,15 +158,21 @@ function CarGalleryInner({ images, children }: Props) {
             aria-label={`Show image ${i + 1} of ${count}`}
             aria-current={i === safeActive ? "true" : undefined}
           >
-            <VehicleCoverImage
-              src={im.url}
-              alt=""
-              fill
-              loading="lazy"
-              className="object-cover"
-              sizes="120px"
-              deliveryPreset="galleryStrip"
-            />
+            {i < unlockedThumbs ? (
+              <VehicleCoverImage
+                src={im.url}
+                alt=""
+                fill
+                loading="lazy"
+                imagePlaceholder
+                className="object-cover"
+                sizes="160px"
+                deliveryPreset="galleryStrip"
+                chunkPriority={i <= 2 ? "visible" : "idle"}
+              />
+            ) : (
+              <span className="absolute inset-0 animate-pulse bg-muted dark:bg-zinc-800" aria-hidden />
+            )}
           </button>
         ))}
       </div>
@@ -211,15 +197,20 @@ function CarGalleryInner({ images, children }: Props) {
                     )}
                     aria-label={`Go to image ${i + 1}`}
                   >
-                    <VehicleCoverImage
-                      src={im.url}
-                      alt=""
-                      fill
-                      loading="lazy"
-                      className="object-cover"
-                      sizes="96px"
-                      deliveryPreset="galleryStrip"
-                    />
+                    {lightboxOpen && Math.abs(i - safeActive) <= 6 ? (
+                      <VehicleCoverImage
+                        src={im.url}
+                        alt=""
+                        fill
+                        loading="lazy"
+                        className="object-cover"
+                        sizes="96px"
+                        deliveryPreset="galleryStrip"
+                        chunkPriority="visible"
+                      />
+                    ) : (
+                      <span className="absolute inset-0 bg-white/5" aria-hidden />
+                    )}
                   </button>
                 ))}
               </div>
@@ -252,7 +243,6 @@ function CarGalleryInner({ images, children }: Props) {
           </>
         ) : null}
         <VehicleCoverImage
-          key={`lb-${current!.id}`}
           src={current!.url}
           alt={current!.alt}
           width={1920}
@@ -262,6 +252,7 @@ function CarGalleryInner({ images, children }: Props) {
           priority
           loading="eager"
           deliveryPreset="galleryPremium"
+          chunkPriority="hero"
         />
       </MediaFullscreenViewer>
     </div>

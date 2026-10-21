@@ -44,6 +44,31 @@ const sourceLabel: Record<string, string> = {
   IN_TRANSIT: "In transit",
 };
 
+function engineCcFromListing(car: {
+  title?: string | null;
+  engineDetails?: string | null;
+  specs: { label: string; value: string }[];
+}): number | undefined {
+  const blobs = [
+    ...car.specs.map((s) => `${s.label} ${s.value}`),
+    car.engineDetails ?? "",
+    car.title ?? "",
+  ];
+  for (const raw of blobs) {
+    const cc = raw.match(/(\d{3,4})\s*(?:cc|cm3)\b/i);
+    if (cc) {
+      const n = Number(cc[1]);
+      if (n >= 600 && n <= 8000) return n;
+    }
+    const liters = raw.match(/(\d(?:\.\d)?)\s*(?:l|t)\b/i);
+    if (liters) {
+      const n = Math.round(Number(liters[1]) * 1000);
+      if (n >= 600 && n <= 8000) return n;
+    }
+  }
+  return undefined;
+}
+
 export async function generateMetadata(props: Props) {
   const { slug } = await props.params;
   const car = await prisma.car.findFirst({
@@ -246,7 +271,7 @@ export default async function CarDetailPage(props: Props) {
             <div className="mt-8">
               <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">Import planning</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Rough duty estimate for Ghana arrival — list price is pre-filled as a{" "}
+                Rough duty estimate for Ghana arrival. List price is pre-filled as a{" "}
                 <span className="font-medium text-foreground">non-CIF</span> placeholder only. Adjust to the valuation you will declare.
               </p>
               <div className="mt-4">
@@ -259,6 +284,7 @@ export default async function CarDetailPage(props: Props) {
                     year: car.year,
                     vin: car.vin ?? undefined,
                     fuelType: car.engineType,
+                    engineCc: engineCcFromListing(car),
                     fobAmount: Number(car.basePriceAmount) > 0 ? Number(car.basePriceAmount) : listPriceAsCifHintGhs,
                     fobCurrency: car.basePriceCurrency || "USD",
                     countryOfOrigin: car.sourceType === "IN_CHINA" ? "CHINA" : "CHINA",
@@ -332,7 +358,7 @@ export default async function CarDetailPage(props: Props) {
               reservationDepositGhs={reservationDepositGhs}
               reservationDepositPercentLabel={reservationDepositPercentLabel}
             />
-            <SharePageButton url={shareUrl} title={car.title} text={`${car.title} — Spark and Drive Autos`} />
+            <SharePageButton url={shareUrl} title={car.title} text={`${car.title}. Spark and Drive Autos`} />
             <CarCompareButton
               variant="detail"
               car={{

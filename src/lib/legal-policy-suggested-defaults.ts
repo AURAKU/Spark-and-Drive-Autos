@@ -21,7 +21,7 @@ Orders may remain pending, processing, awaiting proof, under review, failed, suc
 Special orders, sourcing deposits, logistics charges, third-party commitments, and completed service costs may be non-refundable once processing has begun.`,
   },
   [POLICY_KEYS.PARTS_FINDER_DISCLAIMER]: {
-    title: "Parts Finder — guidance only",
+    title: "Parts Finder. Guidance only",
     content: `Results are generated using automated systems, search engine assisted processing, and external data sources.
 
 Spark & Drive Gear does not guarantee:

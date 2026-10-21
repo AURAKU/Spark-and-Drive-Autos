@@ -466,7 +466,7 @@ export function CheckoutClient({
                 ) : (
                   <p className="text-base leading-relaxed text-zinc-500">
                     No sea-freight estimate is shown for this listing. The amount due above is the unit cost of the vehicle
-                    only—it does not include shipment fees. If ocean delivery applies, your coordinator will confirm
+                    only. It does not include shipment fees. If ocean delivery applies, your coordinator will confirm
                     freight costs with you directly.
                   </p>
                 )}
@@ -630,7 +630,7 @@ export function CheckoutClient({
           >
             Arrange an offline payment
           </Link>
-          —we&apos;ll track your proof on the same order timeline.
+          . We&apos;ll track your proof on the same order timeline.
         </p>
       ) : null}
 
@@ -663,7 +663,7 @@ export function CheckoutClient({
           if (!o) {
             if (paystackHandoff) {
               toast.message("Payment reference", {
-                description: `${paystackHandoff.reference} — finish paying from Dashboard → Payments anytime.`,
+                description: `${paystackHandoff.reference}. Finish paying from Dashboard → Payments anytime.`,
                 duration: 12_000,
               });
             }
@@ -675,7 +675,7 @@ export function CheckoutClient({
           <DialogHeader>
             <DialogTitle className="text-white">Ready for secure payment</DialogTitle>
             <DialogDescription className="text-zinc-400">
-              You will be sent to our payment page (Paystack). Save this number — it is your payment reference for this
+              You will be sent to our payment page (Paystack). Save this number. It is your payment reference for this
               order.
             </DialogDescription>
           </DialogHeader>

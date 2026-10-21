@@ -16,8 +16,8 @@ export const SETTLEMENT_METHOD_LABEL: Record<PaymentSettlementMethod, string> = 
   MOBILE_MONEY: "Mobile Money (receipt)",
   BANK_GHS_COMPANY: "Spark bank account (GHS)",
   ALIPAY_RMB: "Alipay in RMB (details from support)",
-  CASH_OFFICE_GHS: "Cash — office (GHS)",
-  CASH_OFFICE_USD: "Cash — office (USD)",
+  CASH_OFFICE_GHS: "Cash. Office (GHS)",
+  CASH_OFFICE_USD: "Cash. Office (USD)",
 };
 
 export function settlementMethodLabel(m: PaymentSettlementMethod): string {
@@ -37,7 +37,7 @@ export function getSettlementInstructions(method: PaymentSettlementMethod): Sett
         title: "Paystack",
         lines: [
           "Complete payment on Paystack (card, bank transfer, or Mobile Money where enabled).",
-          "Confirmation is automatic when Paystack reports success — no screenshot required unless we ask.",
+          "Confirmation is automatic when Paystack reports success. No screenshot required unless we ask.",
         ],
       };
     case "MOBILE_MONEY":
@@ -50,7 +50,7 @@ export function getSettlementInstructions(method: PaymentSettlementMethod): Sett
       };
     case "BANK_GHS_COMPANY":
       return {
-        title: "Bank transfer (GHS) — CalBank",
+        title: "Bank transfer (GHS). CalBank",
         lines: [
           "Transfer Ghana Cedis (GHS) only to the Spark and Drive Autos business account.",
           "Bank: CalBank PLC",
@@ -65,7 +65,7 @@ export function getSettlementInstructions(method: PaymentSettlementMethod): Sett
       return {
         title: "Alipay in Chinese Yuan (RMB)",
         lines: [
-          "Pay in RMB through Alipay. We share merchant/QR and the exact CNY amount with you directly — call or WhatsApp support first.",
+          "Pay in RMB through Alipay. We share merchant/QR and the exact CNY amount with you directly. Call or WhatsApp support first.",
           "Agree the exchange and amount with us before you send. Vehicle list prices in GHS are for reference only.",
           "When done, upload a clear screenshot of your Alipay confirmation on this page.",
         ],
@@ -75,7 +75,7 @@ export function getSettlementInstructions(method: PaymentSettlementMethod): Sett
         title: "Cash at office (GHS)",
         lines: [
           "Pay Ghana Cedis in person at our authorised office location during business hours.",
-          "You will receive a receipt — upload a photo if asked for verification.",
+          "You will receive a receipt. Upload a photo if asked for verification.",
         ],
       };
     case "CASH_OFFICE_USD":

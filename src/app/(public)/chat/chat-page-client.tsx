@@ -1,64 +1,78 @@
 "use client";
 
+import { Outfit } from "next/font/google";
+import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
 import { ChatThreadView } from "@/components/chat/chat-thread-view";
-import { PageHeading } from "@/components/typography/page-headings";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SPARK_ASSISTANT_LABEL } from "@/lib/live-support-assistant";
 
-const CALLBACK = "/chat";
+const chatFont = Outfit({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
 
 export function ChatPageClient() {
-  const { status } = useSession();
-
-  const registerHref = `/register?callbackUrl=${encodeURIComponent(CALLBACK)}`;
-  const loginHref = `/login?callbackUrl=${encodeURIComponent(CALLBACK)}`;
-
-  if (status === "loading") {
-    return <div className="mx-auto max-w-3xl px-4 py-12 text-sm text-zinc-500">Loading…</div>;
-  }
-
-  if (status !== "authenticated") {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-12 sm:px-6">
-        <PageHeading variant="dashboard">Customer Service Live Support Chat</PageHeading>
-        <p className="mt-4 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Live support chat is available to signed-in customers only, so we can tie your conversation to your account,
-          send updates, and help you securely. Create Account or sign in to start or continue a chat.
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href={registerHref}
-            className={cn(
-              buttonVariants({ size: "default" }),
-              "bg-[var(--brand)] text-center font-semibold text-black hover:opacity-90",
-            )}
-          >
-            Create Account
-          </Link>
-          <Link
-            href={loginHref}
-            className={cn(buttonVariants({ variant: "outline", size: "default" }), "border-white/20 text-center")}
-          >
-            Sign in
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const { status, data: session } = useSession();
+  const signedIn = status === "authenticated" && Boolean(session?.user?.id);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <PageHeading variant="dashboard">Customer Service Live Support Chat</PageHeading>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-        Send text, images, video, documents, and voice notes — use the round mic in the composer: tap once to record,
-        tap again to send. Messages update in real time when configured, with quick refresh otherwise.
-      </p>
-      <div className="mt-8 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50 to-white p-3 dark:border-white/10 dark:from-white/[0.04] dark:to-transparent sm:p-5">
-        <ChatThreadView />
+    <div className={cnPage}>
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">Live support</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
+          Talk to Spark Team
+        </h1>
+        <p className="mt-2 max-w-xl text-[15px] leading-7 text-zinc-400">
+          Ask about our cars, parts, shipping, payments, or how the site works. SPARK answers from public help only. A
+          teammate can join anytime.
+        </p>
+        {status !== "loading" && !signedIn ? (
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500">
+            Want this saved to your dashboard?{" "}
+            <Link
+              href={`/register?callbackUrl=${encodeURIComponent("/chat")}`}
+              className="font-medium text-[var(--brand)] hover:underline"
+            >
+              Create an account
+            </Link>{" "}
+            or{" "}
+            <Link
+              href={`/login?callbackUrl=${encodeURIComponent("/chat")}`}
+              className="font-medium text-[var(--brand)] hover:underline"
+            >
+              sign in
+            </Link>
+            .
+          </p>
+        ) : null}
+
+        <section className="sda-live-chat mt-8 overflow-hidden rounded-[1.75rem] border border-[var(--brand)]/25 bg-zinc-950/70 shadow-[0_24px_80px_-28px_rgba(20,216,230,0.45)]">
+          <header className="flex items-center gap-3 border-b border-white/10 bg-gradient-to-r from-[var(--brand)]/12 via-transparent to-transparent px-4 py-3.5 sm:px-5">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--brand)]/35 bg-[var(--brand)]/15">
+              <Image
+                src="/brand/logo-emblem.png"
+                alt=""
+                width={36}
+                height={36}
+                className="h-8 w-8 object-contain"
+              />
+              <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-zinc-950 bg-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold tracking-tight text-zinc-50">{SPARK_ASSISTANT_LABEL}</p>
+              <p className="text-xs text-zinc-400">Online · usually replies in seconds</p>
+            </div>
+          </header>
+          <div className="p-3 sm:p-5">
+            <ChatThreadView />
+          </div>
+        </section>
       </div>
     </div>
   );
 }
+
+const cnPage = `${chatFont.className} sda-chat-page`;

@@ -152,7 +152,7 @@ export async function uploadFileToCloudinary(
     throw new Error(message || "Admin access is required to upload inventory media.");
   }
   if (sigRes.status === 501) {
-    console.warn("[cloudinary-upload-client] admin sign 501 — Cloudinary not configured on server");
+    console.warn("[cloudinary-upload-client] admin sign 501. Cloudinary not configured on server");
     throw new Error(message || CLOUDINARY_USER_MESSAGE);
   }
   if (!sigRes.ok) {

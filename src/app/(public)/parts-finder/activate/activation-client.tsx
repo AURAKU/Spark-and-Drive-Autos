@@ -230,7 +230,7 @@ export function PartsFinderActivationClient(props: {
       )}
     >
       <p className="text-sm text-muted-foreground sm:text-base">
-        List prices — Activation:{" "}
+        List prices. Activation:{" "}
         <span className="font-bold text-foreground">{formatMoney(activationPrice, props.currency)}</span>
         <span className="text-muted-foreground"> · Renewal: </span>
         <span className="font-semibold text-foreground">{formatMoney(renewalPrice, props.currency)}</span>

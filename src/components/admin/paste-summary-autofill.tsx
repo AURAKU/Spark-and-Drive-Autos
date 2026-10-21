@@ -29,7 +29,7 @@ type Props = {
 };
 
 function confidenceHint(c: AutofillConfidence | undefined): string {
-  if (c === "heuristic") return "Verify — inferred from free text";
+  if (c === "heuristic") return "Verify. Inferred from free text";
   if (c === "explicit") return "Labeled line";
   return "";
 }
@@ -81,7 +81,7 @@ export function PasteSummaryAutofill({ buildPreviewRows, onApply, className, pla
           </DialogHeader>
           {previewRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing detected — try clearer labels (e.g. part number: ABC, selling price: GHS 350, OEM: 45022-TLA-A00).
+              Nothing detected. Try clearer labels (e.g. part number: ABC, selling price: GHS 350, OEM: 45022-TLA-A00).
             </p>
           ) : (
             <ul className="max-h-[40vh] space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3 text-xs dark:border-white/10">

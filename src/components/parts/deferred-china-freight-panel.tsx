@@ -171,7 +171,7 @@ export function DeferredChinaFreightPanel({ orderId, walletBalanceGhs }: Props) 
 
   return (
     <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 text-sm text-zinc-200">
-      <h3 className="text-base font-semibold text-amber-50">Overseas Stock — pay international shipping</h3>
+      <h3 className="text-base font-semibold text-amber-50">Overseas Stock. Pay international shipping</h3>
       <p className="mt-1 text-xs leading-relaxed text-amber-100/85">
         This was not part of the parts subtotal. Amounts are in GHS using current delivery template rates. Choose a
         method and pay with your wallet (full amount) or Paystack.

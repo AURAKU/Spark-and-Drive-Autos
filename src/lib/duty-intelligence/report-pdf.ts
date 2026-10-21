@@ -3,7 +3,16 @@ import path from "node:path";
 
 import { PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from "pdf-lib";
 
-import { formatReportMoney, type DutyReportData } from "@/lib/duty-intelligence/report-model";
+import { formatSheetNumber, type DutyReportData } from "@/lib/duty-intelligence/report-model";
+import { LEGAL_COMPANY } from "@/lib/legal";
+
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const MARGIN = 40;
+const INK = rgb(0.07, 0.08, 0.1);
+const MUTED = rgb(0.38, 0.39, 0.42);
+const LINE = rgb(0.82, 0.83, 0.85);
+const TEAL = rgb(0.04, 0.42, 0.45);
 
 function drawText(
   page: PDFPage,
@@ -12,158 +21,226 @@ function drawText(
   y: number,
   size: number,
   font: PDFFont,
-  color = rgb(0.12, 0.12, 0.14),
+  color = INK,
 ) {
-  const safe = text.replace(/[^\x20-\x7E]/g, "?");
-  page.drawText(safe.slice(0, 110), { x, y, size, font, color });
+  const safe = text.replace(/[^\x20-\x7E]/g, " ");
+  page.drawText(safe, { x, y, size, font, color });
+}
+
+function wrapWords(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const words = text.replace(/\s+/g, " ").trim().split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(next, size) <= maxWidth) {
+      current = next;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 export async function buildDutyIntelligenceReportPdf(report: DutyReportData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const normal = await doc.embedFont(StandardFonts.Helvetica);
-  let page = doc.addPage([595.28, 841.89]);
-  const margin = 42;
-  let y = 790;
+  let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let y = PAGE_HEIGHT - 36;
+
+  const newPage = () => {
+    page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    y = PAGE_HEIGHT - 42;
+  };
+
+  const ensureSpace = (need: number) => {
+    if (y - need < 48) newPage();
+  };
+
+  const generatedLabel = (() => {
+    try {
+      return new Intl.DateTimeFormat("en-GH", { dateStyle: "medium" }).format(new Date(report.generatedAt));
+    } catch {
+      return report.generatedAt.slice(0, 10);
+    }
+  })();
+
+  drawText(page, report.reportReference, MARGIN, y, 8, normal, MUTED);
+  const dateWidth = normal.widthOfTextAtSize(generatedLabel, 8);
+  drawText(page, generatedLabel, PAGE_WIDTH - MARGIN - dateWidth, y, 8, normal, MUTED);
+  y -= 28;
+
+  const title = report.vehicleTitle;
+  const titleSize = title.length > 42 ? 14 : 16;
+  const titleWidth = bold.widthOfTextAtSize(title, titleSize);
+  drawText(page, title, (PAGE_WIDTH - titleWidth) / 2, y, titleSize, bold);
+  y -= 22;
 
   try {
     const logoPath = path.join(process.cwd(), "public/brand/logo-emblem.png");
     const logoBytes = await readFile(logoPath);
     const logo = await doc.embedPng(logoBytes);
-    const logoDims = logo.scale(0.18);
-    page.drawImage(logo, { x: margin, y: y - logoDims.height + 8, width: logoDims.width, height: logoDims.height });
+    const size = 72;
+    const x = (PAGE_WIDTH - size) / 2;
+    page.drawCircle({
+      x: PAGE_WIDTH / 2,
+      y: y - size / 2,
+      size: size / 2 + 4,
+      color: rgb(1, 1, 1),
+      borderColor: rgb(0.86, 0.87, 0.88),
+      borderWidth: 1,
+    });
+    page.drawImage(logo, { x, y: y - size, width: size, height: size });
+    y -= size + 14;
   } catch {
-    // Logo optional — brand text remains.
+    y -= 8;
   }
 
-  drawText(page, "SPARK & DRIVE AUTOS", margin + 70, y, 14, bold, rgb(0.08, 0.45, 0.52));
-  y -= 18;
-  drawText(page, "Vehicle Duty & Landed Cost Estimate", margin + 70, y, 11, bold);
+  const brand = report.company.brandName;
+  const brandWidth = bold.widthOfTextAtSize(brand, 11);
+  drawText(page, brand, (PAGE_WIDTH - brandWidth) / 2, y, 11, bold);
   y -= 14;
-  drawText(page, `Reference: ${report.reportReference}`, margin + 70, y, 9, normal, rgb(0.35, 0.35, 0.38));
-  y -= 12;
-  drawText(
-    page,
-    `Generated: ${new Date(report.generatedAt).toLocaleString("en-GH")}`,
-    margin + 70,
-    y,
-    9,
-    normal,
-    rgb(0.35, 0.35, 0.38),
-  );
+  const host = report.company.websiteHost;
+  const hostWidth = normal.widthOfTextAtSize(host, 9);
+  drawText(page, host, (PAGE_WIDTH - hostWidth) / 2, y, 9, normal, TEAL);
+  y -= 20;
 
-  y -= 28;
-  page.drawLine({ start: { x: margin, y }, end: { x: 553, y }, thickness: 1, color: rgb(0.85, 0.87, 0.9) });
-  y -= 22;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.8, color: LINE });
+  y -= 16;
 
-  const ensureSpace = (need: number) => {
-    if (y - need < 50) {
-      page = doc.addPage([595.28, 841.89]);
-      y = 800;
-    }
-  };
+  const chips = report.specChips.slice(0, 6);
+  if (chips.length > 0) {
+    const colW = (PAGE_WIDTH - MARGIN * 2) / chips.length;
+    chips.forEach((chip, i) => {
+      const cx = MARGIN + i * colW;
+      drawText(page, chip.label.toUpperCase(), cx, y, 7, bold, MUTED);
+      drawText(page, chip.value, cx, y - 12, 9, normal);
+    });
+    y -= 28;
+  }
 
-  const section = (title: string) => {
-    ensureSpace(40);
-    drawText(page, title, margin, y, 11, bold);
-    y -= 16;
-  };
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.8, color: LINE });
+  y -= 16;
 
-  const row = (label: string, value: string) => {
-    ensureSpace(18);
-    drawText(page, label, margin, y, 9, normal, rgb(0.4, 0.4, 0.42));
-    drawText(page, value, margin + 160, y, 9, normal);
-    y -= 14;
-  };
+  if (report.vehicle.vinOrChassisMasked) {
+    const vin = report.vehicle.vinOrChassisMasked;
+    const vinWidth = normal.widthOfTextAtSize(vin, 8);
+    drawText(page, vin, (PAGE_WIDTH - vinWidth) / 2, y, 8, normal, MUTED);
+    y -= 18;
+  }
 
-  section("Vehicle details");
-  const v = report.vehicle;
-  if (v.make) row("Make", v.make);
-  if (v.model) row("Model", v.model);
-  if (v.manufactureYear != null) row("Year", String(v.manufactureYear));
-  if (v.fuelType) row("Powertrain", v.fuelType);
-  if (v.engineCc != null) row("Engine capacity", `${v.engineCc} cc`);
-  if (v.powerKw != null) row("Power", `${v.powerKw} kW`);
-  if (v.transmission) row("Transmission", v.transmission);
-  if (v.drivetrain) row("Drivetrain", v.drivetrain);
-  if (v.vehicleCategory) row("Category", v.vehicleCategory);
-  if (v.hsCode) row("HS code", v.hsCode);
-  if (v.originCountry) row("Origin", v.originCountry);
-  if (v.vinOrChassisMasked) row("VIN / chassis", v.vinOrChassisMasked);
-
-  y -= 6;
-  section("Cost & valuation (GHS)");
-  const c = report.costInputs;
-  row("Purchase currency", c.purchaseCurrency);
-  row("FOB (foreign)", `${c.purchaseCurrency} ${c.fobForeign.toFixed(2)}`);
-  row("FX rate", `1 ${c.purchaseCurrency} = ${c.fxRate} GHS`);
-  if (c.fxSource) row("FX source", c.fxSource);
-  if (c.fxEffectiveDate) row("FX effective date", c.fxEffectiveDate);
-  row("FOB (GHS)", formatReportMoney(c.fobGhs));
-  row("Freight (GHS)", formatReportMoney(c.freightGhs));
-  row("Insurance (GHS)", formatReportMoney(c.insuranceGhs));
-  row("CIF (GHS)", formatReportMoney(c.cifGhs));
-  row("Customs value (GHS)", formatReportMoney(c.customsValueGhs));
-
-  y -= 6;
-  section("Duty & charge breakdown");
-  for (const group of report.dutyGroups) {
-    ensureSpace(24);
-    drawText(page, group.heading, margin, y, 10, bold, rgb(0.2, 0.2, 0.22));
-    y -= 14;
-    for (const line of group.lines) {
-      ensureSpace(16);
-      const rate = line.rateLabel ? ` @ ${line.rateLabel}` : "";
-      drawText(page, `${line.chargeName}${rate}`, margin, y, 8, normal);
-      drawText(page, formatReportMoney(line.payableAmount), 430, y, 8, normal);
+  if (report.customer.name || report.customer.email || report.customer.phone) {
+    drawText(page, "PREPARED FOR", MARGIN, y, 8, bold, MUTED);
+    y -= 13;
+    if (report.customer.name) {
+      drawText(page, report.customer.name, MARGIN, y, 9, normal);
       y -= 12;
     }
-    y -= 4;
-  }
-
-  y -= 4;
-  section("Totals");
-  row("Estimated duty payable", formatReportMoney(report.totals.estimatedDutyPayableGhs));
-  row("Estimated landed cost", formatReportMoney(report.totals.estimatedLandedCostGhs));
-  if (report.totals.lowEstimateGhs != null) row("Low estimate", formatReportMoney(report.totals.lowEstimateGhs));
-  if (report.totals.expectedEstimateGhs != null) {
-    row("Expected estimate", formatReportMoney(report.totals.expectedEstimateGhs));
-  }
-  if (report.totals.highEstimateGhs != null) row("High estimate", formatReportMoney(report.totals.highEstimateGhs));
-
-  y -= 6;
-  section("Confidence");
-  row("Label", report.confidence.label);
-  if (report.confidence.score != null) row("Score", String(report.confidence.score));
-
-  y -= 6;
-  section("Disclaimer");
-  ensureSpace(60);
-  const words = report.disclaimer.split(/\s+/);
-  let line = "";
-  for (const w of words) {
-    const next = line ? `${line} ${w}` : w;
-    if (next.length > 95) {
-      drawText(page, line, margin, y, 8, normal, rgb(0.35, 0.35, 0.38));
-      y -= 11;
-      ensureSpace(20);
-      line = w;
-    } else {
-      line = next;
+    if (report.customer.email) {
+      drawText(page, report.customer.email, MARGIN, y, 9, normal);
+      y -= 12;
     }
-  }
-  if (line) {
-    drawText(page, line, margin, y, 8, normal, rgb(0.35, 0.35, 0.38));
-    y -= 14;
+    if (report.customer.phone) {
+      drawText(page, report.customer.phone, MARGIN, y, 9, normal);
+      y -= 12;
+    }
+    y -= 6;
   }
 
-  ensureSpace(40);
-  drawText(page, `Prepared by: ${report.preparedBy}`, margin, y, 9, bold);
-  y -= 12;
-  drawText(page, report.website, margin, y, 8, normal, rgb(0.35, 0.35, 0.38));
-  if (report.ruleSetVersion) {
+  drawText(page, "Taxes & Duty Payable", MARGIN, y, 12, bold);
+  y -= 18;
+
+  const cols = {
+    no: MARGIN,
+    desc: MARGIN + 28,
+    base: 360,
+    rate: 440,
+    pay: 515,
+  };
+
+  drawText(page, "#", cols.no, y, 8, bold, MUTED);
+  drawText(page, "DESCRIPTOR", cols.desc, y, 8, bold, MUTED);
+  drawText(page, "BASE AMOUNT", cols.base, y, 8, bold, MUTED);
+  drawText(page, "RATE", cols.rate, y, 8, bold, MUTED);
+  drawText(page, "PAYABLE", cols.pay, y, 8, bold, MUTED);
+  y -= 6;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.7, color: LINE });
+  y -= 14;
+
+  if (report.dutyLines.length === 0) {
+    drawText(page, "No charge lines were recorded for this calculation.", MARGIN, y, 9, normal, MUTED);
+    y -= 16;
+  }
+
+  for (const line of report.dutyLines) {
+    ensureSpace(16);
+    drawText(page, line.lineNo, cols.no, y, 8, normal, MUTED);
+    const name = line.chargeName.length > 42 ? `${line.chargeName.slice(0, 41)}.` : line.chargeName;
+    drawText(page, name, cols.desc, y, 8, normal);
+    const base = formatSheetNumber(line.taxableBaseAmount);
+    const rate = line.rateLabel ?? "1.00";
+    const payable = formatSheetNumber(line.payableAmount);
+    drawText(page, base, cols.base + 52 - normal.widthOfTextAtSize(base, 8), y, 8, normal);
+    drawText(page, rate, cols.rate + 36 - normal.widthOfTextAtSize(rate, 8), y, 8, normal);
+    drawText(page, payable, PAGE_WIDTH - MARGIN - normal.widthOfTextAtSize(payable, 8), y, 8, bold);
+    y -= 13;
+  }
+
+  y -= 10;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.8, color: LINE });
+  y -= 20;
+
+  const totalLabel = "Total payable (GHS)";
+  const totalLabelWidth = bold.widthOfTextAtSize(totalLabel, 9);
+  drawText(page, totalLabel, PAGE_WIDTH - MARGIN - totalLabelWidth, y, 9, bold, MUTED);
+  y -= 18;
+  const total = formatSheetNumber(report.totals.estimatedDutyPayableGhs);
+  const totalWidth = bold.widthOfTextAtSize(total, 20);
+  drawText(page, total, PAGE_WIDTH - MARGIN - totalWidth, y, 20, bold);
+  y -= 16;
+  if (report.totals.estimatedDutyPayableUsd != null) {
+    const usd = `USD ${formatSheetNumber(report.totals.estimatedDutyPayableUsd)}`;
+    const usdWidth = normal.widthOfTextAtSize(usd, 10);
+    drawText(page, usd, PAGE_WIDTH - MARGIN - usdWidth, y, 10, normal, MUTED);
+    y -= 16;
+  }
+
+  ensureSpace(70);
+  y -= 6;
+  drawText(page, "VALUATION USED", MARGIN, y, 8, bold, MUTED);
+  y -= 14;
+  const valuation = [
+    ["FOB", formatSheetNumber(report.costInputs.fobGhs)],
+    ["Freight", formatSheetNumber(report.costInputs.freightGhs)],
+    ["Insurance", formatSheetNumber(report.costInputs.insuranceGhs)],
+    ["CIF / assessed value", formatSheetNumber(report.costInputs.customsValueGhs)],
+  ];
+  for (const [label, value] of valuation) {
+    drawText(page, label, MARGIN, y, 8, normal, MUTED);
+    drawText(page, value, MARGIN + 160, y, 8, normal);
     y -= 12;
-    drawText(page, `Rule set: ${report.ruleSetVersion}`, margin, y, 8, normal, rgb(0.35, 0.35, 0.38));
+  }
+
+  ensureSpace(90);
+  y -= 8;
+  drawText(page, "DISCLAIMER", MARGIN, y, 8, bold, MUTED);
+  y -= 13;
+  const disclaimerParts = [
+    report.disclaimer,
+    ...report.disclaimerLong,
+    `Prepared by ${report.company.brandName} (${report.company.legalName}, ${report.company.registrationNumber}). Office: ${report.company.address}. ${LEGAL_COMPANY.phone}. ${report.company.websiteHost}. Ghana Customs determines the final duty and other government charges at clearance. This document is a planning estimate only and is not a Customs assessment.`,
+  ];
+  const maxWidth = PAGE_WIDTH - MARGIN * 2;
+  for (const para of disclaimerParts) {
+    for (const line of wrapWords(para, normal, 7.5, maxWidth)) {
+      ensureSpace(12);
+      drawText(page, line, MARGIN, y, 7.5, normal, MUTED);
+      y -= 10;
+    }
+    y -= 4;
   }
 
   return doc.save();

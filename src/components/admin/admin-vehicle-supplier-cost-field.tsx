@@ -30,7 +30,7 @@ export function AdminVehicleSupplierCostField({
   return (
     <div className="sm:col-span-2 space-y-2">
       <Label htmlFor={amountName}>Supplier / dealership cost</Label>
-      <p className="text-xs text-zinc-500">Admin-only — not shown to customers. Currency is stored for sourcing / accounting.</p>
+      <p className="text-xs text-zinc-500">Admin-only. Not shown to customers. Currency is stored for sourcing / accounting.</p>
       <div className="flex flex-wrap gap-2">
         <select
           id={currencyName}

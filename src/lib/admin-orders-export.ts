@@ -245,7 +245,7 @@ export function buildOrdersExportXlsHtml(lines: OrderExportLine[], filterLabel: 
   });
   return `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>
 <table border="1">
-<tr><th colspan="20">Orders export — ${escapeXml(filterLabel)} (${lines.length} line${lines.length === 1 ? "" : "s"})</th></tr>
+<tr><th colspan="20">Orders export. ${escapeXml(filterLabel)} (${lines.length} line${lines.length === 1 ? "" : "s"})</th></tr>
 <tr>${header.map((h) => `<th>${escapeXml(h)}</th>`).join("")}</tr>
 ${trs.join("\n")}
 </table>

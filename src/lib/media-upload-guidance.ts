@@ -7,7 +7,7 @@ export const MEDIA_UPLOAD_GUIDANCE = {
     combined: "Use JPG, PNG, WebP, or PDF. Maximum file size 10 MB per file.",
   },
   paymentProof: {
-    images: "JPG, PNG, or WebP — optimized on upload when possible.",
+    images: "JPG, PNG, or WebP. Optimized on upload when possible.",
     pdf: "PDF receipt or bank confirmation.",
   },
 } as const;

@@ -89,7 +89,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
               {order.car.title}
             </Link>
           ) : (
-            <p className="mt-2 text-sm text-zinc-500">—</p>
+            <p className="mt-2 text-sm text-zinc-500">. </p>
           )}
           <p className="mt-4 text-sm text-zinc-400">
             Amount: <span className="text-[var(--brand)]">{formatMoney(Number(order.amount), order.currency)}</span>

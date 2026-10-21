@@ -10,7 +10,7 @@ export function DutyEstimatesIntro() {
       <ul className="mt-3 list-inside list-disc space-y-2 marker:text-[var(--brand)]">
         <li>
           <span className="font-medium text-zinc-200">Duty estimates</span> are planning documents our team prepares for{" "}
-          <span className="text-zinc-200">each vehicle</span> — indicative Ghana import duty ranges and landed cost, with a
+          <span className="text-zinc-200">each vehicle</span>. Indicative Ghana import duty ranges and landed cost, with a
           clear disclaimer that{" "}
           <span className="text-zinc-200">final charges are determined by Ghana Customs</span> at clearance. Planning figures use Spark &amp; Drive Duty Intelligence.
         </li>
@@ -20,7 +20,7 @@ export function DutyEstimatesIntro() {
           <Link href="/dashboard/orders" className="font-medium text-[var(--brand)] underline-offset-2 hover:underline">
             matching order
           </Link>{" "}
-          for that car — keep an eye on order updates and notifications there as well.
+          for that car. Keep an eye on order updates and notifications there as well.
         </li>
       </ul>
     </div>

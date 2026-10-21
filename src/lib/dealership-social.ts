@@ -8,4 +8,5 @@ export const DEALERSHIP_SOCIAL = {
   instagram: "https://www.instagram.com/sparkanddriveautos?igsh=cmpiMDlwNzYxYXds&utm_source=qr",
   x: "https://x.com/sparkanddrive?s=21&t=1oI8At6346p9RXMbUxfBmg",
   snapchat: "https://snapchat.com/t/HUmBkBu6",
+  trendshub: "https://www.trendshub.live/u/sparkanddriveautos",
 } as const;

@@ -26,7 +26,7 @@ export function CarCompareEmptyState() {
           {compareHref ? (
             <>
               {" "}
-              —{" "}
+              . {" "}
               <Link href={compareHref} className="font-semibold text-[var(--brand)] hover:underline">
                 open comparison
               </Link>

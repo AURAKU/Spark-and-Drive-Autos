@@ -14,7 +14,7 @@ export function DashboardLegalPendingBanner({ pending }: { pending: UserLegalSta
         href="/dashboard/profile?view=legal"
         className="mt-3 inline-flex h-9 items-center rounded-lg bg-[var(--brand)] px-4 text-xs font-semibold text-black hover:opacity-90"
       >
-        Open Profile — Legal
+        Open Profile. Legal
       </Link>
     </div>
   );

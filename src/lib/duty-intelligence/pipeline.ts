@@ -447,7 +447,7 @@ export async function runDutyIntelligencePipeline(
     engineReconciliation: versioned.engineResult.reconciliation,
     payableDutyLines,
     methodologyNote:
-      "Duty Intelligence Engine V4 with calibration layer — deterministic rule-based tax lines plus cohort-informed confidence and ranges. " +
+      "Duty Intelligence Engine V4 with calibration layer. Deterministic rule-based tax lines plus cohort-informed confidence and ranges. " +
       "FOB, freight and insurance stay separate; Total Estimated Duty Payable equals the unique duty-line sum. " +
       "Estimates are for planning only; final customs assessment is determined by Ghana Customs at clearance.",
   };
