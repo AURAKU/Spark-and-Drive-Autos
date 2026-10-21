@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { decodeVin, type DecodedVin } from "@/lib/vin";
 
+import { inferEngineCcFromText } from "./engine-cc";
 import type { MinimumIntakeInput } from "./intake-schema";
 
 export type VehicleSpecField =
@@ -48,12 +49,7 @@ function mapVinFuelToEngineType(fuel: string | null): string | undefined {
 }
 
 function parseEngineCc(engine: string | null): number | undefined {
-  if (!engine) return undefined;
-  const match = engine.match(/(\d+(?:\.\d+)?)\s*L/i);
-  if (match) return Math.round(Number(match[1]) * 1000);
-  const ccMatch = engine.match(/(\d{3,5})\s*cc/i);
-  if (ccMatch) return Number(ccMatch[1]);
-  return undefined;
+  return inferEngineCcFromText(engine);
 }
 
 function buildFromVin(decoded: DecodedVin): Partial<ResolvedVehicleSpec> {

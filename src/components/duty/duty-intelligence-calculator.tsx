@@ -17,6 +17,7 @@ import {
 } from "@/lib/duty-intelligence/types";
 import { formatMoney } from "@/lib/format";
 
+import { inferEngineCcFromText } from "@/lib/duty-intelligence/engine-cc";
 import { buildDutyReportPreview } from "@/lib/duty-intelligence/report-model";
 
 import { DutyEstimateDisclosure } from "./duty-estimate-disclosure";
@@ -184,7 +185,9 @@ export function DutyIntelligenceCalculator({ prefill, compact, showSave, isAdmin
   const inputPayload = useMemo((): DutyCalculationInput | null => {
     const y = Number(year);
     const fob = Number(fobAmount);
-    const cc = engineCc.trim() ? Number(engineCc) : undefined;
+    const cc = engineCc.trim()
+      ? Number(engineCc)
+      : inferEngineCcFromText(manufacturer, model);
     const kw = powerKw.trim() ? Number(powerKw) : undefined;
     if (!manufacturer.trim() || !model.trim()) return null;
     if (!Number.isFinite(y) || !Number.isFinite(fob) || fob <= 0) return null;

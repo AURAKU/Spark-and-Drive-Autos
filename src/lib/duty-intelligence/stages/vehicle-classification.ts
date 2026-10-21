@@ -58,10 +58,11 @@ export function resolveHsCode(params: {
       !desc.includes("electric")
     ) {
       if (input.vehicle.engineCc != null) {
-        if (input.vehicle.engineCc <= 1000 && desc.includes("≤1000")) return true;
-        if (input.vehicle.engineCc > 1000 && input.vehicle.engineCc <= 1500 && desc.includes("1000")) return true;
-        if (input.vehicle.engineCc > 1500 && input.vehicle.engineCc <= 3000 && desc.includes("1500")) return true;
-        if (input.vehicle.engineCc > 3000 && desc.includes("3000")) return true;
+        if (input.vehicle.engineCc <= 1000 && (desc.includes("≤1000") || desc.includes("<=1000") || desc.includes("not exceeding 1000"))) return true;
+        if (input.vehicle.engineCc > 1000 && input.vehicle.engineCc <= 1500 && (desc.includes("1000-1500") || desc.includes("1000–1500") || desc.includes("exceeding 1000"))) return true;
+        if (input.vehicle.engineCc > 1500 && input.vehicle.engineCc <= 3000 && (desc.includes("1500-3000") || desc.includes("1500–3000") || desc.includes("exceeding 1500"))) return true;
+        if (input.vehicle.engineCc > 3000 && (desc.includes(">3000") || desc.includes("exceeding 3000"))) return true;
+        return false;
       }
       return desc.includes("passenger") || desc.includes("motor car");
     }

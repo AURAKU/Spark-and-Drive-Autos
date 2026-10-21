@@ -46,15 +46,27 @@ export type VersionedCalculationFailure = {
 
 export type VersionedCalculationOutcome = VersionedCalculationSuccess | VersionedCalculationFailure;
 
-function buildVerifiedConfidence(profileId: string): ConfidenceResult {
+function buildVerifiedConfidence(profileId: string, hsConfidence: "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW"): ConfidenceResult {
+  const verifiedBoE = profileId.includes("VERIFIED") && (hsConfidence === "VERY_HIGH" || hsConfidence === "HIGH");
+  if (verifiedBoE) {
+    return {
+      score: 88,
+      label: "HIGH",
+      level: "VERIFIED_PROFILE_HIGH",
+      similarImportCount: 1,
+      basisNote: `Verified rule profile ${profileId} with BoE-calibrated charge lines.`,
+      reasons: ["Verified rule profile", "Bill of Entry calibration fixture", "Versioned rule set"],
+      uncertaintyReasons: [],
+    };
+  }
   return {
-    score: 88,
-    label: "HIGH",
-    level: "VERIFIED_PROFILE_HIGH",
-    similarImportCount: 1,
-    basisNote: `Verified rule profile ${profileId} with BoE-calibrated charge lines.`,
-    reasons: ["Verified rule profile", "Bill of Entry calibration fixture", "Versioned rule set"],
-    uncertaintyReasons: [],
+    score: hsConfidence === "HIGH" ? 72 : 58,
+    label: hsConfidence === "HIGH" ? "HIGH" : "MEDIUM",
+    level: hsConfidence === "HIGH" ? "STRONG_EVIDENCE" : "MODERATE_EVIDENCE",
+    similarImportCount: 0,
+    basisNote: `Ghana passenger planning rates (${profileId}). Estimate only — final GRA assessment may differ.`,
+    reasons: ["Inferred HS heading", "Published GRA levy family", "Planning estimate"],
+    uncertaintyReasons: ["HS heading inferred from fuel and engine size", "Import duty uses the standard 20% passenger family unless a Bill of Entry profile matches"],
   };
 }
 
@@ -143,7 +155,7 @@ export function runVersionedCalculation(rawInput: unknown): VersionedCalculation
       ruleSetVersion: engineResult.ruleSetVersion,
       engineResult,
       estimateRange,
-      confidence: buildVerifiedConfidence(hsProfile.profileId),
+      confidence: buildVerifiedConfidence(hsProfile.profileId, hsProfile.confidence),
     };
   } catch (error) {
     if (isEngineError(error)) {

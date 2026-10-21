@@ -107,11 +107,12 @@ describe("duty calculation engine v4", () => {
     assert.ok(keys.indexOf("NETWORK_CHARGE") < keys.indexOf("NETWORK_CHARGE_VAT"));
   });
 
-  it("returns MISSING_RULE_SET when profile has no rules", () => {
+  it("uses Ghana passenger planning rates when HS is not a calibrated profile", () => {
     const outcome = runVersionedCalculationFromSnapshot({
-      hsCode: "999999",
+      hsCode: "870322",
       fuelType: "GASOLINE",
-      manufactureYear: 2020,
+      manufactureYear: 2023,
+      engineCc: 1498,
       assessmentDate: new Date("2024-06-15"),
       fobGhs: 100000,
       freightGhs: 1000,
@@ -119,9 +120,13 @@ describe("duty calculation engine v4", () => {
       customsValueGhs: 101100,
       documentedTotalGhs: 50000,
     });
-    assert.equal(outcome.ok, false);
-    if (outcome.ok) return;
-    assert.equal(outcome.error.code, "NEEDS_CLASSIFICATION");
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.profileId, "GH-HS-8703-GENERAL-V1");
+    assert.ok(outcome.engineResult.totalDutyPayableGhs > 0);
+    const duty = outcome.engineResult.lines.find((l) => l.chargeKey === "IMPORT_DUTY");
+    assert.ok(duty);
+    assert.equal(duty!.amountGhs, 20220);
   });
 
   it("Jetour Dashing — reproduces total and every verified line", () => {
@@ -197,7 +202,7 @@ describe("duty calculation engine v4", () => {
   });
 
   it("verified rule sets have no expression dependency gaps", () => {
-    for (const profileId of ["GH-HS-870323-VERIFIED-V1", "GH-HS-870380-VERIFIED-V1"]) {
+    for (const profileId of ["GH-HS-870323-VERIFIED-V1", "GH-HS-870380-VERIFIED-V1", "GH-HS-8703-GENERAL-V1"]) {
       const ruleSet = getRuleSetByProfileId(profileId);
       assert.ok(ruleSet);
       for (const rule of ruleSet!.rules) {

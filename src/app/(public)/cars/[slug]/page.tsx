@@ -28,6 +28,7 @@ import { buildCarGalleryImages } from "@/lib/car-gallery";
 import { resolveCarVideoPosterUrl } from "@/lib/car-video-poster";
 import { getVehicleStockBadgeForDisplay } from "@/lib/car-stock-badge";
 import { customerCheckoutBlockedMessage, getCarCheckoutIneligibleReason } from "@/lib/checkout-eligibility";
+import { inferEngineCcFromText } from "@/lib/duty-intelligence/engine-cc";
 import { engineTypeLabel } from "@/lib/engine-type-ui";
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-delivery";
 import { formatMoney } from "@/lib/format";
@@ -47,26 +48,15 @@ const sourceLabel: Record<string, string> = {
 function engineCcFromListing(car: {
   title?: string | null;
   engineDetails?: string | null;
+  model?: string | null;
   specs: { label: string; value: string }[];
 }): number | undefined {
-  const blobs = [
+  return inferEngineCcFromText(
     ...car.specs.map((s) => `${s.label} ${s.value}`),
-    car.engineDetails ?? "",
-    car.title ?? "",
-  ];
-  for (const raw of blobs) {
-    const cc = raw.match(/(\d{3,4})\s*(?:cc|cm3)\b/i);
-    if (cc) {
-      const n = Number(cc[1]);
-      if (n >= 600 && n <= 8000) return n;
-    }
-    const liters = raw.match(/(\d(?:\.\d)?)\s*(?:l|t)\b/i);
-    if (liters) {
-      const n = Math.round(Number(liters[1]) * 1000);
-      if (n >= 600 && n <= 8000) return n;
-    }
-  }
-  return undefined;
+    car.engineDetails,
+    car.title,
+    car.model,
+  );
 }
 
 export async function generateMetadata(props: Props) {
