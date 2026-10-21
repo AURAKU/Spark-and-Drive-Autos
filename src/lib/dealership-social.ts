@@ -7,6 +7,6 @@ export const DEALERSHIP_SOCIAL = {
   tiktok: "https://www.tiktok.com/@sparkanddriveautos?_r=1&_t=ZS-95ohtO1BrgT",
   instagram: "https://www.instagram.com/sparkanddriveautos?igsh=cmpiMDlwNzYxYXds&utm_source=qr",
   x: "https://x.com/sparkanddrive?s=21&t=1oI8At6346p9RXMbUxfBmg",
-  snapchat: "https://snapchat.com/t/HUmBkBu6",
+  snapchat: "https://snapchat.com/t/hboCyfDR",
   trendshub: "https://www.trendshub.live/u/sparkanddriveautos",
 } as const;
