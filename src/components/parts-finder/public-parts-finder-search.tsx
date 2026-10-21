@@ -325,25 +325,22 @@ export function PublicPartsFinderSearch() {
   return (
     <>
       <form onSubmit={onSubmit} className="mt-6 grid gap-3 rounded-2xl border border-border bg-card p-4 text-sm">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          An OEM or part number is enough to search. VIN, chassis, or brand + model + year improves fitment ranking.
-        </p>
         <div className="grid gap-2">
           <label htmlFor="partDescription" className="text-xs font-medium text-muted-foreground">
-            OEM / part number or what you need
+            What part do you need?
           </label>
           <textarea
             id="partDescription"
             name="partDescription"
             value={formVehicle.partDescription}
             onChange={(e) => setFormVehicle((prev) => ({ ...prev, partDescription: e.target.value }))}
-            placeholder="45503-60050 or front left control arm noise"
+            placeholder="Part number or describe the part"
             className="min-h-24 rounded-lg border border-border bg-background p-3"
           />
         </div>
         <div className="grid gap-2">
           <label htmlFor="vin" className="text-xs font-medium text-muted-foreground">
-            VIN for exact match (optional)
+            Vehicle VIN (optional)
           </label>
           <div className="flex flex-wrap gap-2">
             <input
@@ -351,7 +348,7 @@ export function PublicPartsFinderSearch() {
               name="vin"
               value={formVehicle.vin}
               onChange={(e) => setFormVehicle((prev) => ({ ...prev, vin: e.target.value.toUpperCase() }))}
-              placeholder="17-character VIN"
+              placeholder="If you have it"
               className="h-10 min-w-[12rem] flex-1 rounded-lg border border-border bg-background px-3"
             />
             <button
@@ -360,7 +357,7 @@ export function PublicPartsFinderSearch() {
               disabled={decodeBusy}
               className="rounded-lg border border-border px-3 text-xs font-semibold hover:bg-muted/40 disabled:opacity-60"
             >
-              Decode VIN
+              Fill from VIN
             </button>
             <button
               type="button"
@@ -368,7 +365,7 @@ export function PublicPartsFinderSearch() {
               disabled={decodeBusy}
               className="rounded-lg border border-border px-3 text-xs font-semibold hover:bg-muted/40 disabled:opacity-60"
             >
-              Save this vehicle
+              Save vehicle
             </button>
           </div>
           {decodeMessage ? <p className="text-xs text-muted-foreground">{decodeMessage}</p> : null}
@@ -400,7 +397,7 @@ export function PublicPartsFinderSearch() {
               }));
             }}
           >
-            <option value="">Select from Garage</option>
+            <option value="">Choose a saved vehicle</option>
             {garage.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
                 {vehicle.nickname || `${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -408,13 +405,6 @@ export function PublicPartsFinderSearch() {
             ))}
           </select>
         ) : null}
-        <input
-          name="chassis"
-          value={formVehicle.chassis}
-          onChange={(e) => setFormVehicle((prev) => ({ ...prev, chassis: e.target.value }))}
-          placeholder="Chassis (optional)"
-          className="h-10 rounded-lg border border-border bg-background px-3"
-        />
         <div className="grid gap-3 sm:grid-cols-3">
           <input
             name="brand"
@@ -438,25 +428,37 @@ export function PublicPartsFinderSearch() {
             className="h-10 rounded-lg border border-border bg-background px-3"
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            name="engine"
-            value={formVehicle.engine}
-            onChange={(e) => setFormVehicle((prev) => ({ ...prev, engine: e.target.value }))}
-            placeholder="Engine (optional)"
-            className="h-10 rounded-lg border border-border bg-background px-3"
-          />
-          <input
-            name="trim"
-            value={formVehicle.trim}
-            onChange={(e) => setFormVehicle((prev) => ({ ...prev, trim: e.target.value }))}
-            placeholder="Trim (optional)"
-            className="h-10 rounded-lg border border-border bg-background px-3"
-          />
-        </div>
+        <details className="rounded-lg border border-border px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">More vehicle details</summary>
+          <div className="mt-3 grid gap-3">
+            <input
+              name="chassis"
+              value={formVehicle.chassis}
+              onChange={(e) => setFormVehicle((prev) => ({ ...prev, chassis: e.target.value }))}
+              placeholder="Chassis number"
+              className="h-10 rounded-lg border border-border bg-background px-3"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                name="engine"
+                value={formVehicle.engine}
+                onChange={(e) => setFormVehicle((prev) => ({ ...prev, engine: e.target.value }))}
+                placeholder="Engine"
+                className="h-10 rounded-lg border border-border bg-background px-3"
+              />
+              <input
+                name="trim"
+                value={formVehicle.trim}
+                onChange={(e) => setFormVehicle((prev) => ({ ...prev, trim: e.target.value }))}
+                placeholder="Trim"
+                className="h-10 rounded-lg border border-border bg-background px-3"
+              />
+            </div>
+          </div>
+        </details>
         <div className="grid gap-1.5">
           <label htmlFor="partImage" className="text-xs font-medium text-muted-foreground">
-            Part photo (optional)
+            Photo (optional)
           </label>
           <input
             id="partImage"
@@ -465,9 +467,6 @@ export function PublicPartsFinderSearch() {
             accept="image/*"
             className="h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs"
           />
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            A photo can help ranking. Filename metadata is used. Final fitment still needs VIN or chassis confirmation.
-          </p>
         </div>
         <PartsFinderDisclaimerNotice version="active" />
         <button

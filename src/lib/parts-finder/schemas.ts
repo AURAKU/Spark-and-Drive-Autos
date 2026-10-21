@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const PARTS_FINDER_INPUT_HINT =
-  "Enter an OEM/part number, a VIN or chassis, or brand + model + year with the part you need.";
+  "Tell us the part you need, or add your vehicle so we can search.";
 
 /** Toyota-style 45503-60050, Hyundai 58101-2S000, Bosch-like F026T03123. */
 export function looksLikeOemPartNumber(raw: string | undefined): boolean {
