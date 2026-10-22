@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   cloudinarySrcSet,
   cloudinaryWidthUrl,
+  encodeCloudinarySrcSetUrl,
+  forceCloudinaryJpegUrl,
   isCloudinaryMediaUrl,
   optimizeCloudinaryUrl,
   shouldBypassNextImageOptimizer,
@@ -32,6 +34,25 @@ test("responsive srcset offers multiple high-fidelity widths", () => {
   assert.match(srcSet!, /960w/);
   assert.match(srcSet!, /2560w/);
   assert.equal(srcSet!.includes("q_auto:best"), true);
+  assert.equal(srcSet!.includes("c_limit,"), false, "raw commas inside a candidate break Safari srcset parsing");
+  assert.match(srcSet!, /c_limit%2C/);
+  assert.match(srcSet!, /, https:\/\//);
+});
+
+test("srcset candidate URLs percent-encode Cloudinary commas", () => {
+  const href = "https://res.cloudinary.com/demo/image/upload/c_limit,w_480,q_auto:best,f_auto/v1/spark/cars/dashing.jpg";
+  assert.equal(
+    encodeCloudinarySrcSetUrl(href),
+    "https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_480%2Cq_auto:best%2Cf_auto/v1/spark/cars/dashing.jpg",
+  );
+});
+
+test("JPEG force replaces f_auto for Safari decode fallback", () => {
+  const auto = optimizeCloudinaryUrl(raw, "card");
+  const jpg = forceCloudinaryJpegUrl(auto);
+  assert.ok(jpg);
+  assert.match(jpg!, /f_jpg/);
+  assert.equal(jpg!.includes("f_auto"), false);
 });
 
 test("already-transformed Cloudinary URLs are left intact", () => {

@@ -214,10 +214,12 @@ export default async function HomePage() {
               <code className="rounded bg-white/5 px-1 py-0.5">npm run db:seed</code>.
             </p>
           ) : (
-            spotlight.entries.map((entry) =>
+            spotlight.entries.map((entry, index) =>
               entry.kind === "car" ? (
                 <CarCard
                   key={`car-${entry.car.id}`}
+                  imagePriority={index === 0}
+                  imageLoading={index < 3 ? "eager" : "lazy"}
                   car={entry.car}
                   displayAmount={getCarDisplayPrice(Number(entry.car.basePriceRmb), displayCurrency, fx)}
                   displayCurrency={displayCurrency}

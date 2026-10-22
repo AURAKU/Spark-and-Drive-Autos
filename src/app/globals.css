@@ -568,26 +568,114 @@
 
   /**
    * Always-dark premium ink panel (use sparingly).
-   * Forces child zinc/muted utilities to stay bright so light-mode remaps cannot wash them out.
+   * Opaque navy so it cannot wash to gray on a light page. Child type, inputs,
+   * and glass utilities stay bright — light-mode remaps cannot invert them.
    */
   .sda-ink-panel {
-    border: 1px solid rgb(255 255 255 / 0.12);
-    background: linear-gradient(to bottom right, #0c1420, rgb(0 0 0 / 0.65));
+    --brand: #5ee7f0;
+    --brand-readable: #5ee7f0;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    background: linear-gradient(to bottom right, #0b1220, #0d111c 52%, #14101c);
     color: rgb(244 244 245);
   }
 
-  .sda-ink-panel .text-zinc-300 {
-    color: rgb(228 228 231) !important;
+  .sda-ink-panel h1 {
+    color: #5ee7f0 !important;
   }
 
+  .sda-ink-panel h2,
+  .sda-ink-panel h3,
+  .sda-ink-panel h4,
+  .sda-ink-panel .text-white,
+  .sda-ink-panel .text-zinc-50,
+  .sda-ink-panel .text-zinc-100,
+  .sda-ink-panel .text-zinc-200 {
+    color: rgb(244 244 245) !important;
+  }
+
+  .sda-ink-panel .text-zinc-300,
   .sda-ink-panel .text-zinc-400 {
-    color: rgb(212 212 216) !important;
+    color: rgb(228 228 231) !important;
   }
 
   .sda-ink-panel .text-zinc-500,
   .sda-ink-panel .text-zinc-600,
   .sda-ink-panel .text-muted-foreground {
-    color: rgb(161 161 170) !important;
+    color: rgb(212 212 216) !important;
+  }
+
+  .light .sda-ink-panel h1 {
+    color: #5ee7f0 !important;
+  }
+
+  .light .sda-ink-panel h2,
+  .light .sda-ink-panel h3,
+  .light .sda-ink-panel h4 {
+    color: rgb(244 244 245) !important;
+  }
+
+  .light .sda-ink-panel p:not([class*="text-"]) {
+    color: rgb(228 228 231) !important;
+  }
+
+  .light .sda-ink-panel .text-white,
+  .light .sda-ink-panel .text-zinc-50,
+  .light .sda-ink-panel .text-zinc-100,
+  .light .sda-ink-panel .text-zinc-200 {
+    color: rgb(244 244 245) !important;
+  }
+
+  .light .sda-ink-panel .text-zinc-300,
+  .light .sda-ink-panel .text-zinc-400 {
+    color: rgb(228 228 231) !important;
+  }
+
+  .light .sda-ink-panel .text-zinc-500,
+  .light .sda-ink-panel .text-zinc-600,
+  .light .sda-ink-panel .text-muted-foreground {
+    color: rgb(212 212 216) !important;
+  }
+
+  .light .sda-ink-panel .hover\:text-white:hover {
+    color: rgb(255 255 255) !important;
+  }
+
+  .light .sda-ink-panel input:not([type="hidden"]),
+  .light .sda-ink-panel select,
+  .light .sda-ink-panel textarea {
+    color: rgb(244 244 245) !important;
+    background-color: rgb(0 0 0 / 0.55) !important;
+    border-color: rgb(255 255 255 / 0.28) !important;
+  }
+
+  .light .sda-ink-panel input::placeholder,
+  .light .sda-ink-panel textarea::placeholder {
+    color: rgb(212 212 216) !important;
+  }
+
+  .light .sda-ink-panel label {
+    color: rgb(228 228 231) !important;
+  }
+
+  .light .sda-ink-panel [class*="bg-black/20"],
+  .light .sda-ink-panel [class*="bg-black/30"],
+  .light .sda-ink-panel [class*="bg-black/40"],
+  .light .sda-ink-panel [class*="bg-black/50"] {
+    background-color: rgb(0 0 0 / 0.4) !important;
+  }
+
+  .light .sda-ink-panel [class*="bg-white/[0.02]"],
+  .light .sda-ink-panel [class*="bg-white/[0.03]"],
+  .light .sda-ink-panel [class*="bg-white/[0.04]"],
+  .light .sda-ink-panel [class*="bg-white/[0.05]"] {
+    background-color: rgb(255 255 255 / 0.1) !important;
+  }
+
+  .light .sda-ink-panel [class*="border-white/10"],
+  .light .sda-ink-panel [class*="border-white/12"],
+  .light .sda-ink-panel [class*="border-white/15"],
+  .light .sda-ink-panel [class*="border-white/20"] {
+    border-color: rgb(255 255 255 / 0.24) !important;
   }
 
   /**

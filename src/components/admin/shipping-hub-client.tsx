@@ -93,12 +93,12 @@ export function ShippingHubClient({
 
   return (
     <div className="space-y-8">
-      <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0a1628]/90 via-[#05070b] to-black/80 p-5 shadow-[0_0_80px_-40px_rgba(49,182,199,0.35)] sm:p-6">
+      <div className="sda-ink-panel rounded-3xl p-5 shadow-[0_0_80px_-40px_rgba(49,182,199,0.35)] sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-[0.25em] text-[var(--brand)] uppercase">Live pipeline</p>
+            <p className="text-xs font-semibold tracking-[0.16em] text-[var(--brand-readable)] uppercase">Live pipeline</p>
             <h2 className="mt-1 text-xl font-semibold text-white sm:text-2xl">Shipment control center</h2>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-200">
               Use the filters above to focus on parts (Ghana vs China stock) or cars (Ghana vs China / in transit). Expand a
               row for milestones and fee/ETA edits. Customer-visible updates sync to dashboards instantly.
             </p>
@@ -120,23 +120,23 @@ export function ShippingHubClient({
                   className={cn(
                     "rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[44px] inline-flex items-center justify-center",
                     item.active
-                      ? "border-[var(--brand)]/60 bg-[var(--brand)]/15 text-[var(--brand)]"
-                      : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white",
+                      ? "border-[var(--brand)] bg-[var(--brand)]/20 text-[var(--brand-readable)]"
+                      : "border-white/25 bg-white/[0.08] text-zinc-100 hover:border-white/40 hover:text-white",
                   )}
                   aria-current={item.active ? "page" : undefined}
                 >
                   {item.label}{" "}
-                  <span className="ml-1 tabular-nums text-zinc-500">({item.count})</span>
+                  <span className="ml-1 tabular-nums text-zinc-200">({item.count})</span>
                 </Link>
               ))}
             </nav>
-            <div className="grid w-full max-w-md grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-center sm:max-w-xs">
+            <div className="grid w-full max-w-md grid-cols-2 gap-2 rounded-2xl border border-white/25 bg-black/40 p-3 text-center sm:max-w-xs">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">In view</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-readable)]">In view</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-white">{rows.length}</p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Selected</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-readable)]">Selected</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--brand)]">{selectedIds.length}</p>
               </div>
             </div>
@@ -155,23 +155,23 @@ export function ShippingHubClient({
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/20 p-4 sm:p-5">
+      <div className="sda-ink-panel rounded-2xl p-4 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="text-sm font-semibold text-white">Bulk stage transition</h3>
-            <p className="mt-1 text-xs text-zinc-500">Select shipments, choose a logistics stage, publish one customer-visible title.</p>
+            <p className="mt-1 text-xs text-zinc-200">Select shipments, choose a logistics stage, publish one customer-visible title.</p>
           </div>
         </div>
         <form action={bulkAction} className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
           <input type="hidden" name="shipmentIds" value={selectedIds.join(",")} />
           <div className="w-full sm:w-48">
-            <Label htmlFor="bulk-ship-stage" className="text-[10px] uppercase tracking-wide text-zinc-500">
+            <Label htmlFor="bulk-ship-stage" className="text-[10px] uppercase tracking-wide text-[var(--brand-readable)]">
               Stage
             </Label>
             <select
               id="bulk-ship-stage"
               name="stage"
-              className="mt-1 h-11 w-full rounded-xl border border-white/12 bg-black/50 px-3 text-sm text-white focus:border-[var(--brand)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/20"
+              className="mt-1 h-11 w-full rounded-xl border border-white/25 bg-black/50 px-3 text-sm text-white focus:border-[var(--brand)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/25"
             >
               {STAGES.map((s) => (
                 <option key={s} value={s}>
@@ -181,7 +181,7 @@ export function ShippingHubClient({
             </select>
           </div>
           <div className="min-w-0 flex-1 sm:min-w-[14rem]">
-            <Label htmlFor="bulk-ship-title" className="text-[10px] uppercase tracking-wide text-zinc-500">
+            <Label htmlFor="bulk-ship-title" className="text-[10px] uppercase tracking-wide text-[var(--brand-readable)]">
               Title (customer-visible)
             </Label>
             <Input
@@ -189,7 +189,7 @@ export function ShippingHubClient({
               name="title"
               required
               placeholder="e.g. Cleared customs"
-              className="mt-1 h-11 rounded-xl border-white/12 bg-black/40"
+              className="mt-1 h-11 rounded-xl border-white/25 bg-black/50 text-zinc-50"
             />
           </div>
           <Button type="submit" size="default" disabled={selectedIds.length === 0} className="h-11 w-full sm:w-auto">

@@ -262,7 +262,7 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
           {cars.length === 0 ? (
             <p className="text-sm text-zinc-500">No vehicles match your filters yet.</p>
           ) : (
-            cars.map((car) => {
+            cars.map((car, index) => {
               const checkoutOk = getCarCheckoutIneligibleReason(car) === null;
               const pctStored =
                 car.reservationDepositPercent != null ? Number(car.reservationDepositPercent) : null;
@@ -278,6 +278,8 @@ export default async function InventoryPage(props: { searchParams: SearchParams 
               return (
                 <CarCard
                   key={car.id}
+                  imagePriority={index === 0}
+                  imageLoading={index < 3 ? "eager" : "lazy"}
                   car={{
                     id: car.id,
                     slug: car.slug,

@@ -8,6 +8,7 @@ import type { CloudinaryDeliveryPreset } from "@/lib/cloudinary-delivery";
 import {
   cloudinaryBlurPlaceholderUrl,
   cloudinarySrcSet,
+  forceCloudinaryJpegUrl,
   isCloudinaryMediaUrl,
   optimizeCloudinaryUrl,
   shouldBypassNextImageOptimizer,
@@ -133,8 +134,10 @@ export function VehicleCoverImage(props: Props) {
   const [displaySrcSet, setDisplaySrcSet] = useState(responsive.srcSet);
   const [paintedSrc, setPaintedSrc] = useState<string | null>(null);
   const [hiResReady, setHiResReady] = useState(false);
+  const retryKey = useRef(0);
 
   useEffect(() => {
+    retryKey.current = 0;
     setFailed(false);
     setLoaded(false);
     setHiResReady(false);
@@ -177,11 +180,31 @@ export function VehicleCoverImage(props: Props) {
   const unoptimized = shouldUnoptimizeImageUrl(current);
   const showPlaceholder = imagePlaceholder && !paintedSrc && (!loaded || !canFetch) && !failed;
   const cloudinaryNative = isCloudinaryMediaUrl(src) && !failed;
+  const originalUrl = src?.trim() ?? "";
+  const jpegFallback = originalUrl ? forceCloudinaryJpegUrl(optimizeCloudinaryUrl(originalUrl, deliveryPreset)) : null;
+  const imgKey = `${current}|${displaySrcSet ?? ""}|${retryKey.current}`;
 
   const onError = () => {
-    if (current !== VEHICLE_IMAGE_PLACEHOLDER_SRC) {
-      setFailed(true);
+    if (current === VEHICLE_IMAGE_PLACEHOLDER_SRC) return;
+    // 1) Safari often errors the whole <img> when srcset commas parse as extra candidates.
+    if (displaySrcSet) {
+      retryKey.current += 1;
+      setDisplaySrcSet(undefined);
+      return;
     }
+    // 2) AVIF/auto-format decode failures — retry as JPEG.
+    if (jpegFallback && displaySrc !== jpegFallback) {
+      retryKey.current += 1;
+      setDisplaySrc(jpegFallback);
+      return;
+    }
+    // 3) Last photo attempt: the stored URL with no delivery rewrite.
+    if (originalUrl && displaySrc !== originalUrl && originalUrl !== VEHICLE_IMAGE_PLACEHOLDER_SRC) {
+      retryKey.current += 1;
+      setDisplaySrc(originalUrl);
+      return;
+    }
+    setFailed(true);
   };
 
   const placeholderLayer = showPlaceholder ? (
@@ -220,6 +243,7 @@ export function VehicleCoverImage(props: Props) {
         {canFetch && cloudinaryNative ? (
           // eslint-disable-next-line @next/next/no-img-element -- Cloudinary srcset + no Next re-encode
           <img
+            key={imgKey}
             src={current}
             srcSet={hiResReady ? undefined : displaySrcSet}
             sizes={sizes}
@@ -236,6 +260,7 @@ export function VehicleCoverImage(props: Props) {
           />
         ) : canFetch ? (
           <Image
+            key={imgKey}
             src={current}
             alt={alt}
             fill
@@ -278,6 +303,7 @@ export function VehicleCoverImage(props: Props) {
       {canFetch && cloudinaryNative ? (
         // eslint-disable-next-line @next/next/no-img-element -- Cloudinary srcset + no Next re-encode
         <img
+          key={imgKey}
           src={current}
           srcSet={hiResReady ? undefined : displaySrcSet}
           sizes={sizes}
@@ -296,6 +322,7 @@ export function VehicleCoverImage(props: Props) {
         />
       ) : canFetch ? (
         <Image
+          key={imgKey}
           src={current}
           alt={alt}
           width={props.width}

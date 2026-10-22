@@ -211,15 +211,15 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
         <AdminOperationsDateFilter />
       </Suspense>
 
-      <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#0b1220] via-[#0d111c] to-[#14101c] shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-32px_rgba(49,182,199,0.35)]">
-        <div className="border-b border-white/[0.06] bg-black/20 px-5 py-4 sm:px-6">
+      <div className="sda-ink-panel overflow-hidden rounded-3xl shadow-[0_24px_80px_-32px_rgba(49,182,199,0.4)]">
+        <div className="border-b border-white/15 bg-black/30 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--brand)]">Finance operations</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-readable)]">Finance operations</p>
               <PageHeading variant="dashboard" className="mt-1 sm:text-3xl">
                 Payment intelligence
               </PageHeading>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-200">
                 Live revenue, settlement health, wallet flows, and inventory-level profit. Aligned with the same date window as
                 orders and shipping.
               </p>
@@ -228,32 +228,32 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               <div className="flex flex-wrap gap-2">
                 <Link
                   href="/admin/settings"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/25 hover:bg-white/[0.08]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-white/40 hover:bg-white/[0.14]"
                 >
                   <Wrench className="size-3.5 opacity-80" aria-hidden />
                   Providers
                 </Link>
                 <Link
                   href="/admin/disputes"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/25 hover:bg-white/[0.08]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-white/40 hover:bg-white/[0.14]"
                 >
                   <CreditCard className="size-3.5 opacity-80" aria-hidden />
                   Disputes
                 </Link>
-                <Suspense fallback={<span className="text-xs text-zinc-500">Export…</span>}>
+                <Suspense fallback={<span className="text-xs text-zinc-300">Export…</span>}>
                   <AdminPaymentsExportButtons />
                 </Suspense>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Display</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-readable)]">Display</span>
                 {(["GHS", "USD", "CNY"] as const).map((c) => (
                   <Link
                     key={c}
                     href={buildHref({ displayCurrency: c === "GHS" ? null : c, resetListPages: true })}
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                       displayCurrency === c
-                        ? "border-[var(--brand)]/70 bg-[var(--brand)]/15 text-[var(--brand)]"
-                        : "border-white/12 text-zinc-400 hover:border-white/25 hover:text-white"
+                        ? "border-[var(--brand)] bg-[var(--brand)]/20 text-[var(--brand-readable)]"
+                        : "border-white/25 bg-white/[0.08] text-zinc-100 hover:border-white/40 hover:text-white"
                     }`}
                   >
                     {c}
@@ -261,7 +261,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 ))}
                 <Link
                   href="/admin/settings/currency"
-                  className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-zinc-500 hover:border-[var(--brand)]/40 hover:text-[var(--brand)]"
+                  className="rounded-full border border-white/25 bg-white/[0.08] px-2.5 py-1 text-[11px] font-medium text-zinc-100 hover:border-[var(--brand)]/50 hover:text-[var(--brand-readable)]"
                 >
                   FX rates
                 </Link>
@@ -270,40 +270,40 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
           </div>
 
           <nav
-            className="mt-5 flex flex-wrap gap-2 border-t border-white/[0.05] pt-4"
+            className="mt-5 flex flex-wrap gap-2 border-t border-white/15 pt-4"
             aria-label="Cross-module drilldowns"
           >
             <Link
               href={ordersHref}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/35 hover:bg-[var(--brand)]/10"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-[var(--brand)]/50 hover:bg-[var(--brand)]/15"
             >
-              <Package className="size-3.5 text-[var(--brand)]" aria-hidden />
+              <Package className="size-3.5 text-[var(--brand-readable)]" aria-hidden />
               All orders
-              <ArrowRight className="size-3 opacity-50" aria-hidden />
+              <ArrowRight className="size-3 opacity-70" aria-hidden />
             </Link>
             <Link
               href={ordersCarHref}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/20"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-white/40"
             >
               Cars only
             </Link>
             <Link
               href={ordersPartsHref}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/20"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-white/40"
             >
               Parts only
             </Link>
             <Link
               href={shippingHref}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
             >
-              <Ship className="size-3.5 text-cyan-400/90" aria-hidden />
+              <Ship className="size-3.5 text-cyan-300" aria-hidden />
               Shipping hub
-              <ArrowRight className="size-3 opacity-50" aria-hidden />
+              <ArrowRight className="size-3 opacity-70" aria-hidden />
             </Link>
             <Link
               href={buildHref({ status: "FAILED", resetListPages: true })}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-400/40 bg-rose-500/20 px-3 py-2 text-xs font-semibold text-rose-50 transition hover:bg-rose-500/30"
             >
               Failed payments
             </Link>
@@ -312,7 +312,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
 
         <div className="space-y-4 px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Time range</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-readable)]">Time range</p>
             <div className="flex flex-wrap gap-2">
               {(["7d", "30d", "90d", "all"] as const).map((p) => (
                 <Link
@@ -320,8 +320,8 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                   href={buildHref({ period: p, resetListPages: true })}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     period === p
-                      ? "border-[var(--brand)]/60 bg-[var(--brand)]/12 text-[var(--brand)]"
-                      : "border-white/12 text-zinc-400 hover:border-white/22 hover:text-white"
+                      ? "border-[var(--brand)] bg-[var(--brand)]/20 text-[var(--brand-readable)]"
+                      : "border-white/25 bg-white/[0.08] text-zinc-100 hover:border-white/40 hover:text-white"
                   }`}
                 >
                   {p === "all" ? "All time" : `Last ${p.slice(0, -1)} days`}
@@ -329,7 +329,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               ))}
               <Link
                 href="/admin/payments/intelligence"
-                className="rounded-full border border-white/12 px-3 py-1.5 text-xs text-zinc-500 hover:text-white"
+                className="rounded-full border border-white/25 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-100 hover:text-white"
               >
                 Reset all
               </Link>
@@ -337,12 +337,12 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
           </div>
 
           <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Order type</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-readable)]">Order type</p>
             <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by order kind">
               <Link
                 href={buildHref({ orderKind: "", resetListPages: true })}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  !orderKindFilter ? "border-white/25 bg-white/10 text-white" : "border-white/12 text-zinc-400 hover:text-white"
+                  !orderKindFilter ? "border-white/40 bg-white/15 text-white" : "border-white/25 bg-white/[0.08] text-zinc-100 hover:text-white"
                 }`}
               >
                 All kinds
@@ -351,8 +351,8 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 href={buildHref({ orderKind: "CAR", resetListPages: true })}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   orderKindFilter === "CAR"
-                    ? "border-[var(--brand)]/60 bg-[var(--brand)]/12 text-[var(--brand)]"
-                    : "border-white/12 text-zinc-400 hover:text-white"
+                    ? "border-[var(--brand)] bg-[var(--brand)]/20 text-[var(--brand-readable)]"
+                    : "border-white/25 bg-white/[0.08] text-zinc-100 hover:text-white"
                 }`}
               >
                 <Package className="size-3.5" aria-hidden />
@@ -362,8 +362,8 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
                 href={buildHref({ orderKind: "PARTS", resetListPages: true })}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   orderKindFilter === "PARTS"
-                    ? "border-[var(--brand)]/60 bg-[var(--brand)]/12 text-[var(--brand)]"
-                    : "border-white/12 text-zinc-400 hover:text-white"
+                    ? "border-[var(--brand)] bg-[var(--brand)]/20 text-[var(--brand-readable)]"
+                    : "border-white/25 bg-white/[0.08] text-zinc-100 hover:text-white"
                 }`}
               >
                 <CreditCard className="size-3.5" aria-hidden />
@@ -402,7 +402,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               name="q"
               defaultValue={q}
               placeholder="Search reference, payment id, order ref, email…"
-              className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-[var(--brand)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/25 sm:min-w-[280px]"
+              className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-xl border border-white/25 bg-black/50 px-3 text-sm text-zinc-50 placeholder:text-zinc-300 focus:border-[var(--brand)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/30 sm:min-w-[280px]"
             />
             <button
               type="submit"
@@ -420,7 +420,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
           <p className="text-[11px] text-zinc-500">Paystack payment rows in the active filter window</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="flex gap-4 overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/12 to-black/50 p-4 shadow-lg shadow-emerald-950/20 sm:p-5">
+          <div className="sda-ink-panel flex gap-4 overflow-hidden rounded-2xl border-emerald-400/35 p-4 sm:p-5">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
               <Banknote className="size-5" aria-hidden />
             </div>
@@ -434,7 +434,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               <p className="mt-2 text-xs leading-snug text-emerald-200/75">{successCount} successful payment records</p>
             </div>
           </div>
-          <div className="flex gap-4 overflow-hidden rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-500/12 to-black/50 p-4 shadow-lg shadow-rose-950/20 sm:p-5">
+          <div className="sda-ink-panel flex gap-4 overflow-hidden rounded-2xl border-rose-400/40 p-4 sm:p-5">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-300">
               <TrendingUp className="size-5" aria-hidden />
             </div>
@@ -446,7 +446,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               <p className="mt-2 text-xs leading-snug text-rose-200/75">{failedCount} failed transactions</p>
             </div>
           </div>
-          <div className="flex gap-4 overflow-hidden rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-black/50 p-4 sm:p-5">
+          <div className="sda-ink-panel flex gap-4 overflow-hidden rounded-2xl border-sky-400/40 p-4 sm:p-5">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-500/10 text-sky-300">
               <CreditCard className="size-5" aria-hidden />
             </div>
@@ -456,7 +456,7 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
               <p className="mt-2 text-xs leading-snug text-sky-200/75">{totals} payment records in range</p>
             </div>
           </div>
-          <div className="flex gap-4 overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-black/50 p-4 sm:p-5">
+          <div className="sda-ink-panel flex gap-4 overflow-hidden rounded-2xl border-amber-400/40 p-4 sm:p-5">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-500/10 text-amber-300">
               <Package className="size-5" aria-hidden />
             </div>
@@ -474,71 +474,71 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
       <section className="space-y-3" aria-label="Sales and profit summary">
         <h2 className="text-sm font-semibold tracking-tight text-white">Commercial summary</h2>
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-black/30 p-5 ring-1 ring-white/[0.04]">
-            <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-white/5 text-zinc-300">
+          <div className="sda-ink-panel rounded-2xl p-5">
+            <div className="flex items-center gap-2 border-b border-white/15 pb-3">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-white/10 text-zinc-100">
                 <Wallet className="size-4" aria-hidden />
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Gross sales tracked</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-100">Gross sales tracked</p>
             </div>
             <p className="mt-4 text-2xl font-semibold tabular-nums text-white">{formatIntelMoneyFromGhs(grossSales, displayCurrency, fx)}</p>
-            <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-2 text-xs leading-relaxed text-zinc-200">
               Paystack success + wallet parts ({formatIntelMoneyFromGhs(partsSalesFromWallet, displayCurrency, fx)}).
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-black/30 p-5 ring-1 ring-white/[0.04]">
-            <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-white/5 text-zinc-300">
+          <div className="sda-ink-panel rounded-2xl p-5">
+            <div className="flex items-center gap-2 border-b border-white/15 pb-3">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-white/10 text-zinc-100">
                 <ArrowRight className="size-4" aria-hidden />
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Wallet net flow</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-100">Wallet net flow</p>
             </div>
             <p className={`mt-4 text-2xl font-semibold tabular-nums ${netWalletFlow >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
               {formatIntelMoneyFromGhs(netWalletFlow, displayCurrency, fx)}
             </p>
-            <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-2 text-xs leading-relaxed text-zinc-200">
               Credits {formatIntelMoneyFromGhs(walletCredits, displayCurrency, fx)} · Debits{" "}
               {formatIntelMoneyFromGhs(walletDebits, displayCurrency, fx)} · Pending {walletPendingCount}
             </p>
           </div>
-          <div className="rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/40 via-black/40 to-black/60 p-5 ring-1 ring-emerald-500/10 lg:min-h-[11rem]">
-            <div className="flex items-center gap-2 border-b border-emerald-500/10 pb-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
+          <div className="sda-ink-panel rounded-2xl border-emerald-400/35 p-5 lg:min-h-[11rem]">
+            <div className="flex items-center gap-2 border-b border-emerald-400/25 pb-3">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300">
                 <TrendingUp className="size-4" aria-hidden />
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Gross profit (est.)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-100">Gross profit (est.)</p>
             </div>
             <p className="mt-4 text-2xl font-semibold tabular-nums text-emerald-200">
               {formatIntelMoneyFromGhs(totalProfitEstGhs, displayCurrency, fx)}
             </p>
-            <dl className="mt-3 grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
-              <div className="rounded-lg bg-black/30 px-2.5 py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Revenue</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(totalRevenueEstGhs, displayCurrency, fx)}</dd>
+            <dl className="mt-3 grid gap-2 text-xs text-zinc-200 sm:grid-cols-2">
+              <div className="rounded-lg bg-black/40 px-2.5 py-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-300">Revenue</dt>
+                <dd className="mt-0.5 font-medium text-zinc-50">{formatIntelMoneyFromGhs(totalRevenueEstGhs, displayCurrency, fx)}</dd>
               </div>
-              <div className="rounded-lg bg-black/30 px-2.5 py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">COGS</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(profitIntel.cogsGhs, displayCurrency, fx)}</dd>
+              <div className="rounded-lg bg-black/40 px-2.5 py-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-300">COGS</dt>
+                <dd className="mt-0.5 font-medium text-zinc-50">{formatIntelMoneyFromGhs(profitIntel.cogsGhs, displayCurrency, fx)}</dd>
               </div>
-              <div className="rounded-lg bg-black/30 px-2.5 py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Cars profit</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(profitSplit.car.profitGhs, displayCurrency, fx)}</dd>
+              <div className="rounded-lg bg-black/40 px-2.5 py-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-300">Cars profit</dt>
+                <dd className="mt-0.5 font-medium text-zinc-50">{formatIntelMoneyFromGhs(profitSplit.car.profitGhs, displayCurrency, fx)}</dd>
               </div>
-              <div className="rounded-lg bg-black/30 px-2.5 py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Parts profit</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">{formatIntelMoneyFromGhs(profitSplit.parts.profitGhs, displayCurrency, fx)}</dd>
+              <div className="rounded-lg bg-black/40 px-2.5 py-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-300">Parts profit</dt>
+                <dd className="mt-0.5 font-medium text-zinc-50">{formatIntelMoneyFromGhs(profitSplit.parts.profitGhs, displayCurrency, fx)}</dd>
               </div>
-              <div className="rounded-lg bg-black/30 px-2.5 py-2 sm:col-span-2">
-                <dt className="text-[10px] uppercase tracking-wide text-zinc-600">Parts Finder activation</dt>
-                <dd className="mt-0.5 font-medium text-zinc-200">
+              <div className="rounded-lg bg-black/40 px-2.5 py-2 sm:col-span-2">
+                <dt className="text-[10px] uppercase tracking-wide text-zinc-300">Parts Finder activation</dt>
+                <dd className="mt-0.5 font-medium text-zinc-50">
                   {formatIntelMoneyFromGhs(partsFinderActivationProfitGhs, displayCurrency, fx)}
-                  <span className="ml-1.5 font-normal text-zinc-500">
+                  <span className="ml-1.5 font-normal text-zinc-300">
                     ({partsFinderActivationCount} payment{partsFinderActivationCount === 1 ? "" : "s"} · no COGS)
                   </span>
                 </dd>
               </div>
             </dl>
-            <p className="mt-3 text-[11px] text-zinc-600">
+            <p className="mt-3 text-[11px] text-zinc-200">
               {profitIntel.ordersAttributed} Paystack payment(s) tied to orders
               {partsFinderActivationCount > 0 ? (
                 <>
@@ -574,9 +574,9 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
       />
 
       <section className="grid gap-6 lg:grid-cols-2" aria-label="Filterable status and channel breakdown">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Status filters</h2>
-          <p className="mt-1 text-xs text-zinc-600">Tap to apply to the table below.</p>
+        <div className="sda-ink-panel rounded-2xl p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-100">Status filters</h2>
+          <p className="mt-1 text-xs text-zinc-200">Tap to apply to the table below.</p>
           <ul className="mt-4 max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto overscroll-contain pr-1">
             {PAYMENT_STATUS_ORDER.map((s) => {
               const m = statusMap.get(s) ?? { count: 0, amount: 0 };
@@ -601,9 +601,9 @@ export default async function PaymentIntelligencePage(props: { searchParams: Sea
             })}
           </ul>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Settlement filters</h2>
-          <p className="mt-1 text-xs text-zinc-600">Tap to filter by payment route.</p>
+        <div className="sda-ink-panel rounded-2xl p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-100">Settlement filters</h2>
+          <p className="mt-1 text-xs text-zinc-200">Tap to filter by payment route.</p>
           <ul className="mt-4 max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto overscroll-contain pr-1">
             {SETTLEMENT_METHOD_ORDER.map((m) => {
               const x = methodMap.get(m) ?? { count: 0, amount: 0 };

@@ -114,6 +114,27 @@ export function cloudinaryWidthUrl(url: string, width: number): string | null {
   return `${parsed.prefix}c_limit,w_${w},q_auto:best,f_auto/${parsed.rest}`;
 }
 
+/**
+ * HTML srcset splits candidates on commas. Cloudinary transforms use commas
+ * (`c_limit,w_480,q_auto:best,f_auto`), so Safari/iPad treats those as extra
+ * candidates, 404s the image, and our UI falls back to the logo. Encode them.
+ */
+export function encodeCloudinarySrcSetUrl(url: string): string {
+  return url.replaceAll(",", "%2C");
+}
+
+/** Prefer JPEG when AVIF/auto format fails to decode on a client (notably iPad Safari). */
+export function forceCloudinaryJpegUrl(url: string): string | null {
+  if (!isCloudinaryMediaUrl(url)) return null;
+  if (url.includes("f_jpg")) return url;
+  if (/f_auto(?::[a-z0-9]+)?/i.test(url)) {
+    return url.replace(/f_auto(?::[a-z0-9]+)?/gi, "f_jpg");
+  }
+  const parsed = parseCloudinaryUpload(url);
+  if (!parsed || parsed.hasTransform) return null;
+  return `${parsed.prefix}f_jpg/${parsed.rest}`;
+}
+
 export function cloudinarySrcSet(
   url: string,
   preset: CloudinaryDeliveryPreset,
@@ -125,7 +146,7 @@ export function cloudinarySrcSet(
   const parts = widths
     .map((w) => {
       const href = cloudinaryWidthUrl(url, w);
-      return href ? `${href} ${w}w` : null;
+      return href ? `${encodeCloudinarySrcSetUrl(href)} ${w}w` : null;
     })
     .filter((v): v is string => Boolean(v));
   if (parts.length === 0) return { src };

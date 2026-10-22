@@ -32,16 +32,16 @@ export function AdminPaymentsExportButtons() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-zinc-500">Export</span>
+      <span className="text-xs font-medium text-zinc-100">Export</span>
       <a
         href={pdfHref}
-        className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/50 hover:text-white"
+        className="rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:border-[var(--brand)]/50 hover:text-white"
       >
         PDF
       </a>
       <a
         href={xlsHref}
-        className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/50 hover:text-white"
+        className="rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:border-[var(--brand)]/50 hover:text-white"
       >
         Excel (.xls)
       </a>

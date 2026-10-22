@@ -121,26 +121,26 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
         <AdminOperationsDateFilter />
       </Suspense>
 
-      <div className="overflow-hidden rounded-3xl border border-cyan-500/15 bg-gradient-to-br from-[#061018] via-[#0a0f18] to-[#120c18] shadow-[0_0_0_1px_rgba(34,211,238,0.06),0_28px_90px_-36px_rgba(34,211,238,0.22)]">
-        <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-400/90">Logistics operations</p>
+      <div className="sda-ink-panel overflow-hidden rounded-3xl shadow-[0_28px_90px_-36px_rgba(34,211,238,0.28)]">
+        <div className="px-5 py-5 sm:px-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-readable)]">Logistics operations</p>
           <PageHeading variant="dashboard" className="mt-1 sm:text-3xl">
             Shipping &amp; fulfilment
           </PageHeading>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-200">
             Flow-based tracking for parts &amp; accessories (Ghana stock vs China stock) and cars (Ghana vs China / in
-            transit). The calendar uses <span className="text-zinc-200">order created</span> time. Match it with payment
+            transit). The calendar uses <span className="text-zinc-50">order created</span> time. Match it with payment
             intelligence for one timeline.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
               href={paymentsIntelHref}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:border-[var(--brand)]/50 hover:bg-[var(--brand)]/15"
             >
               Payment intelligence
               <span aria-hidden>→</span>
             </a>
-            <GhanaPartsTrackingInfoButton variant="admin" className="!max-w-none border-white/12 bg-white/[0.04] text-zinc-200 hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10" />
+            <GhanaPartsTrackingInfoButton variant="admin" className="!max-w-none border-white/25 bg-white/10 text-zinc-100 hover:border-[var(--brand)]/50 hover:bg-[var(--brand)]/15" />
           </div>
           <form className="mt-4 flex max-w-xl flex-wrap items-center gap-2" method="get">
             {typeof sp.opsDateMode === "string" ? <input type="hidden" name="opsDateMode" value={sp.opsDateMode} /> : null}
@@ -153,18 +153,18 @@ export default async function AdminShippingPage(props: { searchParams: SearchPar
               name="q"
               defaultValue={query}
               placeholder="Search tracking #, order ref, car title, part, or carrier"
-              className="h-10 min-w-[18rem] flex-1 rounded-xl border border-white/12 bg-black/35 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[var(--brand)]/45 focus:outline-none"
+              className="h-10 min-w-[18rem] flex-1 rounded-xl border border-white/25 bg-black/50 px-3 text-sm text-zinc-50 placeholder:text-zinc-300 focus:border-[var(--brand)]/60 focus:outline-none"
             />
             <button
               type="submit"
-              className="inline-flex h-10 items-center rounded-xl border border-white/12 bg-white/[0.06] px-3 text-sm text-zinc-200 transition hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/10"
+              className="inline-flex h-10 items-center rounded-xl bg-[var(--brand)] px-3 text-sm font-semibold text-black transition hover:brightness-110"
             >
               Search
             </button>
             {query ? (
               <a
                 href={shippingBaseHref}
-                className="inline-flex h-10 items-center rounded-xl border border-white/12 px-3 text-sm text-zinc-400 transition hover:text-zinc-200"
+                className="inline-flex h-10 items-center rounded-xl border border-white/25 bg-white/10 px-3 text-sm text-zinc-100 transition hover:text-white"
               >
                 Clear
               </a>

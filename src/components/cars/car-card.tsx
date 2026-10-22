@@ -43,6 +43,9 @@ type CarCardProps = {
   reservationDepositHint?: string | null;
   /** Video walkthrough poster — links to listing anchor; no video element on grid. */
   videoTeaser?: { posterUrl: string } | null;
+  /** First grid cards should load eagerly so iPad Safari does not skip above-the-fold photos. */
+  imagePriority?: boolean;
+  imageLoading?: "lazy" | "eager";
 };
 
 function formatLocationLabel(location?: string | null, sourceType?: Car["sourceType"]): string {
@@ -62,6 +65,8 @@ export const CarCard = memo(function CarCard({
   initialFavorite = false,
   reservationDepositHint,
   videoTeaser,
+  imagePriority = false,
+  imageLoading,
 }: CarCardProps) {
   const href = `/cars/${car.slug}`;
   const stock = getVehicleStockBadgeForDisplay(car);
@@ -84,12 +89,14 @@ export const CarCard = memo(function CarCard({
           {car.coverImageUrl ? (
             <VehicleCoverImage
               src={car.coverImageUrl}
-              alt=""
+              alt={car.title}
               fill
-              sizes="(max-width:768px) 100vw, 33vw"
+              sizes="(max-width:768px) 100vw, (max-width:1024px) 50vw, 33vw"
               className="object-cover transition duration-250 ease-out md:group-hover/card:scale-[1.03]"
               deliveryPreset="card"
               imagePlaceholder
+              priority={imagePriority}
+              loading={imageLoading ?? (imagePriority ? "eager" : "lazy")}
             />
           ) : (
             <div className="flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground">
